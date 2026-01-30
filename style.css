@@ -9,7 +9,7 @@ body {
 }
 
 .app {
-    max-width: 1300px;
+    max-width: 1380px;
     margin: 0 auto;
 }
 
@@ -248,6 +248,11 @@ body {
     color: var(--text);
 }
 
+body {
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,.18), transparent 60%), radial-gradient(900px 500px at 90% 20%, rgba(33,202,162,.14), transparent 55%), #0b0f19;
+}
+
+
 .app {
     max-width: 1120px;
 }
@@ -394,7 +399,7 @@ tr:hover td {
         box-shadow: inset 4px 0 0 rgba(255, 107, 107, 0.65);
     }
 
-/* ¿eby hover nie zabija³ koloru */
+/* Â¿eby hover nie zabijaÂ³ koloru */
 .stock-warn:hover td {
     background: rgba(255, 193, 7, 0.14) !important;
 }
@@ -450,7 +455,7 @@ tr:hover td {
         background: rgba(255,107,107,0.10);
     }
 
-/* Ucywilizowanie selectów w ciemnym motywie */
+/* Ucywilizowanie selectÃ³w w ciemnym motywie */
 select, option, optgroup {
     color: rgba(255,255,255,0.92);
     background-color: #141a24;
@@ -467,12 +472,12 @@ select {
         outline: none;
     }
 
-/* PodpowiedŸ dla przegl¹darki: to jest dark UI */
+/* PodpowiedÂŸ dla przeglÂ¹darki: to jest dark UI */
 :root {
     color-scheme: dark;
 }
 
-/* Jeœli system robi bia³y dropdown, to chocia¿ opcje bêd¹ czytelne */
+/* JeÂœli system robi biaÂ³y dropdown, to chociaÂ¿ opcje bÃªdÂ¹ czytelne */
 option:checked {
     background: rgba(124,92,255,0.35);
 }
@@ -559,13 +564,13 @@ select, option, optgroup {
     opacity: 0.9;
 }
 
-/* FIX: konfiguracja ma byæ czytelna, a nie upchniêta */
+/* FIX: konfiguracja ma byÃ¦ czytelna, a nie upchniÃªta */
 .configGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 18px !important;
 }
 
-/* na w¹skich ekranach jedna kolumna */
+/* na wÂ¹skich ekranach jedna kolumna */
 @media (max-width: 1100px) {
     .configGrid {
         grid-template-columns: 1fr !important;
@@ -579,7 +584,7 @@ select, option, optgroup {
     }
 }
 
-/* ===== Wizualne sekcje w kartach (czytelnoœæ) ===== */
+/* ===== Wizualne sekcje w kartach (czytelnoÂœÃ¦) ===== */
 .uiSection {
     border: 1px solid rgba(255,255,255,0.10);
     background: rgba(255,255,255,0.03);
@@ -608,3 +613,301 @@ select, option, optgroup {
     color: rgba(255,255,255,0.55);
 }
 
+/* ===== Tabs: dopieszczone grupowanie ===== */
+.tabsBar {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    margin: 10px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+    /* na maÂ³ych ekranach niech siÃª przewija, zamiast Â³amaÃ¦ na 3 rzÃªdy */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+    .tabsBar::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .tabsBar::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.14);
+        border-radius: 999px;
+    }
+
+    .tabsBar::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.05);
+        border-radius: 999px;
+    }
+
+.tabGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.tabGroupLabel {
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    padding-left: 6px;
+}
+
+.tabGroupButtons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
+.tabDivider {
+    width: 1px;
+    height: 38px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 999px;
+    flex: 0 0 auto;
+    margin-bottom: 4px;
+}
+
+/* podkrÃªcamy przyciski, ale nadal spÃ³jnie z Twoim stylem */
+.tabBtn {
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.88);
+    font-weight: 700;
+    white-space: nowrap;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+    .tabBtn:hover {
+        background: rgba(255,255,255,0.10);
+        border-color: rgba(255,255,255,0.22);
+        transform: translateY(-1px);
+    }
+
+    .tabBtn:active {
+        transform: translateY(0px);
+    }
+
+    /* aktywna zakÂ³adka: Â“premium pillÂ” */
+    .tabBtn.active {
+        background: linear-gradient(135deg, rgba(124,92,255,0.70), rgba(33,202,162,0.55));
+        border-color: rgba(255,255,255,0.26);
+        box-shadow: 0 8px 22px rgba(0,0,0,0.22);
+    }
+
+.app {
+    max-width: 1200px !important;
+}
+
+.top {
+    max-width: 1200px !important;
+}
+
+
+
+
+
+
+/* ===== Micro-interactions pack ===== */
+:root{
+  --ease: cubic-bezier(.2,.8,.2,1);
+  --t: 160ms;
+  --t2: 240ms;
+}
+
+.card{
+  transition: transform var(--t2) var(--ease), box-shadow var(--t2) var(--ease), border-color var(--t2) var(--ease);
+  will-change: transform;
+}
+.card:hover{ transform: translateY(-2px); }
+
+button, .tabBtn{
+  transition: transform var(--t) var(--ease), background var(--t) var(--ease), border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), opacity var(--t) var(--ease);
+  will-change: transform;
+}
+button:hover{ transform: translateY(-1px); }
+button:active{ transform: translateY(0px) scale(0.99); }
+
+input, select, button{ outline: none; }
+input:focus, select:focus{
+  box-shadow: 0 0 0 3px rgba(124,92,255,0.25);
+  border-color: rgba(124,92,255,0.55);
+}
+
+.uiSection{
+  transition: background var(--t2) var(--ease), border-color var(--t2) var(--ease);
+}
+.uiSection:hover{
+  background: rgba(255,255,255,0.045);
+  border-color: rgba(255,255,255,0.14);
+}
+
+table tbody tr{ transition: background var(--t) var(--ease); }
+table tbody tr:hover{ background: rgba(255,255,255,0.05); }
+
+button:disabled{
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ===== Toast notifications ===== */
+.toastHost{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+
+.toast{
+  min-width: 220px;
+  max-width: 360px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(20,22,28,0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+  transform: translateY(8px);
+  opacity: 0;
+  transition: transform 220ms var(--ease), opacity 220ms var(--ease);
+}
+.toast.show{ transform: translateY(0); opacity: 1; }
+.toast .title{ font-weight: 800; margin-bottom: 4px; }
+.toast.ok{ border-color: rgba(33,202,162,0.35); }
+.toast.warn{ border-color: rgba(255,193,7,0.35); }
+.toast.bad{ border-color: rgba(255,99,132,0.35); }
+
+/* ===== Modal ===== */
+.modalBackdrop{
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.45);
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 180ms var(--ease);
+  pointer-events: none; /* klucz: nie blokuj klikÃ³w gdy ukryty */
+}
+.modalBackdrop.show{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal{
+  width: min(520px, calc(100vw - 32px));
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(20,22,28,0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 16px 46px rgba(0,0,0,0.50);
+  transform: translateY(6px) scale(0.98);
+  transition: transform 180ms var(--ease);
+  padding: 14px;
+}
+.modalBackdrop.show .modal{
+  transform: translateY(0) scale(1);
+}
+
+.modalHead{ margin-bottom: 8px; }
+.modalTitle{ font-size: 16px; font-weight: 900; }
+.modalBody{ margin-bottom: 12px; }
+.modalText{ color: rgba(255,255,255,0.78); line-height: 1.35; }
+
+.modalActions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+button.danger{
+  border-color: rgba(255,99,132,0.35);
+}
+button.danger:hover{
+  border-color: rgba(255,99,132,0.55);
+}
+
+.card {
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 36px rgba(0,0,0,.45);
+    }
+
+.stock-danger td:first-child {
+    box-shadow: inset 4px 0 0 rgba(255,107,107,.7);
+}
+
+.stock-warn td:first-child {
+    box-shadow: inset 4px 0 0 rgba(255,193,7,.6);
+}
+
+.tabBtn.active {
+    background: linear-gradient(135deg, rgba(124,92,255,.7), rgba(33,202,162,.6));
+    box-shadow: 0 8px 22px rgba(0,0,0,.35);
+}
+
+.card.isClickable:hover {
+    transform: translateY(-2px);
+}
+
+/* STOP: karta nie ma siÄ™ ruszaÄ‡ */
+.card:hover {
+    transform: none !important;
+}
+/* ===== BG A: Aurora ===== */
+body {
+    background: #070a12;
+    overflow-x: hidden;
+}
+
+    body::before {
+        content: "";
+        position: fixed;
+        inset: -35%;
+        z-index: -2;
+        pointer-events: none;
+        background: radial-gradient(1400px 800px at 15% 20%, rgba(124,92,255,.45), transparent 58%), radial-gradient(1200px 750px at 85% 10%, rgba(33,202,162,.35), transparent 55%), radial-gradient(1000px 650px at 70% 85%, rgba(255,255,255,.12), transparent 60%), linear-gradient(135deg, rgba(124,92,255,.10), transparent 35%, rgba(33,202,162,.08));
+        filter: saturate(1.15) contrast(1.05);
+    }
+
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        opacity: .065;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+    }
+
+/* ===== Delivery: hierarchia akcji ===== */
+
+.deliveryActions {
+  position: sticky;
+  bottom: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  background: linear-gradient(180deg, transparent, rgba(20,22,28,0.92) 35%);
+  backdrop-filter: blur(10px);
+}
+
+.deliveryActions .primary {
+  width: 100%;
+}
+
+.deliveryActions .secondary {
+  width: auto;
+}

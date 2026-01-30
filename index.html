@@ -10,20 +10,37 @@
 </head>
 <body>
 <main class="app">
-<header class="top">
-<h1>Magazyn</h1>
-<p class="small muted">
-                Skróty: <strong>SKU</strong> = kod części. <strong>FIFO</strong> = najpierw zużywane są najstarsze partie.
-            </p>
-<!-- TABS -->
-<nav aria-label="Nawigacja" class="tabsBar">
-<button class="tabBtn" data-tab-target="parts" type="button">Magazyn części</button>
-<button class="tabBtn" data-tab-target="delivery" type="button">Nowa dostawa</button>
-<button class="tabBtn" data-tab-target="build" type="button">Produkcja maszyn</button>
-<button class="tabBtn" data-tab-target="machines" type="button">Magazyn maszyn</button>
+    <header class="top">
+        <h1>Magazyn</h1>
+        <p class="small muted">
+            Skróty: <strong>SKU</strong> = kod części. <strong>FIFO</strong> = najpierw zużywane są najstarsze partie.
+        </p>
+        <!-- TABS -->
+        <nav class="tabsBar" aria-label="Nawigacja">
+            <div class="tabGroup">
+                <div class="tabGroupLabel">Operacje</div>
+                <div class="tabGroupButtons">
+                    <button class="tabBtn" type="button" data-tab-target="parts">Magazyn części</button>
+                    <button class="tabBtn" type="button" data-tab-target="delivery">Nowa dostawa</button>
+                    <button class="tabBtn" type="button" data-tab-target="build">Produkcja maszyn</button>
+                    <button class="tabBtn" type="button" data-tab-target="machines">Magazyn maszyn</button>
+                </div>
+            </div>
 
-<button class="tabBtn" data-tab-target="catalog_parts" type="button">Katalog części</button><button class="tabBtn" data-tab-target="catalog_suppliers" type="button">Katalog dostawców</button><button class="tabBtn" data-tab-target="catalog_machines" type="button">Katalog maszyn</button></nav>
-</header>
+            <div class="tabDivider" aria-hidden="true"></div>
+
+            <div class="tabGroup">
+                <div class="tabGroupLabel">Katalogi</div>
+                <div class="tabGroupButtons">
+                    <button class="tabBtn" type="button" data-tab-target="catalog_parts">Katalog części</button>
+                    <button class="tabBtn" type="button" data-tab-target="catalog_suppliers">Katalog dostawców</button>
+                    <button class="tabBtn" type="button" data-tab-target="catalog_machines">Katalog maszyn</button>
+                </div>
+            </div>
+        </nav>
+
+
+    </header>
 <!-- TAB: MAGAZYN CZĘŚCI (startowy, szeroki) -->
 <section class="tabPanel widePanel" data-tab-panel="parts">
 <div class="card">
@@ -124,7 +141,7 @@
                         Cena za szt. (PLN)
                         <input id="deliveryPrice" min="0" step="0.01" type="number" value="0"/>
 </label>
-<button id="addDeliveryItemBtn" type="button">Dodaj pozycję</button>
+<button id="addDeliveryItemBtn" type="button" class="secondary">Dodaj pozycję</button>
 </div>
 <div class="tableWrap">
 <table id="deliveryItemsTable">
@@ -144,9 +161,11 @@
 <div><span>Pozycji:</span> <strong id="itemsCount">0</strong></div>
 <div><span>Suma:</span> <strong id="itemsTotal">0,00 zł</strong></div>
 </div>
+<div class="deliveryActions">
 <button class="primary" id="finalizeDeliveryBtn" type="button">Zapisz dostawę (dodaj partie)</button>
+</div>
 <p class="small muted">
-                    W tej wersji dane są lokalne (bez kont/logowania). Zapis/backup zrobimy później.
+                    W tej wersji dane są lokalne (bez kont/logowania).
                 </p>
 </div>
 </section>

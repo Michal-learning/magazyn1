@@ -353,28 +353,40 @@ function deletePart(skuLower) {
   if (!p) return;
 
   const reason = getPartDeleteBlockReason(skuLower);
-  if (reason) return alert(reason);
-
-  const ok = confirm(`Usunąć część z katalogu?\n\n${p.name} (${p.sku})`);
-  if (!ok) return;
-
-  state.partsCatalog.delete(skuLower);
-
-  // Na wszelki wypadek usuń z cenników (powinno być puste przez blokadę, ale lepiej domknąć).
-  for (const sup of state.suppliers.values()) {
-    sup?.prices?.delete?.(skuLower);
+  if (reason) {
+    toast("Nie można usunąć", reason, "warn", 3200);
+    return;
   }
 
-  saveState();
+  openConfirm(
+    {
+      title: "Usunąć część?",
+      text: `${p.name} (${p.sku})`,
+      okText: "Usuń",
+      cancelText: "Anuluj"
+    },
+    () => {
+      state.partsCatalog.delete(skuLower);
 
-  // odśwież UI zależne od katalogu części
-  renderPartsCatalogTable();
-  renderSupplierSelects();
-  renderSupplierSkuDropdown();
-  renderSupplierPartsForDelivery();
-  renderSupplierPriceTable();
-  renderBomSkuSelect();
-  renderMachineSelect();
+      // Na wszelki wypadek usuń z cenników (powinno być puste przez blokadę, ale lepiej domknąć).
+      for (const sup of state.suppliers.values()) {
+        sup?.prices?.delete?.(skuLower);
+      }
+
+      saveState();
+
+      // odśwież UI zależne od katalogu części
+      renderPartsCatalogTable();
+      renderSupplierSelects();
+      renderSupplierSkuDropdown();
+      renderSupplierPartsForDelivery();
+      renderSupplierPriceTable();
+      renderBomSkuSelect();
+      renderMachineSelect();
+
+      toast("Usunięto", `Część: ${p.name}`, "ok");
+    }
+  );
 }
 
 els.partsCatalogBody?.addEventListener("click", (e) => {
@@ -490,24 +502,36 @@ function deleteSupplier(name) {
   if (!state.suppliers.has(name)) return;
 
   if (supplierUsedInLots(name)) {
-    alert("Nie można usunąć dostawcy, bo istnieją partie w magazynie przypisane do tego dostawcy.");
+    toast("Nie można usunąć", "Dostawca ma partie w magazynie.", "warn", 3200);
     return;
   }
 
-  const ok = confirm(`Usunąć dostawcę: "${name}"?\n\nTo usunie też jego cennik.`);
-  if (!ok) return;
+  openConfirm(
+    {
+      title: "Usunąć dostawcę?",
+      text: `Dostawca: "${name}" (usunie też jego cennik)`,
+      okText: "Usuń",
+      cancelText: "Anuluj"
+    },
+    () => {
+      state.suppliers.delete(name);
 
-  // jeśli akurat wybrany w dostawie, wyczyść
-  if (state.currentDelivery.supplier === name) {
-    state.currentDelivery.supplier = null;
-    state.currentDelivery.items = [];
-  }
+      // jeśli był wybrany w dostawie, przestaw na pierwszy dostępny
+      if (els.supplierSelect && els.supplierSelect.value === name) {
+        const first = Array.from(state.suppliers.keys())[0] || "";
+        els.supplierSelect.value = first;
+      }
 
-  state.suppliers.delete(name);
+      saveState();
+      renderSupplierSelects();
+      renderSupplierManageSelect();
+      renderSupplierPriceTable();
+      renderSupplierPartsForDelivery();
+      renderSuppliersListTable?.();
 
-  renderSupplierSelects();
-  renderDeliveryItems();
-  saveState();
+      toast("Usunięto", `Dostawca: ${name}`, "ok");
+    }
+  );
 }
 
 function renderSuppliersList() {
@@ -624,6 +648,15 @@ function renderDeliveryItems() {
   const total = rows.reduce((sum, it) => sum + it.qty * it.price, 0);
   els.itemsCount.textContent = String(rows.length);
   els.itemsTotal.textContent = fmtPLN.format(total);
+
+  // CTA: finalizacja tylko jeśli są pozycje
+  if (els.finalizeDeliveryBtn) {
+    els.finalizeDeliveryBtn.disabled = rows.length === 0;
+    // opcjonalnie: pokaż sumę w przycisku
+    els.finalizeDeliveryBtn.textContent = rows.length === 0
+      ? "Zapisz dostawę (dodaj partie)"
+      : `Zapisz dostawę • ${fmtPLN.format(total)}`;
+  }
 }
 
 function addLot({ name, sku, supplier, qty, unitPrice }) {
@@ -742,39 +775,39 @@ function renderMachinesCatalogTable() {
 }
 
 function deleteMachine(code) {
-  const c = String(code || "").trim();
-  if (!c) return;
-
-  const idx = state.machineCatalog.findIndex(m => m.code === c);
+  const idx = state.machineCatalog.findIndex(m => m.code === code);
   if (idx < 0) return;
 
-  const inStock = state.machinesStock.some(x => x.code === c && Number(x.qty || 0) > 0);
-  if (inStock) {
-    alert("Nie można usunąć: ta maszyna jest w magazynie maszyn (ma stan > 0).");
-    return;
-  }
-
-  const inBuild = state.currentBuild?.items?.some(x => x.machineCode === c);
-  if (inBuild) {
-    alert("Nie można usunąć: ta maszyna jest dodana do bieżącej produkcji.");
-    return;
-  }
-
   const m = state.machineCatalog[idx];
-  const ok = confirm(`Usunąć maszynę "${m.name}" (${m.code})?
 
-To usunie też jej BOM.`);
-  if (!ok) return;
+  // blokady bezpieczeństwa
+  if (machineHasStock(code)) {
+    toast("Nie można usunąć", "Maszyna ma stan w magazynie maszyn.", "warn", 3200);
+    return;
+  }
+  if (machineInBuildList(code)) {
+    toast("Nie można usunąć", "Maszyna jest na liście bieżącej produkcji.", "warn", 3200);
+    return;
+  }
 
-  state.machineCatalog.splice(idx, 1);
+  openConfirm(
+    {
+      title: "Usunąć maszynę?",
+      text: `${m.name} (${m.code})`,
+      okText: "Usuń",
+      cancelText: "Anuluj"
+    },
+    () => {
+      state.machineCatalog.splice(idx, 1);
+      saveState();
 
-  // jeżeli była wybrana w edycji, to przestaw selecty
-  renderMachineSelect();
-  renderMachineManageSelect();
-  renderBomTable();
-  renderMachinesCatalogTable();
+      renderMachineManageSelect();
+      renderMachineSelect();
+      renderMachinesListTable?.();
 
-  saveState();
+      toast("Usunięto", `Maszyna: ${m.name}`, "ok");
+    }
+  );
 }
 
 
@@ -1551,3 +1584,89 @@ els.suppliersListBody?.addEventListener("click", (e) => {
   setActive(start);
 })();
 
+
+
+
+// ===== UI: Toasty + Modal (micro-interactions) =====
+(function uiOverlays(){
+  // Toast host
+  const toastHost = document.createElement("div");
+  toastHost.className = "toastHost";
+  document.body.appendChild(toastHost);
+
+  window.toast = function(title, msg = "", type = "ok", ms = 2200){
+    const el = document.createElement("div");
+    el.className = `toast ${type}`;
+    el.innerHTML = `<div class="title">${title}</div>${msg ? `<div class="small muted">${msg}</div>` : ""}`;
+    toastHost.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("show"));
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 260);
+    }, ms);
+  };
+
+  // Modal
+  const backdrop = document.createElement("div");
+  backdrop.className = "modalBackdrop";
+  backdrop.hidden = true;
+  backdrop.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modalHead">
+        <div id="modalTitle" class="modalTitle">Potwierdź</div>
+      </div>
+      <div class="modalBody">
+        <div class="modalText" id="modalText"></div>
+      </div>
+      <div class="modalActions">
+        <button type="button" class="secondary" id="modalCancel">Anuluj</button>
+        <button type="button" class="danger" id="modalOk">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const titleEl = backdrop.querySelector("#modalTitle");
+  const textEl  = backdrop.querySelector("#modalText");
+  const okBtn   = backdrop.querySelector("#modalOk");
+  const cancelBtn = backdrop.querySelector("#modalCancel");
+
+  let onOk = null;
+  let onCancel = null;
+
+  function close(){
+    backdrop.classList.remove("show");
+    // daj animacji zejść
+    setTimeout(() => { backdrop.hidden = true; }, 150);
+    onOk = null; onCancel = null;
+  }
+
+  function openConfirm({title="Potwierdź", text="", okText="Usuń", cancelText="Anuluj"} = {}, okCb = null, cancelCb = null){
+    titleEl.textContent = title;
+    textEl.textContent = text;
+    okBtn.textContent = okText;
+    cancelBtn.textContent = cancelText;
+    onOk = okCb;
+    onCancel = cancelCb;
+
+    backdrop.hidden = false;
+    requestAnimationFrame(() => backdrop.classList.add("show"));
+    okBtn.focus();
+  }
+
+  // Export
+  window.openConfirm = openConfirm;
+
+  // Events
+  okBtn.addEventListener("click", () => { const cb = onOk; close(); if (typeof cb === "function") cb(); });
+  cancelBtn.addEventListener("click", () => { const cb = onCancel; close(); if (typeof cb === "function") cb(); });
+
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) { const cb = onCancel; close(); if (typeof cb === "function") cb(); }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (backdrop.hidden) return;
+    if (e.key === "Escape") { const cb = onCancel; close(); if (typeof cb === "function") cb(); }
+  });
+})();
