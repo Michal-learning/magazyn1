@@ -1,4 +1,24 @@
-// ====== Dane w pamięci (MVP bez zapisu) ======
+// ====== Dane w pamięci (MVP) ======
+const DEFAULT_MACHINE_CATALOG = [
+  {
+    code: "M-IR01",
+    name: "Maszyna IR-01",
+    bom: [
+      { sku: "SEN-IR01", qty: 1 },
+      { sku: "SCR-M6-30", qty: 8 },
+      { sku: "BRG-6204", qty: 2 }
+    ]
+  },
+  {
+    code: "M-BASIC",
+    name: "Maszyna BASIC",
+    bom: [
+      { sku: "SCR-M6-30", qty: 20 },
+      { sku: "BLT-A32", qty: 1 }
+    ]
+  }
+];
+
 const state = {
   // partie magazynowe
   lots: [],
@@ -13,25 +33,7 @@ const state = {
   suppliers: new Map(),
 
   // BOM maszyn
-  machineCatalog: [
-    {
-      code: "M-IR01",
-      name: "Maszyna IR-01",
-      bom: [
-        { sku: "SEN-IR01", qty: 1 },
-        { sku: "SCR-M6-30", qty: 8 },
-        { sku: "BRG-6204", qty: 2 }
-      ]
-    },
-    {
-      code: "M-BASIC",
-      name: "Maszyna BASIC",
-      bom: [
-        { sku: "SCR-M6-30", qty: 20 },
-        { sku: "BLT-A32", qty: 1 }
-      ]
-    }
-  ],
+  machineCatalog: JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG)),
 
   // dostawa
   currentDelivery: {
@@ -58,6 +60,113 @@ let LOW_DANGER = 50;
 
 let manualPlanGenerated = false;
 
+// ====== LocalStorage (zapis stanu) ======
+const STORAGE_KEY = "magazyn_state_v1";
+
+function serializeState() {
+  return {
+    lots: state.lots,
+    machinesStock: state.machinesStock,
+    machineCatalog: state.machineCatalog,
+
+    currentDelivery: state.currentDelivery,
+    currentBuild: state.currentBuild,
+
+    LOW_WARN,
+    LOW_DANGER,
+
+    partsCatalog: Array.from(state.partsCatalog.entries()), // [[skuLower, {sku,name}], ...]
+    suppliers: Array.from(state.suppliers.entries()).map(([name, obj]) => ({
+      name,
+      prices: Array.from(obj?.prices?.entries?.() || []) // [[skuLower, price], ...]
+    }))
+  };
+}
+
+function applySerializedState(data) {
+  // prosta walidacja
+  if (!data || typeof data !== "object") return;
+
+  state.lots = Array.isArray(data.lots) ? data.lots : [];
+  state.machinesStock = Array.isArray(data.machinesStock) ? data.machinesStock : [];
+  state.machineCatalog = Array.isArray(data.machineCatalog) ? data.machineCatalog : JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG));
+
+  state.currentDelivery = data.currentDelivery && typeof data.currentDelivery === "object"
+    ? data.currentDelivery
+    : state.currentDelivery;
+
+  state.currentBuild = data.currentBuild && typeof data.currentBuild === "object"
+    ? data.currentBuild
+    : state.currentBuild;
+
+  LOW_WARN = Number.isFinite(data.LOW_WARN) ? data.LOW_WARN : LOW_WARN;
+  LOW_DANGER = Number.isFinite(data.LOW_DANGER) ? data.LOW_DANGER : LOW_DANGER;
+
+  state.partsCatalog = new Map(Array.isArray(data.partsCatalog) ? data.partsCatalog : []);
+  state.suppliers = new Map();
+  if (Array.isArray(data.suppliers)) {
+    for (const s of data.suppliers) {
+      if (!s?.name) continue;
+      const pricesArr = Array.isArray(s.prices) ? s.prices : [];
+      state.suppliers.set(s.name, { prices: new Map(pricesArr) });
+    }
+  }
+
+  // odtwórz licznik ID (żeby nie było duplikatów po odświeżeniu)
+  const maxIn = (arr) => Array.isArray(arr) ? arr.reduce((m, x) => Math.max(m, Number(x?.id) || 0), 0) : 0;
+  const maxId = Math.max(
+    maxIn(state.lots),
+    maxIn(state.currentDelivery?.items),
+    maxIn(state.currentBuild?.items)
+  );
+  _id = Math.max(1, maxId + 1);
+}
+
+function saveState() {
+  try {
+    const payload = serializeState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (e) {
+    console.warn("saveState() failed:", e);
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    applySerializedState(data);
+    return true;
+  } catch (e) {
+    console.warn("loadState() failed:", e);
+    return false;
+  }
+}
+
+function clearSavedState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {}
+}
+
+function resetAllData() {
+  state.lots = [];
+  state.machinesStock = [];
+  state.partsCatalog = new Map();
+  state.suppliers = new Map();
+  state.machineCatalog = JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG));
+
+  state.currentDelivery = { supplier: "Wybierz dostawcę...", dateISO: "", items: [] };
+  state.currentBuild = { dateISO: "", items: [] };
+
+  LOW_WARN = 100;
+  LOW_DANGER = 50;
+
+  _id = 1;
+  manualPlanGenerated = false;
+}
+
 function stockClass(totalQty) {
   if (totalQty < LOW_DANGER) return "stock-danger";
   if (totalQty < LOW_WARN) return "stock-warn";
@@ -79,6 +188,7 @@ bomBody: document.querySelector("#bomTable tbody"),
   // magazyn części
   searchParts: document.getElementById("searchParts"),
   seedDemoBtn: document.getElementById("seedDemoBtn"),
+  clearDataBtn: document.getElementById("clearDataBtn"),
   skuSummaryBody: document.querySelector("#skuSummaryTable tbody"),
   lotsBody: document.querySelector("#partsTable tbody"),
   warehouseTotal: document.getElementById("warehouseTotal"),
@@ -352,6 +462,7 @@ function addDeliveryItem() {
   });
 
   renderDeliveryItems();
+  saveState();
 }
 
 function renderDeliveryItems() {
@@ -424,6 +535,7 @@ function finalizeDelivery() {
   renderWarehouseTotal();
 
   refreshManualConsumeUI();
+  saveState();
   alert("Dostawa zapisana (partie dodane).");
 }
 
@@ -602,6 +714,7 @@ function addBuildItem() {
 
   renderBuildItems();
   refreshManualConsumeUI();
+  saveState();
 }
 
 function totalQtyBySku(skuLowerOrSku) {
@@ -823,6 +936,8 @@ function finalizeBuild() {
   renderWarehouseTotal();
   renderMachinesStock();
 
+  saveState();
+
   alert("Produkcja zrealizowana: części odjęte, maszyny dodane.");
 }
 
@@ -854,19 +969,22 @@ function syncThresholdUI() {
 function bindThresholds() {
   if (!els.warnRange || !els.dangerRange) return;
 
-  LOW_WARN = Number(els.warnRange.value || 100);
-  LOW_DANGER = Number(els.dangerRange.value || 50);
-  if (LOW_DANGER >= LOW_WARN) LOW_DANGER = Math.max(0, LOW_WARN - 10);
+  // Uwaga: wartości LOW_WARN/LOW_DANGER mogą być wczytane z LocalStorage.
+  // Najpierw ustawiamy UI na te wartości, dopiero potem słuchamy zmian.
   syncThresholdUI();
 
   const clamp = () => {
     if (LOW_DANGER >= LOW_WARN) LOW_DANGER = Math.max(0, LOW_WARN - 10);
     syncThresholdUI();
     renderSkuSummary();
+    saveState();
   };
 
   els.warnRange.addEventListener("input", () => { LOW_WARN = Number(els.warnRange.value); clamp(); });
   els.dangerRange.addEventListener("input", () => { LOW_DANGER = Number(els.dangerRange.value); clamp(); });
+
+  // dociągnij raz na starcie (napraw relację danger < warn)
+  clamp();
 }
 
 // ====== Demo dane ======
@@ -909,6 +1027,8 @@ function seedDemoData() {
   renderWarehouseTotal();
   renderMachinesStock();
 
+  saveState();
+
   alert("Wgrano demo dane + katalog + dostawcy.");
 }
 
@@ -916,9 +1036,12 @@ function seedDemoData() {
 
 
 function init() {
+  // Wczytaj stan zanim cokolwiek wyrenderujemy (żeby UI widziało Mapy, progi, BOM itd.).
+  loadState();
+
   const today = new Date().toISOString().slice(0, 10);
-  if (els.deliveryDate) els.deliveryDate.value = today;
-  if (els.buildDate) els.buildDate.value = today;
+  if (els.deliveryDate) els.deliveryDate.value = state.currentDelivery.dateISO || today;
+  if (els.buildDate) els.buildDate.value = state.currentBuild.dateISO || today;
 
   bindThresholds();
   renderMachineSelect();
@@ -956,6 +1079,7 @@ els.addMachineBtn?.addEventListener("click", () => {
 
   renderMachineManageSelect();
   renderBomTable();
+  saveState();
   alert(res.msg);
 });
 
@@ -974,6 +1098,7 @@ els.addBomItemBtn?.addEventListener("click", () => {
   if (!res.ok) return alert(res.msg);
 
   renderBomTable();
+  saveState();
   alert(res.msg);
 });
 
@@ -987,6 +1112,7 @@ els.bomBody?.addEventListener("click", (e) => {
 
   m.bom.splice(idx, 1);
   renderBomTable();
+  saveState();
 });
 
 els.searchParts?.addEventListener("input", () => {
@@ -996,10 +1122,48 @@ els.searchParts?.addEventListener("input", () => {
 
 els.seedDemoBtn?.addEventListener("click", seedDemoData);
 
+els.clearDataBtn?.addEventListener("click", () => {
+  const ok = confirm(
+    "Na pewno wyczyścić wszystkie dane?\n\n" +
+    "- usunie zapis z LocalStorage\n" +
+    "- wyzeruje magazyn, dostawców, katalog części, BOM-y i stan maszyn"
+  );
+  if (!ok) return;
+
+  clearSavedState();
+  resetAllData();
+
+  // odśwież cały UI
+  syncThresholdUI();
+  renderMachineSelect();
+  renderMachineManageSelect();
+  renderBomSkuSelect();
+  renderBomTable();
+
+  renderPartsCatalogTable();
+  renderSupplierSelects();
+
+  renderDeliveryItems();
+  renderBuildItems();
+  renderSkuSummary();
+  renderLotsTable();
+  renderWarehouseTotal();
+  renderMachinesStock();
+
+  // zostaw świeże, czyste dane w LocalStorage (żeby progi też były zapisane)
+  saveState();
+});
+
 // ===== Dostawy =====
 els.supplierSelect?.addEventListener("change", () => {
   renderSupplierPartsForDelivery();
   renderDeliveryItems();
+  saveState();
+});
+
+els.deliveryDate?.addEventListener("change", () => {
+  state.currentDelivery.dateISO = els.deliveryDate.value || "";
+  saveState();
 });
 
 els.supplierPartsSelect?.addEventListener("change", onDeliveryPartChange);
@@ -1011,12 +1175,18 @@ els.deliveryItemsBody?.addEventListener("click", (e) => {
   const id = Number(btn.dataset.remove);
   state.currentDelivery.items = state.currentDelivery.items.filter(it => it.id !== id);
   renderDeliveryItems();
+  saveState();
 });
 
 els.finalizeDeliveryBtn?.addEventListener("click", finalizeDelivery);
 
 // ===== Produkcja =====
 els.addBuildItemBtn?.addEventListener("click", addBuildItem);
+
+els.buildDate?.addEventListener("change", () => {
+  state.currentBuild.dateISO = els.buildDate.value || "";
+  saveState();
+});
 
 els.buildItemsBody?.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-remove-build]");
@@ -1026,6 +1196,7 @@ els.buildItemsBody?.addEventListener("click", (e) => {
   renderBuildItems();
   manualPlanGenerated = false;
   refreshManualConsumeUI();
+  saveState();
 });
 
 els.finalizeBuildBtn?.addEventListener("click", finalizeBuild);
@@ -1036,6 +1207,7 @@ els.consumeMode?.addEventListener("change", () => {
   els.manualConsumeBox.hidden = !isManual;
   manualPlanGenerated = false;
   if (isManual) refreshManualConsumeUI();
+  saveState();
 });
 
 els.searchMachines?.addEventListener("input", renderMachinesStock);
@@ -1057,6 +1229,8 @@ els.addPartBtn?.addEventListener("click", () => {
   alert(res.msg);
   renderBomSkuSelect();
 
+  saveState();
+
 });
 
 // ===== Dostawcy + cenniki =====
@@ -1066,6 +1240,7 @@ els.addSupplierBtn?.addEventListener("click", () => {
   ensureSupplier(name);
   els.supplierNameInput.value = "";
   renderSupplierSelects();
+  saveState();
   alert("Dodano dostawcę.");
 });
 
@@ -1085,5 +1260,6 @@ els.setSupplierPriceBtn?.addEventListener("click", () => {
 
   renderSupplierPriceTable();
   renderSupplierPartsForDelivery();
+  saveState();
   alert(res.msg);
 });
