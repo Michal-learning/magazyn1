@@ -1,2114 +1,901 @@
-// ====== Dane w pamięci (MVP) ======
-// Startujemy bez "demo" maszyn. Użytkownik dodaje własny katalog.
-const DEFAULT_MACHINE_CATALOG = [];
+/**
+ * Magazyn PRO - Core Logic
+ * Wersja: V2.3 - Poprawka Daty Dostawy
+ */
+
+// === KONFIGURACJA I STAN ===
+const STORAGE_KEY = "magazyn_state_v2_1";
 
 const state = {
-  // partie magazynowe
-  lots: [],
+    lots: [],           // Partie materiału {id, sku, name, supplier, unitPrice, qty}
+    machinesStock: [],  // Wyprodukowane maszyny {code, name, qty}
+    partsCatalog: new Map(), // Słownik części: skuKey -> {sku, name}
+    suppliers: new Map(),    // Dostawcy: name -> {prices: Map(skuKey -> price)}
+    machineCatalog: [],      // Definicje maszyn (BOM) {code, name, bom: []}
 
-  // magazyn maszyn
-  machinesStock: [],
-
-  // GLOBALNY katalog części: skuLower -> { sku, name }
-  partsCatalog: new Map(),
-
-  // Dostawcy: name -> { prices: Map(skuLower -> price) }
-  suppliers: new Map(),
-
-  // BOM maszyn
-  machineCatalog: JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG)),
-
-  // dostawa
-  currentDelivery: {
-    supplier: null,
-    dateISO: "",
-    items: [] // {id, sku, name, qty, price}
-  },
-
-  // produkcja
-  currentBuild: {
-    dateISO: "",
-    items: [] // {id, machineCode, machineName, qty}
-  }
+    // Stan tymczasowy
+    currentDelivery: { supplier: null, dateISO: "", items: [] },
+    currentBuild: { dateISO: "", items: [] } 
 };
 
-// UI: wybrani dostawcy przy dodawaniu części
-let uiSelectedPartSuppliers = new Set();
-
-
-
-let _id = 1;
-function nextId() { return _id++; }
-
-const fmtPLN = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
-
-// progi podświetlania w podsumowaniu per Nazwę (unikat)
+// Zmienne pomocnicze
+let _idCounter = 1;
 let LOW_WARN = 100;
 let LOW_DANGER = 50;
 
-let manualPlanGenerated = false;
+// Formatowanie waluty
+const fmtPLN = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
 
-// ====== LocalStorage (zapis stanu) ======
-const STORAGE_KEY = "magazyn_state_v1";
+// === SERIALIZACJA I ZAPIS ===
+
+function nextId() { return _idCounter++; }
 
 function serializeState() {
-  return {
-    lots: state.lots,
-    machinesStock: state.machinesStock,
-    machineCatalog: state.machineCatalog,
-
-    currentDelivery: state.currentDelivery,
-    currentBuild: state.currentBuild,
-
-    LOW_WARN,
-    LOW_DANGER,
-
-    partsCatalog: Array.from(state.partsCatalog.entries()), // [[skuLower, {sku,name}], ...]
-    suppliers: Array.from(state.suppliers.entries()).map(([name, obj]) => ({
-      name,
-      prices: Array.from(obj?.prices?.entries?.() || []) // [[skuLower, price], ...]
-    }))
-  };
+    return {
+        lots: state.lots,
+        machinesStock: state.machinesStock,
+        machineCatalog: state.machineCatalog,
+        currentDelivery: state.currentDelivery,
+        currentBuild: state.currentBuild,
+        LOW_WARN,
+        LOW_DANGER,
+        partsCatalog: Array.from(state.partsCatalog.entries()),
+        suppliers: Array.from(state.suppliers.entries()).map(([name, data]) => ({
+            name,
+            prices: Array.from(data.prices.entries())
+        }))
+    };
 }
 
-function applySerializedState(data) {
-  // prosta walidacja
-  if (!data || typeof data !== "object") return;
+function restoreState(data) {
+    if (!data) return;
+    state.lots = data.lots || [];
+    state.machinesStock = data.machinesStock || [];
+    state.machineCatalog = data.machineCatalog || [];
+    state.currentDelivery = data.currentDelivery || { supplier: null, dateISO: "", items: [] };
+    state.currentBuild = data.currentBuild || { dateISO: "", items: [] };
+    
+    LOW_WARN = data.LOW_WARN ?? 100;
+    LOW_DANGER = data.LOW_DANGER ?? 50;
 
-  state.lots = Array.isArray(data.lots) ? data.lots : [];
-  state.machinesStock = Array.isArray(data.machinesStock) ? data.machinesStock : [];
-  state.machineCatalog = Array.isArray(data.machineCatalog) ? data.machineCatalog : JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG));
+    state.partsCatalog = new Map(data.partsCatalog || []);
+    state.suppliers = new Map();
+    (data.suppliers || []).forEach(s => {
+        state.suppliers.set(s.name, { prices: new Map(s.prices || []) });
+    });
 
-  state.currentDelivery = data.currentDelivery && typeof data.currentDelivery === "object"
-    ? data.currentDelivery
-    : state.currentDelivery;
+    const allIds = [
+        ...state.lots.map(x => x.id),
+        ...state.currentDelivery.items.map(x => x.id),
+        ...state.currentBuild.items.map(x => x.id)
+    ];
+    _idCounter = allIds.length ? Math.max(...allIds) + 1 : 1;
+}
 
-  // normalizacja placeholdera (stare wersje)
-  if (state.currentDelivery && state.currentDelivery.supplier === "Wybierz dostawcę...") {
-    state.currentDelivery.supplier = null;
-  }
+function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+}
 
-  state.currentBuild = data.currentBuild && typeof data.currentBuild === "object"
-    ? data.currentBuild
-    : state.currentBuild;
-
-  LOW_WARN = Number.isFinite(data.LOW_WARN) ? data.LOW_WARN : LOW_WARN;
-  LOW_DANGER = Number.isFinite(data.LOW_DANGER) ? data.LOW_DANGER : LOW_DANGER;
-
-  state.partsCatalog = new Map(Array.isArray(data.partsCatalog) ? data.partsCatalog : []);
-  state.suppliers = new Map();
-  if (Array.isArray(data.suppliers)) {
-    for (const s of data.suppliers) {
-      if (!s?.name) continue;
-      const pricesArr = Array.isArray(s.prices) ? s.prices : [];
-      state.suppliers.set(s.name, { prices: new Map(pricesArr) });
+function load() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) restoreState(JSON.parse(raw));
+    } catch (e) {
+        console.error("Błąd odczytu danych", e);
     }
-  }
-
-  // odtwórz licznik ID (żeby nie było duplikatów po odświeżeniu)
-  const maxIn = (arr) => Array.isArray(arr) ? arr.reduce((m, x) => Math.max(m, Number(x?.id) || 0), 0) : 0;
-  const maxId = Math.max(
-    maxIn(state.lots),
-    maxIn(state.currentDelivery?.items),
-    maxIn(state.currentBuild?.items)
-  );
-  _id = Math.max(1, maxId + 1);
 }
 
-function saveState() {
-  try {
-    const payload = serializeState();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch (e) {
-    console.warn("saveState() failed:", e);
-  }
-}
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    applySerializedState(data);
-    return true;
-  } catch (e) {
-    console.warn("loadState() failed:", e);
-    return false;
-  }
-}
-
-function clearSavedState() {
-  try {
+function resetData() {
     localStorage.removeItem(STORAGE_KEY);
-  } catch (e) {}
+    location.reload();
 }
 
-function resetAllData() {
-  state.lots = [];
-  state.machinesStock = [];
-  state.partsCatalog = new Map();
-  state.suppliers = new Map();
-  state.machineCatalog = JSON.parse(JSON.stringify(DEFAULT_MACHINE_CATALOG));
+// === UTILS ===
+const normalize = (str) => String(str || "").trim();
+const skuKey = (str) => normalize(str).toLowerCase();
 
-  state.currentDelivery = { supplier: null, dateISO: "", items: [] };
-  state.currentBuild = { dateISO: "", items: [] };
-
-  LOW_WARN = 100;
-  LOW_DANGER = 50;
-
-  _id = 1;
-  manualPlanGenerated = false;
-}
-
-function stockClass(totalQty) {
-  if (totalQty < LOW_DANGER) return "stock-danger";
-  if (totalQty < LOW_WARN) return "stock-warn";
-  return "";
-}
-
-// ====== Elementy UI ======
-const els = {
-
-    machineCodeInput: document.getElementById("machineCodeInput"),
-machineNameInput: document.getElementById("machineNameInput"),
-addMachineBtn: document.getElementById("addMachineBtn"),
-machineManageSelect: document.getElementById("machineManageSelect"),
-bomSkuSelect: document.getElementById("bomSkuSelect"),
-bomQtyInput: document.getElementById("bomQtyInput"),
-addBomItemBtn: document.getElementById("addBomItemBtn"),
-bomBody: document.querySelector("#bomTable tbody"),
-  machinesCatalogBody: document.querySelector("#machinesCatalogTable tbody"),
-
-  // inline edycja BOM (maszyny)
-  machineEditorTemplate: document.getElementById("machineEditorTemplate"),
-  machineEditorName: document.getElementById("machineEditorName"),
-  machineEditorCode: document.getElementById("machineEditorCode"),
-  machineEditorSaveBtn: document.getElementById("machineEditorSaveBtn"),
-  machineEditorCancelBtn: document.getElementById("machineEditorCancelBtn"),
-
-  // magazyn części
-  searchParts: document.getElementById("searchParts"),
-  clearDataBtn: document.getElementById("clearDataBtn"),
-  skuSummaryBody: document.querySelector("#skuSummaryTable tbody"),
-  lotsBody: document.querySelector("#partsTable tbody"),
-  warehouseTotal: document.getElementById("warehouseTotal"),
-
-  // suwaki progów (opcjonalne)
-  warnRange: document.getElementById("warnRange"),
-  dangerRange: document.getElementById("dangerRange"),
-  warnValue: document.getElementById("warnValue"),
-  dangerValue: document.getElementById("dangerValue"),
-
-  // dostawy
-  supplierSelect: document.getElementById("supplierSelect"),
-  deliveryDate: document.getElementById("deliveryDate"),
-  supplierPartsSelect: document.getElementById("supplierPartsSelect"),
-  deliveryQty: document.getElementById("deliveryQty"),
-  deliveryPrice: document.getElementById("deliveryPrice"),
-  addDeliveryItemBtn: document.getElementById("addDeliveryItemBtn"),
-  deliveryItemsBody: document.querySelector("#deliveryItemsTable tbody"),
-  itemsCount: document.getElementById("itemsCount"),
-  itemsTotal: document.getElementById("itemsTotal"),
-  finalizeDeliveryBtn: document.getElementById("finalizeDeliveryBtn"),
-
-  // produkcja
-  machineSelect: document.getElementById("machineSelect"),
-  buildQty: document.getElementById("buildQty"),
-  buildDate: document.getElementById("buildDate"),
-  addBuildItemBtn: document.getElementById("addBuildItemBtn"),
-  buildItemsBody: document.querySelector("#buildItemsTable tbody"),
-  buildItemsCount: document.getElementById("buildItemsCount"),
-  finalizeBuildBtn: document.getElementById("finalizeBuildBtn"),
-  missingBox: document.getElementById("missingBox"),
-  missingList: document.getElementById("missingList"),
-  consumeMode: document.getElementById("consumeMode"),
-  manualConsumeBox: document.getElementById("manualConsumeBox"),
-  manualConsumeUI: document.getElementById("manualConsumeUI"),
-
-  // magazyn maszyn
-  searchMachines: document.getElementById("searchMachines"),
-  machinesStockBody: document.querySelector("#machinesStockTable tbody"),
-
-  // NOWE: katalog części + dostawcy
-  partSkuInput: document.getElementById("partSkuInput"),
-  partNameInput: document.getElementById("partNameInput"),
-  partSuppliersInput: document.getElementById("partSuppliersInput"),
-  partSuppliersDropdown: document.getElementById("partSuppliersDropdown"),
-  partSuppliersChips: document.getElementById("partSuppliersChips"),
-  partSuppliersClearBtn: document.getElementById("partSuppliersClearBtn"),
-  addPartBtn: document.getElementById("addPartBtn"),
-  partsCatalogBody: document.querySelector("#partsCatalogTable tbody"),
-
-  supplierNameInput: document.getElementById("supplierNameInput"),
-  addSupplierBtn: document.getElementById("addSupplierBtn"),
-  supplierManageSelect: document.getElementById("supplierManageSelect"),
-  supplierSkuSelect: document.getElementById("supplierSkuSelect"),
-  supplierPriceInput: document.getElementById("supplierPriceInput"),
-  setSupplierPriceBtn: document.getElementById("setSupplierPriceBtn"),
-  supplierPriceBody: document.querySelector("#supplierPriceTable tbody"),
-  suppliersListBody: document.querySelector("#suppliersListTable tbody"),
-
-  supplierEditorTemplate: document.getElementById("supplierEditorTemplate"),
-  supplierEditorName: document.getElementById("supplierEditorName"),
-  supplierEditorPartSelect: document.getElementById("supplierEditorPartSelect"),
-  supplierEditorPriceInput: document.getElementById("supplierEditorPriceInput"),
-  supplierEditorSetPriceBtn: document.getElementById("supplierEditorSetPriceBtn"),
-  supplierEditorPriceBody: document.getElementById("supplierEditorPriceBody"),
-  supplierEditorSaveBtn: document.getElementById("supplierEditorSaveBtn"),
-  supplierEditorCancelBtn: document.getElementById("supplierEditorCancelBtn")
+// POPRAWKA: Obsługa przecinków (np. "12,50" -> 12.50)
+const safeFloat = (val) => {
+    if (typeof val === "number") return Math.max(0, val);
+    const strVal = String(val || "").replace(",", "."); 
+    return Math.max(0, parseFloat(strVal) || 0);
 };
 
-// ====== Utils ======
+const safeInt = (val) => Math.max(1, parseInt(val) || 1);
 
-function hasPendingWork() {
-  return (
-    state.currentDelivery.items.length > 0 ||
-    state.currentBuild.items.length > 0
-  );
-}
+// === LOGIKA BIZNESOWA: KATALOG CZĘŚCI ===
 
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-function escapeAttr(str) { return escapeHtml(str).replaceAll('"', "&quot;"); }
+function upsertPart(sku, name, selectedSuppliers = []) {
+    const s = normalize(sku);
+    const n = normalize(name);
+    if (!s || !n) return { success: false, msg: "Podaj Nazwę (ID) i Typ." };
+    
+    const k = skuKey(s);
+    state.partsCatalog.set(k, { sku: s, name: n });
 
-function normSku(sku) { return String(sku || "").trim(); }
-function skuKey(sku) { return normSku(sku).toLowerCase(); }
-
-// liczby/kwoty: wywal NaN, trzymaj >= 0
-function safePrice(val, fallback = 0) {
-  const n = Number(val);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, n);
-}
-
-// ====== Katalog części (globalny) ======
-function upsertPart(sku, name) {
-  const s = normSku(sku);
-  const n = String(name || "").trim();
-  if (!s || !n) return { ok: false, msg: "Podaj Nazwę (unikat) i Typ." };
-
-  const key = skuKey(s);
-  if (state.partsCatalog.has(key)) {
-    // aktualizuj nazwę
-    state.partsCatalog.set(key, { sku: s, name: n });
-    return { ok: true, msg: "Zaktualizowano część." };
-  }
-  state.partsCatalog.set(key, { sku: s, name: n });
-  return { ok: true, msg: "Dodano część." };
-}
-
-function getPartName(sku) {
-  const key = skuKey(sku);
-  const it = state.partsCatalog.get(key);
-  return it ? it.name : String(sku || "").toUpperCase();
-}
-
-
-function renderPartSuppliersBadges(partKey) {
-  const names = Array.from(state.suppliers.keys())
-    .filter((n) => state.suppliers.get(n)?.prices?.has(partKey))
-    .sort((a, b) => a.localeCompare(b, "pl"));
-
-  if (!names.length) return `<span class="muted small">—</span>`;
-  return names.map(n => `<span class="badge supplierBadge">${escapeHtml(n)}</span>`).join(" ");
-}
-
-function renderPartsCatalogTable() {
-  if (!els.partsCatalogBody) return;
-
-  // sortuj po Nazwie (unikatowej), bo to jest klucz i najłatwiej to znaleźć
-  const rows = Array.from(state.partsCatalog.entries())
-    .map(([skuLower, p]) => ({ skuLower, ...p }))
-    .sort((a, b) => a.sku.localeCompare(b.sku, "pl"));
-
-  els.partsCatalogBody.innerHTML = rows.map(p => {
-    const reason = getPartDeleteBlockReason(p.skuLower);
-    const disabled = reason ? "disabled" : "";
-    const title = reason ? `title="${escapeAttr(reason)}"` : "";
-    return `
-    <tr>
-      <td><span class="badge">${escapeHtml(p.sku)}</span></td>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${renderPartSuppliersBadges(p.skuLower)}</td>
-      <td class="right">
-        <button type="button" class="secondary" data-delete-part="${escapeAttr(p.skuLower)}" ${disabled} ${title}>Usuń</button>
-      </td>
-    </tr>
-  `;
-  }).join("");
-}
-
-
-function getPartDeleteBlockReason(skuLower) {
-  // Blokujemy usuwanie, jeśli część jest użyta gdziekolwiek w systemie.
-  const inLots = state.lots.some(l => skuKey(l.sku) === skuLower);
-  if (inLots) return "Nie można usunąć: część jest w partiach magazynowych.";
-
-  for (const [supplierName, sup] of state.suppliers.entries()) {
-    if (sup?.prices?.has?.(skuLower)) {
-      return `Nie można usunąć: część jest w cenniku dostawcy (${supplierName}).`;
-    }
-  }
-
-  const inBom = state.machineCatalog.some(m =>
-    Array.isArray(m.bom) && m.bom.some(b => skuKey(b.sku) === skuLower)
-  );
-  if (inBom) return "Nie można usunąć: część jest użyta w BOM maszyn.";
-
-  const inCurrentDelivery = state.currentDelivery.items.some(it => skuKey(it.sku) === skuLower);
-  if (inCurrentDelivery) return "Nie można usunąć: część jest w bieżącej dostawie (koszyku).";
-
-  return "";
-}
-
-function deletePart(skuLower) {
-  const p = state.partsCatalog.get(skuLower);
-  if (!p) return;
-
-  const reason = getPartDeleteBlockReason(skuLower);
-  if (reason) {
-    toast("Nie można usunąć", reason, "warn", 3200);
-    return;
-  }
-
-  openConfirm(
-    {
-      title: "Usunąć część?",
-      text: `${p.name} (${p.sku})`,
-      okText: "Usuń",
-      cancelText: "Anuluj"
-    },
-    () => {
-      state.partsCatalog.delete(skuLower);
-
-      // Na wszelki wypadek usuń z cenników (powinno być puste przez blokadę, ale lepiej domknąć).
-      for (const sup of state.suppliers.values()) {
-        sup?.prices?.delete?.(skuLower);
-      }
-
-      saveState();
-
-      // odśwież UI zależne od katalogu części
-      renderPartsCatalogTable();
-      renderSupplierSelects();
-      renderSupplierSkuDropdown();
-      renderSupplierPartsForDelivery();
-      renderSupplierPriceTable();
-      renderBomSkuSelect();
-      renderMachineSelect();
-
-      toast("Usunięto", `Część: ${p.name}`, "ok");
-    }
-  );
-}
-
-els.partsCatalogBody?.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-delete-part]");
-  if (!btn) return;
-  deletePart(btn.dataset.deletePart);
-});
-
-// ====== Dostawcy + cenniki ======
-// Inline edycja cennika dostawcy (rozsuwana pod wierszem)
-let uiEditingSupplier = null;
-let uiEditingPrices = null; // Map<partKey, price>
-let uiEditorHome = null;    // {parent, nextSibling}
-let uiEditorRow = null;     // <tr>
-
-function initSupplierEditorHome(){
-  if (!els.supplierEditorTemplate || uiEditorHome) return;
-  uiEditorHome = {
-    parent: els.supplierEditorTemplate.parentElement,
-    nextSibling: els.supplierEditorTemplate.nextElementSibling
-  };
-}
-
-function unmountSupplierEditor(){
-  if (!els.supplierEditorTemplate || !uiEditorHome) return;
-  els.supplierEditorTemplate.hidden = true;
-  if (uiEditorRow){
-    uiEditorRow.remove();
-    uiEditorRow = null;
-  }
-  const p = uiEditorHome.parent;
-  if (!p) return;
-  if (uiEditorHome.nextSibling && uiEditorHome.nextSibling.parentElement === p) {
-    p.insertBefore(els.supplierEditorTemplate, uiEditorHome.nextSibling);
-  } else {
-    p.appendChild(els.supplierEditorTemplate);
-  }
-  uiEditingSupplier = null;
-  uiEditingPrices = null;
-}
-
-function mountSupplierEditorAfter(rowEl){
-  if (!els.supplierEditorTemplate) return;
-  initSupplierEditorHome();
-  if (uiEditorRow) uiEditorRow.remove();
-
-  uiEditorRow = document.createElement("tr");
-  uiEditorRow.className = "inlineEditorRow";
-  uiEditorRow.innerHTML = `<td colspan="2"><div class="inlineEditorWrap"></div></td>`;
-  rowEl.parentElement.insertBefore(uiEditorRow, rowEl.nextElementSibling);
-  uiEditorRow.querySelector(".inlineEditorWrap").appendChild(els.supplierEditorTemplate);
-  els.supplierEditorTemplate.hidden = false;
-}
-
-function renderSupplierEditorPartDropdown(){
-  if (!els.supplierEditorPartSelect) return;
-  const parts = Array.from(state.partsCatalog.values()).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
-  els.supplierEditorPartSelect.innerHTML = parts.length
-    ? parts.map(p => `<option value="${escapeAttr(p.sku)}">${escapeHtml(p.sku)} (${escapeHtml(p.name)})</option>`).join("")
-    : `<option value="">(dodaj części do katalogu)</option>`;
-}
-
-function supplierEditorCurrentPartSku(){
-  const val = els.supplierEditorPartSelect?.value || "";
-  return val;
-}
-
-function syncSupplierEditorPriceInput(){
-  if (!uiEditingPrices || !els.supplierEditorPriceInput) return;
-  const sku = supplierEditorCurrentPartSku();
-  if (!sku) { els.supplierEditorPriceInput.value = "0"; return; }
-  const key = skuKey(sku);
-  const v = uiEditingPrices.has(key) ? uiEditingPrices.get(key) : 0;
-  els.supplierEditorPriceInput.value = String(v ?? 0);
-}
-
-function renderSupplierEditorPriceTable(){
-  if (!els.supplierEditorPriceBody) return;
-  if (!uiEditingSupplier || !uiEditingPrices) { els.supplierEditorPriceBody.innerHTML = ""; return; }
-  const rows = Array.from(uiEditingPrices.entries()).map(([skuLower, price]) => {
-    const part = state.partsCatalog.get(skuLower);
-    return { sku: part?.sku || skuLower.toUpperCase(), name: part?.name || skuLower.toUpperCase(), price };
-  }).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
-
-  els.supplierEditorPriceBody.innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="badge">${escapeHtml(r.sku)}</span></td>
-      <td>${escapeHtml(r.name)}</td>
-      <td class="right">${fmtPLN.format(r.price)}</td>
-    </tr>
-  `).join("");
-}
-
-function openSupplierEditor(name){
-  if (!state.suppliers.has(name)) return;
-  if (uiEditingSupplier === name) {
-    // już otwarte: zamykanie jest przez Zapisz/Anuluj
-    return;
-  }
-  uiEditingSupplier = name;
-  uiEditingPrices = new Map(state.suppliers.get(name).prices);
-
-  if (els.supplierEditorName) els.supplierEditorName.textContent = name;
-  renderSupplierEditorPartDropdown();
-  syncSupplierEditorPriceInput();
-  renderSupplierEditorPriceTable();
-  renderSuppliersList();
-}
-
-function commitSupplierEditor(){
-  if (!uiEditingSupplier || !uiEditingPrices) return;
-  if (!state.suppliers.has(uiEditingSupplier)) return;
-  state.suppliers.get(uiEditingSupplier).prices = new Map(uiEditingPrices);
-  saveState();
-  // odśwież wszystko zależne od cenników
-  renderSupplierSelects();
-  renderPartsCatalogTable();
-  renderSupplierPartsForDelivery();
-  unmountSupplierEditor();
-  renderSuppliersList();
-  toast("Zapisano", `Cennik: ${uiEditingSupplier}`, "ok");
-}
-
-function setSupplierEditorPrice(){
-  if (!uiEditingSupplier || !uiEditingPrices) return;
-  const sku = supplierEditorCurrentPartSku();
-  if (!sku) return;
-  const key = skuKey(sku);
-  if (!state.partsCatalog.has(key)) {
-    toast("Błąd", "Najpierw dodaj część do katalogu.", "warn", 2800);
-    return;
-  }
-  const price = safePrice(els.supplierEditorPriceInput?.value, 0);
-  uiEditingPrices.set(key, price);
-  renderSupplierEditorPriceTable();
-  toast("OK", "Zmieniono cenę (roboczo).", "ok", 1600);
-}
-
-function ensureSupplier(name) {
-  const n = String(name || "").trim();
-  if (!n) return null;
-  if (!state.suppliers.has(n)) state.suppliers.set(n, { prices: new Map() });
-  return n;
-}
-
-function setSupplierPrice(supplierName, sku, price) {
-  const n = ensureSupplier(supplierName);
-  if (!n) return { ok: false, msg: "Podaj nazwę dostawcy." };
-
-  const s = normSku(sku);
-  if (!s) return { ok: false, msg: "Podaj Nazwę części." };
-
-  const p = safePrice(price, 0);
-  const key = skuKey(s);
-
-  // Nazwa części musi istnieć w katalogu (żeby nie robić śmietnika)
-  if (!state.partsCatalog.has(key)) {
-    return { ok: false, msg: "Najpierw dodaj tę część do katalogu części." };
-  }
-
-  state.suppliers.get(n).prices.set(key, p);
-  return { ok: true, msg: "Ustawiono cenę." };
-}
-
-function renderSupplierSelects() {
-  // select w dostawie
-  if (els.supplierSelect) {
-    const names = Array.from(state.suppliers.keys()).sort((a,b)=>a.localeCompare(b,"pl"));
-    els.supplierSelect.innerHTML = [
-      `<option value="">Wybierz dostawcę...</option>`,
-      ...names.map(x => `<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`)
-    ].join("");
-
-    // supplier w stanie trzymamy jako null albo nazwa dostawcy
-    if (!state.currentDelivery.supplier || !state.suppliers.has(state.currentDelivery.supplier)) {
-      state.currentDelivery.supplier = null;
-    }
-    els.supplierSelect.value = state.currentDelivery.supplier || "";
-  }
-
-  // select w panelu zarządzania dostawcą
-  if (els.supplierManageSelect) {
-    const names = Array.from(state.suppliers.keys()).sort((a,b)=>a.localeCompare(b,"pl"));
-    els.supplierManageSelect.innerHTML = names.length
-      ? names.map(x => `<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join("")
-      : `<option value="">(brak dostawców)</option>`;
-  }
-
-  renderSupplierSkuDropdown();
-  renderSupplierPriceTable();
-  renderSuppliersList();
-  renderSupplierPartsForDelivery();
-  renderPartSuppliersPicker();
-}
-
-
-function renderPartSuppliersPicker() {
-  if (!els.partSuppliersDropdown || !els.partSuppliersInput || !els.partSuppliersChips) return;
-
-  // usuń zaznaczenia, które już nie istnieją
-  const supplierNames = Array.from(state.suppliers.keys());
-  uiSelectedPartSuppliers = new Set(
-    Array.from(uiSelectedPartSuppliers).filter((n) => supplierNames.includes(n))
-  );
-
-  const q = (els.partSuppliersInput.value || "").trim().toLowerCase();
-  const filtered = supplierNames
-    .filter((n) => n.toLowerCase().includes(q))
-    .sort((a, b) => a.localeCompare(b, "pl"));
-
-  // chips
-  els.partSuppliersChips.innerHTML = "";
-  for (const name of Array.from(uiSelectedPartSuppliers).sort((a, b) => a.localeCompare(b, "pl"))) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "supplierChip";
-    chip.textContent = name;
-    chip.title = "Usuń";
-    chip.addEventListener("click", () => {
-      uiSelectedPartSuppliers.delete(name);
-      renderPartSuppliersPicker();
+    // Przypisz do dostawców
+    selectedSuppliers.forEach(supName => {
+        const sup = state.suppliers.get(supName);
+        if (sup && !sup.prices.has(k)) {
+            sup.prices.set(k, 0); // Dodaj z ceną 0, jeśli jeszcze nie ma
+        }
     });
-    els.partSuppliersChips.appendChild(chip);
-  }
 
-  // dropdown
-  els.partSuppliersDropdown.innerHTML = "";
-  if (filtered.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "supplierOption empty";
-    empty.textContent = supplierNames.length ? "Brak wyników" : "Brak dostawców (dodaj w Katalogu dostawców)";
-    els.partSuppliersDropdown.appendChild(empty);
-  } else {
-    for (const name of filtered) {
-      const opt = document.createElement("button");
-      opt.type = "button";
-      opt.className = "supplierOption";
-      opt.setAttribute("data-supplier", name);
+    save();
+    return { success: true, msg: "Zapisano część w bazie." };
+}
 
-      const isOn = uiSelectedPartSuppliers.has(name);
-      opt.innerHTML = `<span class="tick">${isOn ? "✓" : ""}</span><span class="label">${escapeHtml(name)}</span>`;
+function deletePart(skuRaw) {
+    const k = skuKey(skuRaw);
+    if (state.lots.some(l => skuKey(l.sku) === k)) return "Część jest na stanie magazynowym.";
+    if (state.currentDelivery.items.some(i => skuKey(i.sku) === k)) return "Część jest w trakcie dostawy.";
+    
+    const usedInMachine = state.machineCatalog.find(m => m.bom.some(b => skuKey(b.sku) === k));
+    if (usedInMachine) return `Część używana w maszynie: ${usedInMachine.name}`;
 
-      opt.addEventListener("click", () => {
-        if (uiSelectedPartSuppliers.has(name)) uiSelectedPartSuppliers.delete(name);
-        else uiSelectedPartSuppliers.add(name);
-        renderPartSuppliersPicker();
-      });
-
-      els.partSuppliersDropdown.appendChild(opt);
+    state.partsCatalog.delete(k);
+    for (let s of state.suppliers.values()) {
+        s.prices.delete(k);
     }
-  }
-
-  // pokaż/ukryj dropdown: tylko gdy input jest w fokusie lub ma query
-  // (samo hidden sterujemy w eventach, tu nie ruszamy)
+    save();
+    return null;
 }
 
-function openPartSuppliersDropdown() {
-  if (!els.partSuppliersDropdown) return;
-  els.partSuppliersDropdown.hidden = false;
-}
+// === LOGIKA BIZNESOWA: DOSTAWCY ===
 
-function closePartSuppliersDropdown() {
-  if (!els.partSuppliersDropdown) return;
-  els.partSuppliersDropdown.hidden = true;
-}
-
-function renderSupplierSkuDropdown() {
-  if (!els.supplierSkuSelect) return;
-  const parts = Array.from(state.partsCatalog.values())
-    .sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
-
-  els.supplierSkuSelect.innerHTML = parts.length
-    ? parts.map(p => `<option value="${escapeAttr(p.sku)}">${escapeHtml(p.sku)} (${escapeHtml(p.name)})</option>`).join("")
-    : `<option value="">(dodaj części do katalogu)</option>`;
-}
-
-function currentManagedSupplier() {
-  const val = els.supplierManageSelect?.value || "";
-  return state.suppliers.has(val) ? val : "";
-}
-
-function renderSupplierPriceTable() {
-  if (!els.supplierPriceBody) return;
-  const sup = currentManagedSupplier();
-  if (!sup) {
-    els.supplierPriceBody.innerHTML = "";
-    return;
-  }
-
-  const prices = state.suppliers.get(sup).prices;
-  const rows = Array.from(prices.entries()).map(([skuLower, price]) => {
-    const part = state.partsCatalog.get(skuLower);
-    return {
-      sku: part?.sku || skuLower.toUpperCase(),
-      name: part?.name || skuLower.toUpperCase(),
-      price
-    };
-  }).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
-
-  // Kolumny: Nazwa, Typ, Cena
-  els.supplierPriceBody.innerHTML = rows.map(r => `
-    <tr>
-      <td><span class="badge">${escapeHtml(r.sku)}</span></td>
-      <td>${escapeHtml(r.name)}</td>
-      <td class="right">${fmtPLN.format(r.price)}</td>
-    </tr>
-  `).join("");
-}
-// lista wszystkich dostawców + usuwanie
-function supplierUsedInLots(name) {
-  return state.lots.some(l => String(l.supplier || "").toLowerCase() === String(name || "").toLowerCase());
+function addSupplier(name) {
+    const n = normalize(name);
+    if (!n) return;
+    if (!state.suppliers.has(n)) {
+        state.suppliers.set(n, { prices: new Map() });
+        save();
+        renderAllSuppliers();
+        refreshCatalogsUI(); // Żeby odświeżyć listę checkboxów w "Nowa część"
+    }
 }
 
 function deleteSupplier(name) {
-  if (!state.suppliers.has(name)) return;
-
-  if (supplierUsedInLots(name)) {
-    toast("Nie można usunąć", "Dostawca ma partie w magazynie.", "warn", 3200);
-    return;
-  }
-
-  openConfirm(
-    {
-      title: "Usunąć dostawcę?",
-      text: `Dostawca: "${name}" (usunie też jego cennik)`,
-      okText: "Usuń",
-      cancelText: "Anuluj"
-    },
-    () => {
-      state.suppliers.delete(name);
-
-      if (uiEditingSupplier === name) {
-        unmountSupplierEditor();
-      }
-
-      // jeśli był wybrany w dostawie, przestaw na pierwszy dostępny
-      if (els.supplierSelect && els.supplierSelect.value === name) {
-        const first = Array.from(state.suppliers.keys())[0] || "";
-        els.supplierSelect.value = first;
-      }
-
-      saveState();
-      // odśwież UI po usunięciu dostawcy
-      renderSupplierSelects();
-      renderSupplierPriceTable();
-      renderSupplierPartsForDelivery();
-
-      toast("Usunięto", `Dostawca: ${name}`, "ok");
+    if (state.lots.some(l => l.supplier === name)) {
+        toast("Błąd", "Nie można usunąć dostawcy, który ma towar na magazynie.", "bad");
+        return;
     }
-  );
+    state.suppliers.delete(name);
+    save();
+    renderAllSuppliers();
+    refreshCatalogsUI();
 }
 
-function renderSuppliersList() {
-  if (!els.suppliersListBody) return;
-
-  const names = Array.from(state.suppliers.keys()).sort((a,b)=>a.localeCompare(b,"pl"));
-  els.suppliersListBody.innerHTML = names.map(n => {
-    const isOpen = (uiEditingSupplier === n);
-    const editLabel = "Edytuj";
-    return `
-      <tr class="${isOpen ? "noHover" : ""}">
-        <td>${escapeHtml(n)}</td>
-        <td class="right">
-          <button type="button" class="success" data-edit-supplier="${escapeAttr(n)}" ${isOpen ? "disabled" : ""}>${editLabel}</button>
-          <button type="button" class="secondary" data-delete-supplier="${escapeAttr(n)}">Usuń</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
-
-  // po renderze: jeśli edytujemy, podepnij edytor pod właściwy wiersz
-  if (uiEditingSupplier && state.suppliers.has(uiEditingSupplier)) {
-    const btns = els.suppliersListBody.querySelectorAll("button[data-edit-supplier]");
-    for (const b of btns) {
-      if (b.dataset.editSupplier === uiEditingSupplier) {
-        const row = b.closest("tr");
-        if (row) mountSupplierEditorAfter(row);
-        break;
-      }
-    }
-  }
+function updateSupplierPrice(supplierName, skuRaw, price) {
+    const sup = state.suppliers.get(supplierName);
+    if (!sup) return;
+    const k = skuKey(skuRaw);
+    
+    sup.prices.set(k, safeFloat(price));
+    save();
 }
 
-// ====== Maszyny: inline edycja BOM (rozsuwana pod wierszem) ======
-let uiEditingMachineCode = null;
-let uiEditingMachineBom = null; // Array<{sku, qty}>
-let uiMachineEditorHome = null; // {parent, nextSibling}
-let uiMachineEditorRow = null;  // <tr>
+// === LOGIKA BIZNESOWA: DOSTAWY ===
 
-function initMachineEditorHome(){
-  if (!els.machineEditorTemplate || uiMachineEditorHome) return;
-  uiMachineEditorHome = {
-    parent: els.machineEditorTemplate.parentElement,
-    nextSibling: els.machineEditorTemplate.nextElementSibling
-  };
-}
+function addToDelivery(supplier, skuRaw, qty, price) {
+    const k = skuKey(skuRaw);
+    const part = state.partsCatalog.get(k);
+    if (!part) return;
 
-function unmountMachineEditor(){
-  if (!els.machineEditorTemplate || !uiMachineEditorHome) return;
-  els.machineEditorTemplate.hidden = true;
-  if (uiMachineEditorRow){
-    uiMachineEditorRow.remove();
-    uiMachineEditorRow = null;
-  }
-  const p = uiMachineEditorHome.parent;
-  if (!p) return;
-  if (uiMachineEditorHome.nextSibling && uiMachineEditorHome.nextSibling.parentElement === p) {
-    p.insertBefore(els.machineEditorTemplate, uiMachineEditorHome.nextSibling);
-  } else {
-    p.appendChild(els.machineEditorTemplate);
-  }
-  uiEditingMachineCode = null;
-  uiEditingMachineBom = null;
-}
-
-function mountMachineEditorAfter(rowEl){
-  if (!els.machineEditorTemplate) return;
-  initMachineEditorHome();
-  if (uiMachineEditorRow) uiMachineEditorRow.remove();
-
-  uiMachineEditorRow = document.createElement("tr");
-  uiMachineEditorRow.className = "inlineEditorRow";
-  // tabela maszyn ma 4 kolumny
-  uiMachineEditorRow.innerHTML = `<td colspan="4"><div class="inlineEditorWrap"></div></td>`;
-  rowEl.parentElement.insertBefore(uiMachineEditorRow, rowEl.nextElementSibling);
-  uiMachineEditorRow.querySelector(".inlineEditorWrap").appendChild(els.machineEditorTemplate);
-  els.machineEditorTemplate.hidden = false;
-}
-
-function cloneBom(bom){
-  return (bom || []).map(x => ({ sku: x.sku, qty: Number(x.qty || 1) }));
-}
-
-function renderMachineEditorHeader(){
-  if (!uiEditingMachineCode) return;
-  const m = state.machineCatalog.find(x => x.code === uiEditingMachineCode);
-  if (!m) return;
-  if (els.machineEditorName) els.machineEditorName.textContent = m.name || "";
-  if (els.machineEditorCode) els.machineEditorCode.textContent = m.code || "";
-}
-
-function openMachineEditor(code){
-  const m = state.machineCatalog.find(x => x.code === code);
-  if (!m) return;
-
-  if (uiEditingMachineCode === code) return;
-
-  uiEditingMachineCode = code;
-  uiEditingMachineBom = cloneBom(m.bom);
-
-  // ustaw ukryty select (dla istniejącej logiki)
-  renderMachineManageSelect();
-  if (els.machineManageSelect) els.machineManageSelect.value = code;
-
-  renderMachineEditorHeader();
-  renderBomSkuSelect();
-  renderBomTable();
-  renderMachinesCatalogTable();
-}
-
-function commitMachineEditor(){
-  if (!uiEditingMachineCode) return;
-  const m = state.machineCatalog.find(x => x.code === uiEditingMachineCode);
-  if (!m) return;
-  m.bom = cloneBom(uiEditingMachineBom);
-  saveState();
-
-  unmountMachineEditor();
-  renderMachinesCatalogTable();
-  renderMachineSelect();
-  toast("Zapisano", `BOM: ${m.name} (${m.code})`, "ok");
-}
-
-function cancelMachineEditor(){
-  if (!uiEditingMachineCode) return;
-  unmountMachineEditor();
-  renderMachinesCatalogTable();
-  toast("Anulowano", "Zmiany nie zostały zapisane.", "warn", 1800);
-}
-
-function setBomItemInTemp(sku, qty){
-  const s = String(sku || "").trim();
-  if (!s) return { ok:false, msg:"Wybierz część." };
-  const q = Math.max(1, Math.floor(Number(qty || 1)));
-  const key = skuKey(s);
-  if (!state.partsCatalog.has(key)) {
-    return { ok:false, msg:"Najpierw dodaj tę część do katalogu części." };
-  }
-  if (!uiEditingMachineBom) uiEditingMachineBom = [];
-  const existing = uiEditingMachineBom.find(b => skuKey(b.sku) === key);
-  if (existing) existing.qty = q;
-  else uiEditingMachineBom.push({ sku: s, qty: q });
-  return { ok:true, msg:"Ustawiono w BOM (roboczo)." };
-}
-
-// ====== Nowa dostawa (lista części z cennika dostawcy) ======
-function supplierPriceForSku(supplierName, sku) {
-  const sup = state.suppliers.get(supplierName);
-  if (!sup) return null;
-  const key = skuKey(sku);
-  return sup.prices.has(key) ? sup.prices.get(key) : null;
-}
-
-function renderSupplierPartsForDelivery() {
-  if (!els.supplierPartsSelect) return;
-
-  const supplier = els.supplierSelect?.value || "";
-  state.currentDelivery.supplier = supplier || null;
-
-  if (!supplier || !state.suppliers.has(supplier)) {
-    els.supplierPartsSelect.innerHTML = "";
-    els.supplierPartsSelect.disabled = true;
-    els.addDeliveryItemBtn.disabled = true;
-    els.deliveryPrice.value = "0";
-    return;
-  }
-
-  const prices = state.suppliers.get(supplier).prices;
-  const rows = Array.from(prices.entries()).map(([skuLower, price]) => {
-    const part = state.partsCatalog.get(skuLower);
-    return {
-      sku: part?.sku || skuLower.toUpperCase(),
-      name: part?.name || skuLower.toUpperCase(),
-      price
-    };
-  }).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
-
-  els.supplierPartsSelect.innerHTML = rows.map((it, idx) => `
-    <option value="${idx}" data-sku="${escapeAttr(it.sku)}" data-price="${it.price}">
-      ${escapeHtml(it.sku)} • ${escapeHtml(it.name)} • ${fmtPLN.format(it.price)}
-    </option>
-  `).join("");
-
-  els.supplierPartsSelect.disabled = rows.length === 0;
-  els.addDeliveryItemBtn.disabled = rows.length === 0;
-
-  if (rows.length > 0) {
-    els.deliveryPrice.value = String(rows[0].price ?? 0);
-  } else {
-    els.deliveryPrice.value = "0";
-  }
-}
-
-function onDeliveryPartChange() {
-  const opt = els.supplierPartsSelect?.selectedOptions?.[0];
-  if (!opt) return;
-  const price = safePrice(opt.dataset.price, 0);
-  els.deliveryPrice.value = String(price);
-}
-
-function addDeliveryItem() {
-  const supplier = state.currentDelivery.supplier;
-  if (!state.suppliers.has(supplier)) return alert("Wybierz dostawcę z listy.");
-
-  const opt = els.supplierPartsSelect?.selectedOptions?.[0];
-  if (!opt) return alert("Wybierz część.");
-
-  const sku = String(opt.dataset.sku || "").trim();
-  const name = getPartName(sku);
-
-  const rawQty = Number(els.deliveryQty.value);
-if (!Number.isInteger(rawQty) || rawQty <= 0) {
-  return alert("Ilość musi być liczbą większą od zera.");
-}
-const qty = rawQty;
-
-  const price = safePrice(els.deliveryPrice.value, 0); // można nadpisać ręcznie
-
-  state.currentDelivery.items.push({
-    id: nextId(),
-    sku,
-    name,
-    qty,
-    price
-  });
-
-  renderDeliveryItems();
-  saveState();
-}
-
-function renderDeliveryItems() {
-  const rows = state.currentDelivery.items;
-
-  els.deliveryItemsBody.innerHTML = rows.map(it => `
-    <tr>
-      <td><span class="badge">${escapeHtml(it.sku)}</span> ${escapeHtml(it.name)}</td>
-      <td class="right">${it.qty}</td>
-      <td class="right">${fmtPLN.format(it.price)}</td>
-      <td class="right">${fmtPLN.format(it.qty * it.price)}</td>
-      <td class="right"><button class="iconBtn" data-remove="${it.id}">Usuń</button></td>
-    </tr>
-  `).join("");
-
-  const total = rows.reduce((sum, it) => sum + it.qty * it.price, 0);
-  els.itemsCount.textContent = String(rows.length);
-  els.itemsTotal.textContent = fmtPLN.format(total);
-
-  // CTA: finalizacja tylko jeśli są pozycje
-  if (els.finalizeDeliveryBtn) {
-    els.finalizeDeliveryBtn.disabled = rows.length === 0;
-    // opcjonalnie: pokaż sumę w przycisku
-    els.finalizeDeliveryBtn.textContent = rows.length === 0
-      ? "Zapisz dostawę (dodaj partie)"
-      : `Zapisz dostawę • ${fmtPLN.format(total)}`;
-  }
-}
-
-function addLot({ name, sku, supplier, qty, unitPrice }) {
-  const cleanSku = normSku(sku);
-  const cleanName = String(name || "").trim();
-  const cleanSupplier = String(supplier || "").trim();
-  const q = Math.max(0, Math.floor(Number(qty || 0)));
-  const price = safePrice(unitPrice, 0);
-  if (!cleanSku || !cleanName || q <= 0) return;
-
-  const existing = state.lots.find(l =>
-    skuKey(l.sku) === skuKey(cleanSku) &&
-    (l.supplier || "").toLowerCase() === cleanSupplier.toLowerCase() &&
-    Number(l.unitPrice) === Number(price)
-  );
-
-  if (existing) {
-    existing.qty += q;
-    return;
-  }
-
-  state.lots.push({
-    id: nextId(),
-    name: cleanName,
-    sku: cleanSku,
-    supplier: cleanSupplier,
-    unitPrice: price,
-    qty: q
-  });
+    state.currentDelivery.items.push({
+        id: nextId(),
+        sku: part.sku,
+        name: part.name,
+        qty: safeInt(qty),
+        price: safeFloat(price)
+    });
+    state.currentDelivery.supplier = supplier;
+    save();
+    renderDelivery();
 }
 
 function finalizeDelivery() {
-  const supplier = state.currentDelivery.supplier;
-  if (!supplier || !state.suppliers.has(supplier)) return alert("Wybierz dostawcę.");
-  if (state.currentDelivery.items.length === 0) return alert("Dodaj przynajmniej jedną pozycję.");
-
-  state.currentDelivery.dateISO = els.deliveryDate.value || "";
-
-  for (const it of state.currentDelivery.items) {
-    // upewnij się, że część (Nazwa) istnieje w katalogu
-    if (!state.partsCatalog.has(skuKey(it.sku))) {
-      upsertPart(it.sku, it.name);
+    // --- POPRAWKA TUTAJ ---
+    // Pobieramy datę bezpośrednio z pola input przed sprawdzeniem
+    const dateInput = document.getElementById("deliveryDate");
+    if (dateInput) {
+        state.currentDelivery.dateISO = dateInput.value;
     }
-    addLot({ name: it.name, sku: it.sku, supplier, qty: it.qty, unitPrice: it.price });
-  }
+    // ----------------------
 
-  state.currentDelivery.items = [];
-  renderDeliveryItems();
+    const d = state.currentDelivery;
+    if (!d.items.length) return;
+    if (!d.dateISO) return toast("Uwaga", "Podaj datę dostawy.", "warn");
 
-  renderSkuSummary();
-  renderLotsTable();
-  renderWarehouseTotal();
-
-  refreshManualConsumeUI();
-  saveState();
-  alert("Dostawa zapisana (partie dodane).");
-}
-
-// ====== Magazyn części: render ======
-function renderMachineManageSelect() {
-  if (!els.machineManageSelect) return;
-  els.machineManageSelect.innerHTML = state.machineCatalog
-    .slice()
-    .sort((a,b)=>a.name.localeCompare(b.name,"pl"))
-    .map(m => `<option value="${escapeAttr(m.code)}">${escapeHtml(m.name)} (${escapeHtml(m.code)})</option>`)
-    .join("");
-}
-
-function renderBomSkuSelect() {
-  if (!els.bomSkuSelect) return;
-  const parts = Array.from(state.partsCatalog.values())
-    .sort((a,b)=>a.name.localeCompare(b.name,"pl"));
-  els.bomSkuSelect.innerHTML = parts.length
-    ? parts.map(p => `<option value="${escapeAttr(p.sku)}">${escapeHtml(p.sku)} (${escapeHtml(p.name)})</option>`).join("")
-    : `<option value="">(dodaj części do katalogu)</option>`;
-}
-
-function getManagedMachine() {
-  const code = uiEditingMachineCode || (els.machineManageSelect?.value || "");
-  const base = state.machineCatalog.find(m => m.code === code) || null;
-  if (!base) return null;
-  if (uiEditingMachineCode) {
-    return { ...base, bom: uiEditingMachineBom ? uiEditingMachineBom : (base.bom || []) };
-  }
-  return base;
-}
-
-function renderBomTable() {
-  if (!els.bomBody) return;
-  const m = getManagedMachine();
-  if (!m) { els.bomBody.innerHTML = ""; return; }
-
-  // Kolumny: Nazwa, Typ, Ilość
-  els.bomBody.innerHTML = (m.bom || []).map((b, idx) => `
-    <tr>
-      <td><span class="badge">${escapeHtml(b.sku)}</span></td>
-      <td>${escapeHtml(getPartName(b.sku))}</td>
-      <td class="right">${Number(b.qty || 0)}</td>
-      <td class="right"><button class="iconBtn" data-del-bom="${idx}">Usuń</button></td>
-    </tr>
-  `).join("");
-}
-
-
-function renderMachinesCatalogTable() {
-  if (!els.machinesCatalogBody) return;
-
-  const rows = [...state.machineCatalog]
-    .sort((a, b) => (a.code || "").localeCompare(b.code || "", "pl"));
-
-  els.machinesCatalogBody.innerHTML = rows.map(m => {
-    const bomCount = (m.bom || []).length;
-    const isOpen = (uiEditingMachineCode === m.code);
-    return `
-      <tr class="${isOpen ? "noHover" : ""}">
-        <td>${escapeHtml(m.name || "")}</td>
-        <td><span class="badge">${escapeHtml(m.code || "")}</span></td>
-        <td class="right">${bomCount}</td>
-        <td class="right">
-          <button type="button" class="success" data-edit-machine="${escapeAttr(m.code || "")}" ${isOpen ? "disabled" : ""}>Edytuj</button>
-          <button type="button" class="secondary" data-del-machine="${escapeAttr(m.code || "")}">Usuń</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
-
-  // po renderze: jeśli edytujemy, podepnij edytor pod właściwy wiersz
-  if (uiEditingMachineCode && state.machineCatalog.some(x => x.code === uiEditingMachineCode)) {
-    const btns = els.machinesCatalogBody.querySelectorAll("button[data-edit-machine]");
-    for (const b of btns) {
-      if (b.dataset.editMachine === uiEditingMachineCode) {
-        const row = b.closest("tr");
-        if (row) mountMachineEditorAfter(row);
-        break;
-      }
-    }
-  }
-}
-
-function deleteMachine(code) {
-  const idx = state.machineCatalog.findIndex(m => m.code === code);
-  if (idx < 0) return;
-
-  const m = state.machineCatalog[idx];
-
-  // blokady bezpieczeństwa
-  if (machineHasStock(code)) {
-    toast("Nie można usunąć", "Maszyna ma stan w magazynie maszyn.", "warn", 3200);
-    return;
-  }
-  if (machineInBuildList(code)) {
-    toast("Nie można usunąć", "Maszyna jest na liście bieżącej produkcji.", "warn", 3200);
-    return;
-  }
-
-  openConfirm(
-    {
-      title: "Usunąć maszynę?",
-      text: `${m.name} (${m.code})`,
-      okText: "Usuń",
-      cancelText: "Anuluj"
-    },
-    () => {
-      if (uiEditingMachineCode && uiEditingMachineCode === code) {
-        unmountMachineEditor();
-      }
-      state.machineCatalog.splice(idx, 1);
-      saveState();
-
-      renderMachineManageSelect();
-      renderMachineSelect();
-
-      toast("Usunięto", `Maszyna: ${m.name}`, "ok");
-    }
-  );
-}
-
-
-function addMachine(code, name) {
-  const c = String(code || "").trim();
-  const n = String(name || "").trim();
-  if (!c || !n) return { ok:false, msg:"Podaj kod i nazwę maszyny." };
-
-  if (state.machineCatalog.some(m => m.code.toLowerCase() === c.toLowerCase())) {
-    return { ok:false, msg:"Taki kod maszyny już istnieje." };
-  }
-
-  state.machineCatalog.push({ code: c, name: n, bom: [] });
-
-  // odśwież select do produkcji też
-  renderMachineSelect();
-  renderMachineManageSelect();
-
-  return { ok:true, msg:"Dodano maszynę." };
-}
-
-function addBomItem(machineCode, sku, qty) {
-  const m = state.machineCatalog.find(x => x.code === machineCode);
-  if (!m) return { ok:false, msg:"Nie znaleziono maszyny." };
-
-  const s = String(sku || "").trim();
-  if (!s) return { ok:false, msg:"Wybierz część." };
-
-  const q = Math.max(1, Math.floor(Number(qty || 1)));
-  const key = skuKey(s);
-
-  // Część musi istnieć globalnie
-  if (!state.partsCatalog.has(key)) {
-    return { ok:false, msg:"Najpierw dodaj tę część do katalogu części." };
-  }
-
-  // jeśli już jest w BOM, to NADPISUJ ilość (logiczniejsze)
-  const existing = m.bom.find(b => skuKey(b.sku) === key);
-  if (existing) existing.qty = q;
-  else m.bom.push({ sku: s, qty: q });
-
-  return { ok:true, msg:"Ustawiono w BOM." };
-}
-
-function renderSkuSummary() {
-  const q = (els.searchParts.value || "").trim().toLowerCase();
-  const map = new Map();
-
-  for (const lot of state.lots) {
-    if (q) {
-      const ok = (lot.name || "").toLowerCase().includes(q) || (lot.sku || "").toLowerCase().includes(q);
-      if (!ok) continue;
-    }
-    const key = skuKey(lot.sku);
-    if (!map.has(key)) map.set(key, { name: lot.name, sku: lot.sku, totalQty: 0, totalValue: 0 });
-
-    const row = map.get(key);
-    const qty = Number(lot.qty || 0);
-    const price = Number(lot.unitPrice || 0);
-    row.totalQty += qty;
-    row.totalValue += qty * price;
-  }
-
-  // sortuj po Nazwie (unikatowej)
-  const rows = Array.from(map.values()).sort((a,b)=>String(a.sku||"").localeCompare(String(b.sku||""),"pl"));
-  els.skuSummaryBody.innerHTML = rows.map(r => `
-    <tr class="${stockClass(r.totalQty)}">
-      <td><span class="badge">${escapeHtml(r.sku)}</span></td>
-      <td>${escapeHtml(r.name)}</td>
-      <td class="right">${r.totalQty}</td>
-      <td class="right">${fmtPLN.format(r.totalValue)}</td>
-    </tr>
-  `).join("");
-}
-
-function renderLotsTable() {
-  const q = (els.searchParts.value || "").trim().toLowerCase();
-  const rows = state.lots
-    .filter(l => {
-      if (!q) return true;
-      return (l.name || "").toLowerCase().includes(q) || (l.sku || "").toLowerCase().includes(q);
-    })
-    .sort((a,b)=>{
-      const n = (a.name||"").localeCompare(b.name||"","pl");
-      if (n !== 0) return n;
-      return Number(a.unitPrice||0) - Number(b.unitPrice||0);
+    d.items.forEach(item => {
+        state.lots.push({
+            id: nextId(),
+            sku: item.sku,
+            name: item.name,
+            supplier: d.supplier,
+            unitPrice: item.unitPrice || item.price, // Fallback fix
+            qty: item.qty,
+            dateIn: d.dateISO
+        });
     });
 
-  els.lotsBody.innerHTML = rows.map(l => {
-    const value = Number(l.qty||0) * Number(l.unitPrice||0);
-    return `
-      <tr>
-        <td><span class="badge">${escapeHtml(l.sku)}</span></td>
-        <td>${escapeHtml(l.name)}</td>
-        <td>${escapeHtml(l.supplier || "-")}</td>
-        <td class="right">${fmtPLN.format(l.unitPrice || 0)}</td>
-        <td class="right">${Number(l.qty || 0)}</td>
-        <td class="right">${fmtPLN.format(value)}</td>
-      </tr>
-    `;
-  }).join("");
+    state.currentDelivery.items = [];
+    state.currentDelivery.supplier = null;
+    
+    // Resetujemy też stan daty i pole w formularzu
+    state.currentDelivery.dateISO = "";
+    if (dateInput) dateInput.value = "";
+
+    save();
+    renderDelivery();
+    renderWarehouse();
+    toast("Sukces", "Towar przyjęty na stan.", "ok");
 }
 
-function renderWarehouseTotal() {
-  const total = state.lots.reduce((sum, lot) => sum + Number(lot.qty||0)*Number(lot.unitPrice||0), 0);
-  if (els.warehouseTotal) els.warehouseTotal.textContent = fmtPLN.format(total);
+// === LOGIKA BIZNESOWA: PRODUKCJA ===
+
+function calculateBuildRequirements() {
+    const needs = new Map(); 
+    state.currentBuild.items.forEach(buildItem => {
+        const machine = state.machineCatalog.find(m => m.code === buildItem.machineCode);
+        if (!machine) return;
+        machine.bom.forEach(bomItem => {
+            const k = skuKey(bomItem.sku);
+            const total = (bomItem.qty * buildItem.qty);
+            needs.set(k, (needs.get(k) || 0) + total);
+        });
+    });
+    return needs;
 }
 
-// ====== Produkcja (FIFO + ręczny) ======
-function renderMachineSelect() {
-  const rows = state.machineCatalog
-    .slice()
-    .sort((a,b)=>a.name.localeCompare(b.name,"pl"));
-  els.machineSelect.innerHTML = rows.map(m => `
-    <option value="${escapeAttr(m.code)}">${escapeHtml(m.name)} (${escapeHtml(m.code)})</option>
-  `).join("");
-}
-
-function renderBuildItems() {
-  const rows = state.currentBuild.items;
-  els.buildItemsBody.innerHTML = rows.map(it => `
-    <tr>
-      <td>${escapeHtml(it.machineName)} <span class="badge">${escapeHtml(it.machineCode)}</span></td>
-      <td class="right">${it.qty}</td>
-      <td class="right"><button class="iconBtn" data-remove-build="${it.id}">Usuń</button></td>
-    </tr>
-  `).join("");
-  els.buildItemsCount.textContent = String(rows.length);
-}
-
-function addBuildItem() {
-    const rawQty = Number(els.buildQty.value);
-if (!Number.isInteger(rawQty) || rawQty <= 0) {
-  return alert("Ilość musi być liczbą większą od zera.");
-}
-
-  const code = els.machineSelect.value;
-  const qty = rawQty;
-
-  const machine = state.machineCatalog.find(m => m.code === code);
-  if (!machine) return alert("Nie znaleziono maszyny.");
-  if (!machine.bom || machine.bom.length === 0) {
-    return alert(`Maszyna ${machine.name} (${machine.code}) nie ma zdefiniowanego BOM.`);
-  }
-
-  state.currentBuild.items.push({ id: nextId(), machineCode: machine.code, machineName: machine.name, qty });
-
-  els.missingBox.hidden = true;
-  els.missingList.innerHTML = "";
-  manualPlanGenerated = false;
-
-  renderBuildItems();
-  refreshManualConsumeUI();
-  saveState();
-}
-
-function totalQtyBySku(skuLowerOrSku) {
-  const key = skuKey(skuLowerOrSku);
-  return state.lots
-    .filter(l => skuKey(l.sku) === key)
-    .reduce((sum, l) => sum + Number(l.qty || 0), 0);
-}
-
-function consumeSkuFIFO(skuLowerOrSku, qtyNeeded) {
-  const key = skuKey(skuLowerOrSku);
-  let remaining = Math.max(0, Math.floor(Number(qtyNeeded || 0)));
-
-  const lots = state.lots
-    .filter(l => skuKey(l.sku) === key && Number(l.qty || 0) > 0)
-    .sort((a,b)=>a.id-b.id);
-
-  for (const lot of lots) {
-    if (remaining <= 0) break;
-    const take = Math.min(Number(lot.qty||0), remaining);
-    lot.qty -= take;
-    remaining -= take;
-  }
-
-  state.lots = state.lots.filter(l => Number(l.qty || 0) > 0);
-  return remaining === 0;
-}
-
-function computeMissingPartsForBuild() {
-  const needed = new Map(); // skuLower -> qty
-  for (const bi of state.currentBuild.items) {
-    const machine = state.machineCatalog.find(m => m.code === bi.machineCode);
-    if (!machine) continue;
-
-    for (const b of machine.bom) {
-      const add = Number(b.qty||0) * Number(bi.qty||0);
-      const key = skuKey(b.sku);
-      needed.set(key, (needed.get(key) || 0) + add);
+function checkStockAvailability(needs) {
+    const missing = [];
+    for (const [k, qtyNeeded] of needs.entries()) {
+        const stock = state.lots
+            .filter(l => skuKey(l.sku) === k)
+            .reduce((sum, l) => sum + l.qty, 0);
+        
+        if (stock < qtyNeeded) {
+            const part = state.partsCatalog.get(k);
+            missing.push({ sku: part ? part.sku : k, needed: qtyNeeded, has: stock });
+        }
     }
-  }
+    return missing;
+}
 
-  const missing = [];
-  for (const [skuLower, qtyNeeded] of needed.entries()) {
-    const available = totalQtyBySku(skuLower);
-    if (available < qtyNeeded) {
-      missing.push({ sku: skuLower, needed: qtyNeeded, available, missing: qtyNeeded - available });
+function finalizeBuild(manualAllocation = null) {
+    const requirements = calculateBuildRequirements();
+    const missing = checkStockAvailability(requirements);
+
+    if (missing.length > 0) {
+        renderMissingParts(missing);
+        return;
     }
-  }
 
-  return { needed, missing };
+    const lotsClone = JSON.parse(JSON.stringify(state.lots));
+    
+    if (manualAllocation) {
+        for (const [lotId, qty] of Object.entries(manualAllocation)) {
+            const lot = lotsClone.find(l => l.id == lotId);
+            if (lot) {
+                lot.qty -= qty;
+                if (lot.qty < 0) return toast("Błąd", "Próba pobrania więcej niż w partii.", "bad");
+            }
+        }
+    } else {
+        for (const [k, qtyNeeded] of requirements.entries()) {
+            let remain = qtyNeeded;
+            const relevantLots = lotsClone
+                .filter(l => skuKey(l.sku) === k && l.qty > 0)
+                .sort((a, b) => a.id - b.id);
+            
+            for (const lot of relevantLots) {
+                if (remain <= 0) break;
+                const take = Math.min(lot.qty, remain);
+                lot.qty -= take;
+                remain -= take;
+            }
+        }
+    }
+
+    state.lots = lotsClone.filter(l => l.qty > 0);
+    
+    state.currentBuild.items.forEach(bi => {
+        const existing = state.machinesStock.find(m => m.code === bi.machineCode);
+        
+        // POPRAWKA: Pobieranie aktualnej nazwy maszyny (jeśli edytowano BOM/nazwę)
+        const machineDef = state.machineCatalog.find(m => m.code === bi.machineCode);
+        const currentName = machineDef ? machineDef.name : bi.machineCode;
+
+        if (existing) {
+            existing.qty += bi.qty;
+            existing.name = currentName; // Aktualizacja nazwy
+        } else {
+            state.machinesStock.push({ 
+                code: bi.machineCode, 
+                name: currentName, 
+                qty: bi.qty 
+            });
+        }
+    });
+
+    state.currentBuild.items = [];
+    save();
+    
+    renderBuild();
+    renderWarehouse();
+    renderMachinesStock();
+    toast("Produkcja zakończona", "Stany zaktualizowane.", "ok");
 }
 
-function showMissing(missing) {
-  if (!missing.length) {
-    els.missingBox.hidden = true;
-    els.missingList.innerHTML = "";
-    return;
-  }
-  els.missingBox.hidden = false;
-  els.missingList.innerHTML = missing.map(m => `
-    <li><strong>${escapeHtml(m.sku.toUpperCase())}</strong>: brakuje ${m.missing} (potrzeba ${m.needed}, jest ${m.available})</li>
-  `).join("");
-}
 
-function getLotsForSku(skuLower) {
-  return state.lots
-    .filter(l => skuKey(l.sku) === skuLower && Number(l.qty||0) > 0)
-    .sort((a,b)=>a.id-b.id);
-}
+// === INTERFEJS UŻYTKOWNIKA (UI) ===
 
-function consumeFromLotsByPlan(planMap) {
-  for (const [lotIdStr, qtyStr] of Object.entries(planMap)) {
-    const lotId = Number(lotIdStr);
-    const take = Math.max(0, Math.floor(Number(qtyStr || 0)));
-    if (!take) continue;
+const els = {
+    partsTable: document.querySelector("#partsTable tbody"),
+    summaryTable: document.querySelector("#skuSummaryTable tbody"),
+    whTotal: document.getElementById("warehouseTotal"),
+    deliveryItems: document.querySelector("#deliveryItemsTable tbody"),
+    buildItems: document.querySelector("#buildItemsTable tbody"),
+    missingBox: document.getElementById("missingBox"),
+    manualBox: document.getElementById("manualConsumeBox"),
+    partsCatalog: document.querySelector("#partsCatalogTable tbody"),
+    suppliersList: document.querySelector("#suppliersListTable tbody"),
+    machinesCatalog: document.querySelector("#machinesCatalogTable tbody"),
+    machineSelect: document.getElementById('machineSelect'),};
 
-    const lot = state.lots.find(l => Number(l.id) === lotId);
-    if (!lot) continue;
+function renderWarehouse() {
+    const q = normalize(document.getElementById("searchParts").value).toLowerCase();
+    const summary = new Map();
+    let grandTotal = 0;
 
-    lot.qty = Number(lot.qty || 0) - take;
-  }
-  state.lots = state.lots.filter(l => Number(l.qty || 0) > 0);
-}
-
-function buildManualConsumeUI(neededMap) {
-  const parts = [];
-  for (const [skuLower, qtyNeeded] of neededMap.entries()) {
-    const lots = getLotsForSku(skuLower);
-    const skuLabel = skuLower.toUpperCase();
-
-    parts.push(`
-      <div class="consumePart">
-        <div><strong>${escapeHtml(skuLabel)}</strong> • potrzeba <strong>${qtyNeeded}</strong></div>
-        <div class="consumeGrid">
-          ${lots.map(lot => `
-            <div class="lotRow">
-              <div>
-                <span class="badge">${escapeHtml(lot.sku)}</span>
-                ${escapeHtml(lot.supplier || "-")} • ${fmtPLN.format(lot.unitPrice || 0)}
-                <span class="muted"> (dostępne: ${Number(lot.qty || 0)})</span>
-              </div>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value="0"
-                data-lotid="${lot.id}"
-                data-sku="${escapeAttr(skuLower)}"
-                data-max="${Number(lot.qty || 0)}"
-              />
-            </div>
-          `).join("")}
-        </div>
-      </div>
-    `);
-  }
-
-  els.manualConsumeUI.innerHTML = parts.join("");
-  els.manualConsumeBox.hidden = false;
-}
-
-function refreshManualConsumeUI() {
-  const isManual = (els.consumeMode?.value === "manual");
-  if (!isManual) return;
-
-  els.manualConsumeBox.hidden = false;
-
-  if (state.currentBuild.items.length === 0) {
-    els.manualConsumeUI.innerHTML = "(Dodaj maszyny do listy, wtedy pokażę wybór partii.)";
-    manualPlanGenerated = false;
-    return;
-  }
-
-  const { needed, missing } = computeMissingPartsForBuild();
-  if (missing.length) {
-    showMissing(missing);
-    els.manualConsumeUI.innerHTML = "(Najpierw uzupełnij braki części, wtedy pojawi się wybór partii.)";
-    manualPlanGenerated = false;
-    return;
-  }
-
-  showMissing([]);
-  buildManualConsumeUI(needed);
-  manualPlanGenerated = true;
-}
-
-function addToMachinesStock(code, name, qty) {
-  const existing = state.machinesStock.find(x => x.code === code);
-  if (existing) existing.qty += qty;
-  else state.machinesStock.push({ code, name, qty });
-}
-
-function finalizeBuild() {
-    for (const bi of state.currentBuild.items) {
-  const machine = state.machineCatalog.find(m => m.code === bi.machineCode);
-  if (!machine || !machine.bom || machine.bom.length === 0) {
-    return alert(
-      `Maszyna ${bi.machineName} (${bi.machineCode}) nie ma zdefiniowanego BOM.`
+    // POPRAWKA: Wyszukiwanie obejmuje dostawcę
+    const filteredLots = state.lots.filter(l => 
+        !q || 
+        l.sku.toLowerCase().includes(q) || 
+        l.name.toLowerCase().includes(q) ||
+        (l.supplier && l.supplier.toLowerCase().includes(q))
     );
-  }
- }
 
-  if (state.currentBuild.items.length === 0) return alert("Dodaj przynajmniej jedną maszynę do listy.");
+    els.partsTable.innerHTML = filteredLots.map(l => {
+        const val = l.qty * l.unitPrice;
+        grandTotal += val;
+        
+        const k = skuKey(l.sku);
+        // POPRAWKA: Pobieramy aktualną nazwę z katalogu (synchronizacja)
+        const catalogPart = state.partsCatalog.get(k);
+        const displayName = catalogPart ? catalogPart.name : l.name;
 
-  state.currentBuild.dateISO = els.buildDate.value || "";
+        if (!summary.has(k)) {
+            summary.set(k, {
+                sku: l.sku, 
+                name: displayName, 
+                qty: 0, 
+                val: 0
+            });
+        }
+        
+        const s = summary.get(k);
+        s.qty += l.qty;
+        s.val += val;
 
-  const { needed, missing } = computeMissingPartsForBuild();
-  if (missing.length) {
-    showMissing(missing);
-    refreshManualConsumeUI();
-    return;
-  }
+        return `<tr>
+            <td><strong>${displayName}</strong><br><small class="muted">${l.sku}</small></td>
+            <td>${l.supplier || "-"}</td>
+            <td class="right">${fmtPLN.format(l.unitPrice)}</td>
+            <td class="right">${l.qty}</td>
+            <td class="right">${fmtPLN.format(val)}</td>
+        </tr>`;
+    }).join("");
 
-  const mode = els.consumeMode?.value || "fifo";
+    els.whTotal.textContent = fmtPLN.format(grandTotal);
 
-  if (mode === "manual") {
-    const inputCount = els.manualConsumeUI?.querySelectorAll("input[data-lotid]")?.length || 0;
-    if (!manualPlanGenerated || inputCount === 0) {
-      refreshManualConsumeUI();
-      return;
-    }
-
-    const inputs = Array.from(els.manualConsumeUI.querySelectorAll("input[data-lotid]"));
-    const plan = {};
-    const perSkuSum = new Map();
-
-    for (const inp of inputs) {
-      const lotId = inp.dataset.lotid;
-      const skuLower = (inp.dataset.sku || "").toLowerCase();
-      const max = Number(inp.dataset.max || 0);
-      let val = Math.max(0, Math.floor(Number(inp.value || 0)));
-      if (val > max) val = max;
-      inp.value = String(val);
-
-      if (val > 0) plan[lotId] = val;
-      perSkuSum.set(skuLower, (perSkuSum.get(skuLower) || 0) + val);
-    }
-
-    const errors = [];
-    for (const [skuLower, qtyNeeded] of needed.entries()) {
-      const sum = perSkuSum.get(skuLower) || 0;
-      if (sum !== qtyNeeded) errors.push(`${skuLower.toUpperCase()}: wybrałeś ${sum}, potrzeba ${qtyNeeded}`);
-    }
-
-    if (errors.length) return alert("Ręczny wybór nie pasuje:\n\n" + errors.join("\n"));
-
-    consumeFromLotsByPlan(plan);
-  } else {
-    for (const [skuLower, qtyNeeded] of needed.entries()) {
-      const ok = consumeSkuFIFO(skuLower, qtyNeeded);
-      if (!ok) return alert("Coś poszło nie tak przy odejmowaniu części (FIFO).");
-    }
-  }
-
-  for (const bi of state.currentBuild.items) {
-    addToMachinesStock(bi.machineCode, bi.machineName, bi.qty);
-  }
-
-  state.currentBuild.items = [];
-  renderBuildItems();
-  showMissing([]);
-  els.manualConsumeUI.innerHTML = "";
-  els.manualConsumeBox.hidden = true;
-  manualPlanGenerated = false;
-
-  renderSkuSummary();
-  renderLotsTable();
-  renderWarehouseTotal();
-  renderMachinesStock();
-
-  saveState();
-
-  alert("Produkcja zrealizowana: części odjęte, maszyny dodane.");
+    els.summaryTable.innerHTML = Array.from(summary.values())
+        .sort((a,b) => a.sku.localeCompare(b.sku))
+        .map(s => {
+            let cls = "";
+            if (s.qty < LOW_DANGER) cls = "stock-danger";
+            else if (s.qty < LOW_WARN) cls = "stock-warn";
+            
+            return `<tr class="${cls}">
+                <td><span class="badge">${s.sku}</span></td>
+                <td>${s.name}</td>
+                <td class="right"><strong>${s.qty}</strong></td>
+                <td class="right">${fmtPLN.format(s.val)}</td>
+            </tr>`;
+        }).join("");
 }
 
-// ====== Magazyn maszyn ======
+function renderDelivery() {
+    const items = state.currentDelivery.items;
+    let total = 0;
+    els.deliveryItems.innerHTML = items.map(i => {
+        const rowVal = i.qty * i.price;
+        total += rowVal;
+        return `<tr>
+            <td><span class="badge">${i.sku}</span> ${i.name}</td>
+            <td class="right">${i.qty}</td>
+            <td class="right">${fmtPLN.format(i.price)}</td>
+            <td class="right">${fmtPLN.format(rowVal)}</td>
+            <td class="right"><button class="iconBtn" onclick="removeDeliveryItem(${i.id})">✕</button></td>
+        </tr>`;
+    }).join("");
+    
+    document.getElementById("itemsCount").textContent = items.length;
+    document.getElementById("itemsTotal").textContent = fmtPLN.format(total);
+    document.getElementById("finalizeDeliveryBtn").disabled = items.length === 0;
+}
+
+function renderBuild() {
+    els.buildItems.innerHTML = state.currentBuild.items.map(i => {
+        const m = state.machineCatalog.find(x => x.code === i.machineCode);
+        return `<tr>
+            <td>${m ? m.name : "???"} <span class="badge">${i.machineCode}</span></td>
+            <td class="right">${i.qty}</td>
+            <td class="right"><button class="iconBtn" onclick="removeBuildItem(${i.id})">✕</button></td>
+        </tr>`;
+    }).join("");
+    
+    document.getElementById("buildItemsCount").textContent = state.currentBuild.items.length;
+    document.getElementById("finalizeBuildBtn").disabled = state.currentBuild.items.length === 0;
+    els.missingBox.hidden = true;
+    els.manualBox.hidden = true;
+}
+
+function renderMissingParts(missing) {
+    els.missingBox.hidden = false;
+    document.getElementById("missingList").innerHTML = missing.map(m => 
+        `<li><strong>${m.sku}</strong>: Potrzeba ${m.needed}, stan: ${m.has} (brak: ${m.needed - m.has})</li>`
+    ).join("");
+}
+
+function renderManualConsume() {
+    const req = calculateBuildRequirements();
+    const container = document.getElementById("manualConsumeUI");
+    container.innerHTML = "";
+    
+    const missing = checkStockAvailability(req);
+    if (missing.length > 0) {
+        renderMissingParts(missing);
+        els.manualBox.hidden = true;
+        return;
+    }
+
+    els.manualBox.hidden = false;
+    
+    req.forEach((qtyNeeded, skuKeyStr) => {
+        const part = state.partsCatalog.get(skuKeyStr);
+        const lots = state.lots.filter(l => skuKey(l.sku) === skuKeyStr);
+        
+        const html = `
+        <div class="consumePart">
+            <div style="margin-bottom:6px">
+                <strong>${part?.sku || skuKeyStr}</strong> 
+                <span class="muted">(Wymagane: ${qtyNeeded})</span>
+            </div>
+            ${lots.map(lot => `
+                <div class="lotRow">
+                    <span>${lot.supplier} (${fmtPLN.format(lot.unitPrice)}) - Dostępne: ${lot.qty}</span>
+                    <input type="number" class="manual-lot-input" 
+                        data-lot-id="${lot.id}" 
+                        data-sku="${skuKeyStr}"
+                        max="${lot.qty}" min="0" value="0">
+                </div>
+            `).join("")}
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+    });
+}
+
 function renderMachinesStock() {
-  const q = (els.searchMachines.value || "").trim().toLowerCase();
-  const rows = state.machinesStock
-    .filter(m => !q || (m.name||"").toLowerCase().includes(q) || (m.code||"").toLowerCase().includes(q))
-    .sort((a,b)=>(a.name||"").localeCompare(b.name||"","pl"));
-
-  els.machinesStockBody.innerHTML = rows.map(m => `
-    <tr>
-      <td>${escapeHtml(m.name)}</td>
-      <td><span class="badge">${escapeHtml(m.code)}</span></td>
-      <td class="right">${Number(m.qty || 0)}</td>
-    </tr>
-  `).join("");
+    const q = normalize(document.getElementById("searchMachines").value).toLowerCase();
+    const tbody = document.querySelector("#machinesStockTable tbody");
+    
+    tbody.innerHTML = state.machinesStock
+        .filter(m => !q || m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
+        .map(m => `<tr>
+            <td><span class="badge">${m.code}</span></td>
+            <td>${m.name}</td>
+            <td class="right"><strong>${m.qty}</strong></td>
+        </tr>`).join("");
 }
 
-// ====== Suwaki progów ======
-function syncThresholdUI() {
-  if (!els.warnRange || !els.dangerRange || !els.warnValue || !els.dangerValue) return;
-  els.warnRange.value = String(LOW_WARN);
-  els.dangerRange.value = String(LOW_DANGER);
-  els.warnValue.textContent = String(LOW_WARN);
-  els.dangerValue.textContent = String(LOW_DANGER);
+function renderAllSuppliers() {
+    const tbody = document.getElementById("suppliersListTable").querySelector("tbody");
+    tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => `
+        <tr>
+            <td>${name}</td>
+            <td class="right">
+                <button class="success compact" onclick="openSupplierEditor('${name}')">Cennik</button>
+                <button class="secondary compact" onclick="askDeleteSupplier('${name}')">Usuń</button>
+            </td>
+        </tr>
+    `).join("");
+    
+    renderSelectOptions(document.getElementById("supplierSelect"), Array.from(state.suppliers.keys()));
 }
 
-function bindThresholds() {
-  if (!els.warnRange || !els.dangerRange) return;
-
-  // Uwaga: wartości LOW_WARN/LOW_DANGER mogą być wczytane z LocalStorage.
-  // Najpierw ustawiamy UI na te wartości, dopiero potem słuchamy zmian.
-  syncThresholdUI();
-
-  const clamp = () => {
-    if (LOW_DANGER >= LOW_WARN) LOW_DANGER = Math.max(0, LOW_WARN - 10);
-    syncThresholdUI();
-    renderSkuSummary();
-    saveState();
-  };
-
-  els.warnRange.addEventListener("input", () => { LOW_WARN = Number(els.warnRange.value); clamp(); });
-  els.dangerRange.addEventListener("input", () => { LOW_DANGER = Number(els.dangerRange.value); clamp(); });
-
-  // dociągnij raz na starcie (napraw relację danger < warn)
-  clamp();
-}
-
-// ====== Init + eventy ======
-
-
-function init() {
-  // Wczytaj stan zanim cokolwiek wyrenderujemy (żeby UI widziało Mapy, progi, BOM itd.).
-  loadState();
-
-  const today = new Date().toISOString().slice(0, 10);
-  if (els.deliveryDate) els.deliveryDate.value = state.currentDelivery.dateISO || today;
-  if (els.buildDate) els.buildDate.value = state.currentBuild.dateISO || today;
-
-  bindThresholds();
-  renderMachineSelect();
-
-  renderPartsCatalogTable();
-  renderSupplierSelects();
-
-  renderDeliveryItems();
-  renderBuildItems();
-  renderSkuSummary();
-  renderLotsTable();
-  renderWarehouseTotal();
-  renderMachinesStock();
-
-  renderMachineManageSelect();
-renderBomSkuSelect();
-renderBomTable();
-
-
-    renderMachinesCatalogTable();
-
-// startowe UI manual
-  if (els.consumeMode && els.consumeMode.value === "manual") refreshManualConsumeUI();
-}
-init();
-
-window.addEventListener("beforeunload", (e) => {
-  if (!hasPendingWork()) return;
-  e.preventDefault();
-  e.returnValue = "";
-});
-
-
-// ===== Eventy ogólne =====
-els.addMachineBtn?.addEventListener("click", () => {
-  const code = els.machineCodeInput.value;
-  const name = els.machineNameInput.value;
-
-  const res = addMachine(code, name);
-  if (!res.ok) return alert(res.msg);
-
-  els.machineCodeInput.value = "";
-  els.machineNameInput.value = "";
-
-  renderMachineSelect();
-  renderMachineManageSelect();
-  renderBomTable();
-  renderMachinesCatalogTable();
-  saveState();
-  alert(res.msg);
-});
-
-els.machineManageSelect?.addEventListener("change", () => {
-  renderBomTable();
-});
-
-els.addBomItemBtn?.addEventListener("click", () => {
-  const m = getManagedMachine();
-  if (!m) return alert("Wybierz maszynę do edycji.");
-
-  const sku = els.bomSkuSelect.value;
-  const qty = els.bomQtyInput.value;
-
-  // tryb inline (roboczy) vs klasyczny
-  const res = uiEditingMachineCode ? setBomItemInTemp(sku, qty) : addBomItem(m.code, sku, qty);
-  if (!res.ok) return alert(res.msg);
-
-  renderBomTable();
-  renderMachinesCatalogTable();
-
-  if (!uiEditingMachineCode) {
-    saveState();
-    alert(res.msg);
-  } else {
-    toast("OK", res.msg, "ok", 1600);
-  }
-});
-
-
-els.bomBody?.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-del-bom]");
-  if (!btn) return;
-
-  const idx = Number(btn.dataset.delBom);
-  const m = getManagedMachine();
-  if (!m) return;
-
-  m.bom.splice(idx, 1);
-
-  renderBomTable();
-  renderMachinesCatalogTable();
-
-  if (!uiEditingMachineCode) {
-    saveState();
-  } else {
-    toast("OK", "Usunięto z BOM (roboczo).", "ok", 1600);
-  }
-});
-
-
-
-els.machinesCatalogBody?.addEventListener("click", (e) => {
-  const editBtn = e.target.closest("button[data-edit-machine]");
-  if (editBtn) {
-    openMachineEditor(editBtn.dataset.editMachine);
-    return;
-  }
-
-  const delBtn = e.target.closest("button[data-del-machine]");
-  if (delBtn) {
-    deleteMachine(delBtn.dataset.delMachine);
-  }
-});
-
-
-
-els.searchParts?.addEventListener("input", () => {
-  renderSkuSummary();
-  renderLotsTable();
-});
-
-els.clearDataBtn?.addEventListener("click", () => {
-  const ok = confirm(
-    "Na pewno wyczyścić wszystkie dane?\n\n" +
-    "- usunie zapis z LocalStorage\n" +
-    "- wyzeruje magazyn, dostawców, katalog części, BOM-y i stan maszyn"
-  );
-  if (!ok) return;
-
-  clearSavedState();
-  resetAllData();
-
-  // odśwież cały UI
-  syncThresholdUI();
-  renderMachineSelect();
-  renderMachineManageSelect();
-  renderBomSkuSelect();
-  renderBomTable();
-  renderMachinesCatalogTable();
-
-  renderPartsCatalogTable();
-  renderSupplierSelects();
-
-  renderDeliveryItems();
-  renderBuildItems();
-  renderSkuSummary();
-  renderLotsTable();
-  renderWarehouseTotal();
-  renderMachinesStock();
-
-  // zostaw świeże, czyste dane w LocalStorage (żeby progi też były zapisane)
-  saveState();
-});
-
-// ===== Dostawy =====
-els.supplierSelect?.addEventListener("change", () => {
-  renderSupplierPartsForDelivery();
-  renderDeliveryItems();
-  saveState();
-});
-
-els.deliveryDate?.addEventListener("change", () => {
-  state.currentDelivery.dateISO = els.deliveryDate.value || "";
-  saveState();
-});
-
-els.supplierPartsSelect?.addEventListener("change", onDeliveryPartChange);
-els.addDeliveryItemBtn?.addEventListener("click", addDeliveryItem);
-
-els.deliveryItemsBody?.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-remove]");
-  if (!btn) return;
-  const id = Number(btn.dataset.remove);
-  state.currentDelivery.items = state.currentDelivery.items.filter(it => it.id !== id);
-  renderDeliveryItems();
-  saveState();
-});
-
-els.finalizeDeliveryBtn?.addEventListener("click", finalizeDelivery);
-
-// ===== Produkcja =====
-els.addBuildItemBtn?.addEventListener("click", addBuildItem);
-
-els.buildDate?.addEventListener("change", () => {
-  state.currentBuild.dateISO = els.buildDate.value || "";
-  saveState();
-});
-
-els.buildItemsBody?.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-remove-build]");
-  if (!btn) return;
-  const id = Number(btn.dataset.removeBuild);
-  state.currentBuild.items = state.currentBuild.items.filter(it => it.id !== id);
-  renderBuildItems();
-  manualPlanGenerated = false;
-  refreshManualConsumeUI();
-  saveState();
-});
-
-els.finalizeBuildBtn?.addEventListener("click", finalizeBuild);
-
-els.consumeMode?.addEventListener("change", () => {
-  const isManual = (els.consumeMode.value === "manual");
-  els.manualConsumeUI.innerHTML = "";
-  els.manualConsumeBox.hidden = !isManual;
-  manualPlanGenerated = false;
-  if (isManual) refreshManualConsumeUI();
-  saveState();
-});
-
-els.searchMachines?.addEventListener("input", renderMachinesStock);
-
-// ===== Katalog części =====
-els.addPartBtn?.addEventListener("click", () => {
-  const sku = els.partSkuInput.value;
-  const name = els.partNameInput.value;
-
-  const res = upsertPart(sku, name);
-  if (!res.ok) return alert(res.msg);
-
-  // przypisz do zaznaczonych dostawców (cena startowa 0)
-  const partKey = skuKey(sku);
-  for (const supName of Array.from(uiSelectedPartSuppliers)) {
-    const sup = state.suppliers.get(supName);
-    if (!sup) continue;
-    if (!sup.prices.has(partKey)) sup.prices.set(partKey, 0);
-  }
-
-  els.partSkuInput.value = "";
-  els.partNameInput.value = "";
-  uiSelectedPartSuppliers.clear();
-  if (els.partSuppliersInput) els.partSuppliersInput.value = "";
-  closePartSuppliersDropdown();
-  renderPartSuppliersPicker();
-
-  renderPartsCatalogTable();
-  renderSupplierSelects();
-  renderSupplierSkuDropdown();
-  renderSupplierPartsForDelivery();
-  alert(res.msg);
-  renderBomSkuSelect();
-});
-
-// ===== Picker dostawców w katalogu części (multi) =====
-els.partSuppliersInput?.addEventListener("focus", () => {
-  renderPartSuppliersPicker();
-  openPartSuppliersDropdown();
-});
-
-els.partSuppliersInput?.addEventListener("input", () => {
-  renderPartSuppliersPicker();
-  openPartSuppliersDropdown();
-});
-
-els.partSuppliersInput?.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    closePartSuppliersDropdown();
-    return;
-  }
-  if (e.key === "Enter") {
-    e.preventDefault();
-    // przełącz pierwszą widoczną opcję
-    const first = els.partSuppliersDropdown?.querySelector(".supplierOption[data-supplier]");
-    const name = first?.getAttribute("data-supplier");
-    if (name) {
-      if (uiSelectedPartSuppliers.has(name)) uiSelectedPartSuppliers.delete(name);
-      else uiSelectedPartSuppliers.add(name);
-      renderPartSuppliersPicker();
-      openPartSuppliersDropdown();
+function refreshCatalogsUI() {
+    // 1. PARTS CATALOG TABLE
+    const parts = Array.from(state.partsCatalog.values());
+    els.partsCatalog.innerHTML = parts.map(p => {
+        // Find suppliers who have this part
+        const suppliers = Array.from(state.suppliers.entries())
+            .filter(([_, data]) => data.prices.has(skuKey(p.sku)))
+            .map(([n]) => n);
+            
+        return `<tr>
+            <td><span class="badge">${p.sku}</span></td>
+            <td>${p.name}</td>
+            <td>${suppliers.length ? suppliers.map(s => `<span class="supplierChip small">${s}</span>`).join(" ") : '<span class="muted">-</span>'}</td>
+            <td class="right"><button class="iconBtn" onclick="askDeletePart('${p.sku}')">Usuń</button></td>
+        </tr>`;
+    }).join("");
+
+    // 2. MACHINES CATALOG
+    els.machinesCatalog.innerHTML = state.machineCatalog.map(m => `
+        <tr>
+            <td><span class="badge">${m.code}</span></td>
+            <td>${m.name}</td>
+            <td class="right">${m.bom.length}</td>
+            <td class="right">
+                <button class="success compact" onclick="openMachineEditor('${m.code}')">Edytuj BOM</button>
+                <button class="secondary compact" onclick="askDeleteMachine('${m.code}')">Usuń</button>
+            </td>
+        </tr>
+    `).join("");
+
+    // 3. SELECTS for machines
+    renderSelectOptions(els.machineSelect, state.machineCatalog.map(m => m.code), c => {
+        const m = state.machineCatalog.find(x => x.code === c);
+        return `${m.name} (${c})`;
+    });
+
+    // 4. GENERATE SUPPLIER CHECKBOXES FOR NEW PART
+    const supCheckList = document.getElementById("partNewSuppliersChecklist");
+    const allSups = Array.from(state.suppliers.keys()).sort();
+    
+    if (allSups.length === 0) {
+        supCheckList.innerHTML = '<span class="small muted">Brak zdefiniowanych dostawców. Dodaj ich w zakładce "Dostawcy".</span>';
+    } else {
+        supCheckList.innerHTML = allSups.map(s => `
+            <label style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:12px; font-size:0.85rem; cursor:pointer;">
+                <input type="checkbox" name="newPartSupplier" value="${s}" style="width:auto; margin:0 6px 0 0;">
+                ${s}
+            </label>
+        `).join("");
     }
-  }
-});
+}
 
-els.partSuppliersClearBtn?.addEventListener("click", () => {
-  uiSelectedPartSuppliers.clear();
-  if (els.partSuppliersInput) els.partSuppliersInput.value = "";
-  renderPartSuppliersPicker();
-  openPartSuppliersDropdown();
-});
+// === UTILS UI ===
+function renderSelectOptions(select, values, displayMapFn = x => x) {
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">-- Wybierz --</option>' + 
+        values.map(v => `<option value="${v}">${displayMapFn(v)}</option>`).join("");
+    if (values.includes(current)) select.value = current;
+}
 
-document.addEventListener("click", (e) => {
-  const picker = document.getElementById("partSuppliersPicker");
-  if (!picker) return;
-  if (picker.contains(e.target)) return;
-  closePartSuppliersDropdown();
-});
-
-// ===== Dostawcy + cenniki =====
-els.addSupplierBtn?.addEventListener("click", () => {
-  const name = String(els.supplierNameInput.value || "").trim();
-  if (!name) return alert("Podaj nazwę dostawcy.");
-  ensureSupplier(name);
-  els.supplierNameInput.value = "";
-  renderSupplierSelects();
-  saveState();
-  alert("Dodano dostawcę.");
-});
-
-els.supplierManageSelect?.addEventListener("change", () => {
-  renderSupplierPriceTable();
-  renderSuppliersList();
-});
-
-els.setSupplierPriceBtn?.addEventListener("click", () => {
-  const sup = currentManagedSupplier();
-  if (!sup) return alert("Wybierz dostawcę do edycji (albo dodaj nowego).");
-
-  const sku = els.supplierSkuSelect.value;
-  const price = Number(els.supplierPriceInput.value || 0);
-
-  const res = setSupplierPrice(sup, sku, price);
-  if (!res.ok) return alert(res.msg);
-
-  renderSupplierPriceTable();
-  renderSuppliersList();
-  renderSupplierPartsForDelivery();
-  saveState();
-  alert(res.msg);
-});
-
-
-// lista dostawców: akcje (delegacja klików)
-
-// inline editor: eventy
-els.supplierEditorPartSelect?.addEventListener("change", () => {
-  syncSupplierEditorPriceInput();
-});
-els.supplierEditorSetPriceBtn?.addEventListener("click", setSupplierEditorPrice);
-els.supplierEditorSaveBtn?.addEventListener("click", commitSupplierEditor);
-els.machineEditorSaveBtn?.addEventListener("click", commitMachineEditor);
-els.machineEditorCancelBtn?.addEventListener("click", cancelMachineEditor);
-
-els.supplierEditorCancelBtn?.addEventListener("click", () => {
-  unmountSupplierEditor();
-  renderSuppliersList();
-});
-
-els.suppliersListBody?.addEventListener("click", (e) => {
-  const del = e.target.closest("button[data-delete-supplier]");
-  if (del) {
-    const name = del.dataset.deleteSupplier;
-    deleteSupplier(name);
-    return;
-  }
-  const edit = e.target.closest("button[data-edit-supplier]");
-  if (edit) {
-    openSupplierEditor(edit.dataset.editSupplier);
-    return;
-  }
-});
-
-
-
-// inline edytor dostawcy: eventy
-els.supplierEditorPartSelect?.addEventListener("change", () => {
-  syncSupplierEditorPriceInput();
-});
-els.supplierEditorSetPriceBtn?.addEventListener("click", setSupplierEditorPrice);
-els.supplierEditorSaveBtn?.addEventListener("click", commitSupplierEditor);
-els.supplierEditorCancelBtn?.addEventListener("click", () => {
-  unmountSupplierEditor();
-  renderSuppliersList();
-});
-// ===== Tabs UI (Etap 1) =====
-(function initTabsUI(){
-  const btns = Array.from(document.querySelectorAll("button[data-tab-target]"));
-  const panels = Array.from(document.querySelectorAll("[data-tab-panel]"));
-  if (!btns.length || !panels.length) return;
-
-  const KEY = "magazyn_active_tab";
-  const defaultTab = "parts";
-
-  function setActive(tab) {
-    for (const p of panels) {
-      p.hidden = (p.dataset.tabPanel !== tab);
-    }
-    for (const b of btns) {
-      b.classList.toggle("active", b.dataset.tabTarget === tab);
-    }
-    try { localStorage.setItem(KEY, tab); } catch(e) {}
-  }
-
-  for (const b of btns) {
-    b.addEventListener("click", () => setActive(b.dataset.tabTarget));
-  }
-
-  let start = defaultTab;
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved && panels.some(p => p.dataset.tabPanel === saved)) start = saved;
-  } catch(e) {}
-
-  setActive(start);
-})();
-
-
-
-
-// ===== UI: Toasty + Modal (micro-interactions) =====
-(function uiOverlays(){
-  // Toast host
-  const toastHost = document.createElement("div");
-  toastHost.className = "toastHost";
-  document.body.appendChild(toastHost);
-
-  window.toast = function(title, msg = "", type = "ok", ms = 2200){
+function toast(title, msg, type="ok") {
     const el = document.createElement("div");
     el.className = `toast ${type}`;
-    el.innerHTML = `<div class="title">${title}</div>${msg ? `<div class="small muted">${msg}</div>` : ""}`;
-    toastHost.appendChild(el);
+    el.innerHTML = `<div style="font-weight:bold">${title}</div><div>${msg}</div>`;
+    document.querySelector(".toastHost").appendChild(el);
     requestAnimationFrame(() => el.classList.add("show"));
-    setTimeout(() => {
-      el.classList.remove("show");
-      setTimeout(() => el.remove(), 260);
-    }, ms);
-  };
+    setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 3000);
+}
 
-  // Modal
-  const backdrop = document.createElement("div");
-  backdrop.className = "modalBackdrop";
-  backdrop.hidden = true;
-  backdrop.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modalHead">
-        <div id="modalTitle" class="modalTitle">Potwierdź</div>
-      </div>
-      <div class="modalBody">
-        <div class="modalText" id="modalText"></div>
-      </div>
-      <div class="modalActions">
-        <button type="button" class="secondary" id="modalCancel">Anuluj</button>
-        <button type="button" class="danger" id="modalOk">OK</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(backdrop);
+// === INITIALIZATION ===
+function init() {
+    if (!document.querySelector(".toastHost")) {
+        const h = document.createElement("div"); h.className = "toastHost"; document.body.appendChild(h);
+    }
+    load();
+    bindTabs();
+    bindSearch();
+    
+    renderWarehouse();
+    renderAllSuppliers();
+    renderMachinesStock();
+    refreshCatalogsUI();
 
-  const titleEl = backdrop.querySelector("#modalTitle");
-  const textEl  = backdrop.querySelector("#modalText");
-  const okBtn   = backdrop.querySelector("#modalOk");
-  const cancelBtn = backdrop.querySelector("#modalCancel");
+    document.getElementById("warnRange").addEventListener("input", (e) => {
+        LOW_WARN = parseInt(e.target.value);
+        document.getElementById("warnValue").textContent = LOW_WARN;
+        save(); renderWarehouse();
+    });
+    document.getElementById("dangerRange").addEventListener("input", (e) => {
+        LOW_DANGER = parseInt(e.target.value);
+        document.getElementById("dangerValue").textContent = LOW_DANGER;
+        save(); renderWarehouse();
+    });
+}
 
-  let onOk = null;
-  let onCancel = null;
+// EVENTS
 
-  function close(){
-    backdrop.classList.remove("show");
-    // daj animacji zejść
-    setTimeout(() => { backdrop.hidden = true; }, 150);
-    onOk = null; onCancel = null;
+// --- Delivery ---
+document.getElementById("supplierSelect").addEventListener("change", (e) => {
+  const supName = e.target.value;
+  const skuSelect = document.getElementById("supplierPartsSelect");
+
+  if (!supName) {
+    skuSelect.innerHTML = "";
+    return;
   }
 
-  function openConfirm({title="Potwierdź", text="", okText="Usuń", cancelText="Anuluj"} = {}, okCb = null, cancelCb = null){
-    titleEl.textContent = title;
-    textEl.textContent = text;
-    okBtn.textContent = okText;
-    cancelBtn.textContent = cancelText;
-    onOk = okCb;
-    onCancel = cancelCb;
+  const sup = state.suppliers.get(supName);
 
-    backdrop.hidden = false;
-    requestAnimationFrame(() => backdrop.classList.add("show"));
-    okBtn.focus();
+  // FIX: jeśli dostawca nie ma jeszcze pozycji w cenniku, pokaż wszystkie części z katalogu
+  const skuList = (sup && sup.prices && sup.prices.size)
+    ? Array.from(sup.prices.keys())
+    : Array.from(state.partsCatalog.keys());
+
+  skuSelect.innerHTML =
+    '<option value="">-- Wybierz część --</option>' +
+    skuList.map(k => {
+      const p = state.partsCatalog.get(k);
+      const price = (sup && sup.prices) ? (sup.prices.get(k) ?? 0) : 0;
+      return `<option value="${k}" data-price="${price}">
+        ${p ? p.sku : k} - ${p ? p.name : ""} (${fmtPLN.format(price)})
+      </option>`;
+    }).join("");
+
+  skuSelect.dispatchEvent(new Event("change"));
+});
+
+document.getElementById("supplierPartsSelect").addEventListener("change", (e) => {
+  const opt = e.target.selectedOptions[0];
+
+  // FIX: placeholder/brak wyboru nie powinien wpychać undefined/NaN
+  if (!opt || !opt.value) {
+    document.getElementById("deliveryPrice").value = 0;
+    return;
   }
 
-  // Export
-  window.openConfirm = openConfirm;
+  document.getElementById("deliveryPrice").value = opt.dataset.price ?? 0;
+});
 
-  // Events
-  okBtn.addEventListener("click", () => { const cb = onOk; close(); if (typeof cb === "function") cb(); });
-  cancelBtn.addEventListener("click", () => { const cb = onCancel; close(); if (typeof cb === "function") cb(); });
+document.getElementById("addDeliveryItemBtn").addEventListener("click", () => {
+    const sup = document.getElementById("supplierSelect").value;
+    if (!sup) return toast("Błąd", "Wybierz dostawcę.", "warn");
+    
+    const skuKeyVal = document.getElementById("supplierPartsSelect").value;
+    if (!skuKeyVal) return toast("Błąd", "Wybierz część.", "warn");
+    
+    const qty = document.getElementById("deliveryQty").value;
+    const price = document.getElementById("deliveryPrice").value;
+    
+    const part = state.partsCatalog.get(skuKeyVal);
+    addToDelivery(sup, part.sku, qty, price);
+});
 
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) { const cb = onCancel; close(); if (typeof cb === "function") cb(); }
-  });
+document.getElementById("finalizeDeliveryBtn").addEventListener("click", finalizeDelivery);
+window.removeDeliveryItem = (id) => {
+    state.currentDelivery.items = state.currentDelivery.items.filter(x => x.id !== id);
+    save(); renderDelivery();
+}
 
-  document.addEventListener("keydown", (e) => {
-    if (backdrop.hidden) return;
-    if (e.key === "Escape") { const cb = onCancel; close(); if (typeof cb === "function") cb(); }
-  });
-})();
+// --- Build ---
+document.getElementById("addBuildItemBtn").addEventListener("click", () => {
+    const code = els.machineSelect.value;
+    if (!code) return;
+    const qty = safeInt(document.getElementById("buildQty").value);
+    
+    state.currentBuild.items.push({ id: nextId(), machineCode: code, qty });
+    save(); renderBuild();
+});
+
+window.removeBuildItem = (id) => {
+    state.currentBuild.items = state.currentBuild.items.filter(x => x.id !== id);
+    save(); renderBuild();
+}
+
+document.getElementById("finalizeBuildBtn").addEventListener("click", () => {
+    const mode = document.getElementById("consumeMode").value;
+    if (mode === 'manual') {
+        const inputs = document.querySelectorAll(".manual-lot-input");
+        const manualAlloc = {};
+        let error = false;
+        
+        const req = calculateBuildRequirements();
+        const currentSum = new Map();
+        
+        inputs.forEach(inp => {
+            const val = safeFloat(inp.value);
+            if (val > 0) {
+                manualAlloc[inp.dataset.lotId] = val;
+                const k = inp.dataset.sku;
+                currentSum.set(k, (currentSum.get(k)||0) + val);
+            }
+        });
+
+        req.forEach((needed, k) => {
+            if ((currentSum.get(k) || 0) !== needed) {
+                toast("Błąd manualny", `Dla części ${state.partsCatalog.get(k)?.sku} wybrano ${currentSum.get(k)||0}, a potrzeba ${needed}.`, "bad");
+                error = true;
+            }
+        });
+
+        if (!error) finalizeBuild(manualAlloc);
+    } else {
+        finalizeBuild(null);
+    }
+});
+
+document.getElementById("consumeMode").addEventListener("change", (e) => {
+    if (e.target.value === 'manual') renderManualConsume();
+    else {
+        els.manualBox.hidden = true;
+        els.missingBox.hidden = true;
+    }
+});
+
+// --- Catalogs ---
+document.getElementById("addPartBtn").addEventListener("click", () => {
+    const sku = document.getElementById("partSkuInput").value;
+    const name = document.getElementById("partNameInput").value;
+    
+    // Pobierz zaznaczonych dostawców
+    const checkboxes = document.querySelectorAll('input[name="newPartSupplier"]:checked');
+    const selectedSups = Array.from(checkboxes).map(cb => cb.value);
+
+    const res = upsertPart(sku, name, selectedSups);
+    toast(res.success?"OK":"Błąd", res.msg, res.success?"ok":"warn");
+    if (res.success) {
+        document.getElementById("partSkuInput").value = "";
+        document.getElementById("partNameInput").value = "";
+        // Reset checkboxów
+        checkboxes.forEach(cb => cb.checked = false);
+        refreshCatalogsUI();
+    }
+});
+
+window.askDeletePart = (sku) => {
+    if(confirm("Czy na pewno usunąć tę część?")) {
+        const err = deletePart(sku);
+        if (err) toast("Nie można usunąć", err, "bad");
+        else { toast("Usunięto", sku, "ok"); refreshCatalogsUI(); }
+    }
+};
+
+document.getElementById("addSupplierBtn").addEventListener("click", () => {
+    addSupplier(document.getElementById("supplierNameInput").value);
+    document.getElementById("supplierNameInput").value = "";
+});
+window.askDeleteSupplier = (n) => { if(confirm("Usunąć dostawcę " + n + "?")) deleteSupplier(n); };
+
+document.getElementById("addMachineBtn").addEventListener("click", () => {
+    const c = normalize(document.getElementById("machineCodeInput").value);
+    const n = normalize(document.getElementById("machineNameInput").value);
+    if (!c || !n) return;
+    state.machineCatalog.push({code: c, name: n, bom: []});
+    save(); refreshCatalogsUI();
+});
+window.askDeleteMachine = (code) => {
+    state.machineCatalog = state.machineCatalog.filter(m => m.code !== code);
+    save(); refreshCatalogsUI();
+};
+
+// --- Editors Inline ---
+let editingSup = null;
+let editingMachine = null;
+
+window.openSupplierEditor = (name) => {
+    editingSup = name;
+    const panel = document.getElementById("supplierEditorTemplate");
+    document.getElementById("supplierEditorName").textContent = name;
+    
+    const sel = document.getElementById("supplierEditorPartSelect");
+    sel.innerHTML = Array.from(state.partsCatalog.values()).map(p => 
+        `<option value="${p.sku}">${p.sku} (${p.name})</option>`
+    ).join("");
+    
+    renderSupEditorTable();
+    panel.hidden = false;
+    panel.scrollIntoView({behavior: "smooth"});
+};
+
+function renderSupEditorTable() {
+    const tbody = document.getElementById("supplierEditorPriceBody");
+    const sup = state.suppliers.get(editingSup);
+    tbody.innerHTML = Array.from(sup.prices.entries()).map(([k, price]) => {
+        const p = state.partsCatalog.get(k);
+        return `<tr><td>${p ? p.sku : k}</td><td>${p ? p.name : '-'}</td><td>${fmtPLN.format(price)}</td></tr>`;
+    }).join("");
+}
+
+document.getElementById("supplierEditorSetPriceBtn").addEventListener("click", () => {
+    const sku = document.getElementById("supplierEditorPartSelect").value;
+    const price = document.getElementById("supplierEditorPriceInput").value;
+    updateSupplierPrice(editingSup, sku, price);
+    renderSupEditorTable();
+});
+
+document.getElementById("supplierEditorSaveBtn").addEventListener("click", () => {
+    document.getElementById("supplierEditorTemplate").hidden = true;
+    renderAllSuppliers();
+    refreshCatalogsUI();
+});
+document.getElementById("supplierEditorCancelBtn").addEventListener("click", () => {
+    document.getElementById("supplierEditorTemplate").hidden = true;
+});
+
+window.openMachineEditor = (code) => {
+    editingMachine = state.machineCatalog.find(m => m.code === code);
+    if (!editingMachine) return;
+    
+    const panel = document.getElementById("machineEditorTemplate");
+    document.getElementById("machineEditorName").textContent = editingMachine.name;
+    document.getElementById("machineEditorCode").textContent = code;
+    
+    const sel = document.getElementById("bomSkuSelect");
+    sel.innerHTML = Array.from(state.partsCatalog.values()).map(p => 
+        `<option value="${p.sku}">${p.sku} (${p.name})</option>`
+    ).join("");
+
+    renderBomTable();
+    panel.hidden = false;
+    panel.scrollIntoView({behavior: "smooth"});
+};
+
+function renderBomTable() {
+    const tbody = document.querySelector("#bomTable tbody");
+    tbody.innerHTML = editingMachine.bom.map((b, idx) => {
+        const p = state.partsCatalog.get(skuKey(b.sku));
+        return `<tr>
+            <td><span class="badge">${b.sku}</span></td>
+            <td>${p ? p.name : "???"}</td>
+            <td class="right">${b.qty}</td>
+            <td class="right"><button class="iconBtn" onclick="removeBomItem(${idx})">Usuń</button></td>
+        </tr>`;
+    }).join("");
+}
+
+document.getElementById("addBomItemBtn").addEventListener("click", () => {
+    const sku = document.getElementById("bomSkuSelect").value;
+    const qty = safeInt(document.getElementById("bomQtyInput").value);
+    
+    const existing = editingMachine.bom.find(b => skuKey(b.sku) === skuKey(sku));
+    if (existing) existing.qty = qty;
+    else editingMachine.bom.push({ sku, qty });
+    
+    renderBomTable();
+});
+
+window.removeBomItem = (idx) => {
+    editingMachine.bom.splice(idx, 1);
+    renderBomTable();
+};
+
+document.getElementById("machineEditorSaveBtn").addEventListener("click", () => {
+    save();
+    document.getElementById("machineEditorTemplate").hidden = true;
+    refreshCatalogsUI();
+});
+document.getElementById("machineEditorCancelBtn").addEventListener("click", () => {
+    document.getElementById("machineEditorTemplate").hidden = true;
+    load(); 
+});
+
+// Common Bindings
+function bindTabs() {
+    const btns = document.querySelectorAll(".tabBtn");
+    btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            btns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            document.querySelectorAll(".tabPanel").forEach(p => p.hidden = true);
+            document.querySelector(`[data-tab-panel="${btn.dataset.tabTarget}"]`).hidden = false;
+        });
+    });
+}
+
+function bindSearch() {
+    document.getElementById("searchParts").addEventListener("input", renderWarehouse);
+    document.getElementById("searchMachines").addEventListener("input", renderMachinesStock);
+}
+
+document.getElementById("clearDataBtn").addEventListener("click", () => {
+    if(confirm("Czy na pewno chcesz usunąć WSZYSTKIE dane?")) resetData();
+});
+
+init();

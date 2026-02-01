@@ -1,529 +1,470 @@
 <!DOCTYPE html>
-
 <html lang="pl">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Magazyn</title>
-<meta content="Prosty magazyn: części (partie i ceny zakupu), dostawy, produkcja maszyn, magazyn maszyn." name="description"/>
-<link href="style.css" rel="stylesheet"/>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport" />
+    <title>Magazyn PRO</title>
+    <meta content="System zarządzania magazynem i produkcją" name="description" />
+    <link href="style.css" rel="stylesheet" />
 </head>
 <body>
-<main class="app">
-    <header class="top">
-        <h1>Magazyn</h1>
-        <p class="small muted">
-            Skróty: <strong>Nazwa</strong> = unikalny identyfikator części. <strong>Typ</strong> może się powtarzać.
-            <strong>FIFO</strong> = najpierw zużywane są najstarsze partie.
-        </p>
-        <!-- TABS -->
-        <nav class="tabsBar" aria-label="Nawigacja">
-            <div class="tabGroup">
-                <div class="tabGroupLabel">Operacje</div>
-                <div class="tabGroupButtons">
-                    <button class="tabBtn" type="button" data-tab-target="parts">Magazyn części</button>
-                    <button class="tabBtn" type="button" data-tab-target="delivery">Nowa dostawa</button>
-                    <button class="tabBtn" type="button" data-tab-target="build">Produkcja maszyn</button>
-                    <button class="tabBtn" type="button" data-tab-target="machines">Magazyn maszyn</button>
+    <main class="app">
+        <header class="top">
+            <div class="header-content">
+                <h1>Magazyn <span class="accent">PRO</span></h1>
+                <p class="small muted">
+                    Zasada: <strong>Nazwa (ID)</strong> to unikalny identyfikator. <strong>Typ</strong> to opis/kategoria.
+                    Zużycie: <strong>FIFO</strong>.
+                </p>
+            </div>
+
+            <nav class="tabsBar" aria-label="Nawigacja">
+                <div class="tabGroup">
+                    <div class="tabGroupLabel">Operacje</div>
+                    <div class="tabGroupButtons">
+                        <button class="tabBtn active" type="button" data-tab-target="parts">Stan Magazynowy</button>
+                        <button class="tabBtn" type="button" data-tab-target="delivery">Nowa Dostawa</button>
+                        <button class="tabBtn" type="button" data-tab-target="build">Produkcja</button>
+                        <button class="tabBtn" type="button" data-tab-target="machines">Magazyn Maszyn</button>
+                    </div>
+                </div>
+
+                <div class="tabDivider" aria-hidden="true"></div>
+
+                <div class="tabGroup">
+                    <div class="tabGroupLabel">Katalogi / Ustawienia</div>
+                    <div class="tabGroupButtons">
+                        <button class="tabBtn" type="button" data-tab-target="catalog_parts">Baza Części</button>
+                        <button class="tabBtn" type="button" data-tab-target="catalog_suppliers">Dostawcy</button>
+                        <button class="tabBtn" type="button" data-tab-target="catalog_machines">Definicje Maszyn (BOM)</button>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        <section class="tabPanel widePanel" data-tab-panel="parts">
+            <div class="card">
+                <div class="cardHeader">
+                    <h2>Magazyn Części</h2>
+                    <div class="toolbarRight">
+                        <button class="secondary compact" id="clearDataBtn" type="button">Resetuj system</button>
+                    </div>
+                </div>
+
+                <div class="thresholds">
+                    <div class="thresholdRow">
+                        <label>Ostrzeżenie (żółty): <strong id="warnValue">100</strong> szt.</label>
+                        <input id="warnRange" max="1000" min="0" step="10" type="range" value="100" />
+                    </div>
+                    <div class="thresholdRow">
+                        <label>Krytyczny (czerwony): <strong id="dangerValue">50</strong> szt.</label>
+                        <input id="dangerRange" max="1000" min="0" step="10" type="range" value="50" />
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <input id="searchParts" placeholder="Szukaj po Nazwie lub Typie..." type="text" autocomplete="off" />
+                </div>
+
+                <div class="partsSplit">
+                    <section class="splitCol">
+                        <h3 class="subhead">Podsumowanie (wg Nazwy/ID)</h3>
+                        <div class="tableWrap">
+                            <table id="skuSummaryTable" class="tightTable stickyHeader">
+                                <thead>
+                                    <tr>
+                                        <th>Nazwa (ID)</th>
+                                        <th>Typ</th>
+                                        <th class="right">Stan</th>
+                                        <th class="right">Wartość</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="splitCol">
+                        <h3 class="subhead">Szczegóły Partii (FIFO)</h3>
+                        <div class="tableWrap">
+                            <div class="summaryRow">
+                                <div class="muted small">Wartość całkowita:</div>
+                                <div class="right"><strong id="warehouseTotal">0,00 zł</strong></div>
+                            </div>
+
+                            <table id="partsTable" class="tightTable stickyHeader">
+                                <thead>
+                                    <tr>
+                                        <th>Nazwa (ID)</th>
+                                        <th>Dostawca</th>
+                                        <th class="right">Cena zak.</th>
+                                        <th class="right">Ilość</th>
+                                        <th class="right">Wartość</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
             </div>
+        </section>
 
-            <div class="tabDivider" aria-hidden="true"></div>
+        <section class="tabPanel" data-tab-panel="delivery" hidden>
+            <div class="card">
+                <h2>Przyjęcie Dostawy</h2>
+                <p class="small muted">Wybierz dostawcę i dodaj towary do listy przyjęcia.</p>
 
-            <div class="tabGroup">
-                <div class="tabGroupLabel">Katalogi</div>
-                <div class="tabGroupButtons">
-                    <button class="tabBtn" type="button" data-tab-target="catalog_parts">Katalog części</button>
-                    <button class="tabBtn" type="button" data-tab-target="catalog_suppliers">Katalog dostawców</button>
-                    <button class="tabBtn" type="button" data-tab-target="catalog_machines">Katalog maszyn</button>
+                <div class="grid2">
+                    <div class="uiSection">
+                        <div class="row">
+                            <label>
+                                Dostawca
+                                <select id="supplierSelect"></select>
+                            </label>
+                            <label>
+                                Data przyjęcia
+                                <input id="deliveryDate" type="date" required />
+                            </label>
+                        </div>
+                        <div class="row">
+                            <label>
+                                Wybierz część (Nazwa - Typ)
+                                <select id="supplierPartsSelect"></select>
+                            </label>
+                        </div>
+                        <div class="row items-end">
+                            <label>
+                                Ilość
+                                <input id="deliveryQty" min="1" step="1" type="number" value="1" />
+                            </label>
+                            <label>
+                                Cena jedn. (PLN)
+                                <input id="deliveryPrice" min="0" step="0.01" type="number" value="0" />
+                            </label>
+                            <button id="addDeliveryItemBtn" type="button" class="secondary">Dodaj pozycję</button>
+                        </div>
+                    </div>
+
+                    <div class="uiSection listSection">
+                        <div class="tableWrap">
+                            <table id="deliveryItemsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Nazwa (ID)</th>
+                                        <th class="right">Ilość</th>
+                                        <th class="right">Cena</th>
+                                        <th class="right">Razem</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="deliveryActions">
+                            <div class="summary">
+                                <div><span>Pozycji:</span> <strong id="itemsCount">0</strong></div>
+                                <div><span>Do zapłaty:</span> <strong id="itemsTotal">0,00 zł</strong></div>
+                            </div>
+                            <button class="primary" id="finalizeDeliveryBtn" type="button" disabled>Zatwierdź dostawę</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </nav>
+        </section>
 
+        <section class="tabPanel" data-tab-panel="build" hidden>
+            <div class="card">
+                <h2>Zlecenie Produkcyjne</h2>
+                <p class="small muted">Zaplanuj produkcję. System automatycznie zdejmie części ze stanu (FIFO).</p>
 
-    </header>
-<!-- TAB: MAGAZYN CZĘŚCI (startowy, szeroki) -->
-<section class="tabPanel widePanel" data-tab-panel="parts">
-    <div class="card">
-        <h2>Magazyn części</h2>
-        <p class="small muted">
-            Najpierw jest podsumowanie per <strong>Nazwę</strong> (unikatową), a niżej partie (różne ceny zakupu osobno). <strong>Typ</strong> może się powtarzać.
-        </p>
-        <div class="toolbar">
-            <button class="secondary" id="clearDataBtn" type="button">Wyczyść dane</button>
-        </div>
+                <div class="grid2">
+                    <div class="uiSection">
+                        <div class="row">
+                            <label>
+                                Wybierz maszynę
+                                <select id="machineSelect"></select>
+                            </label>
+                        </div>
+                        <div class="row items-end">
+                            <label>
+                                Ilość sztuk
+                                <input id="buildQty" min="1" step="1" type="number" value="1" />
+                            </label>
+                            <label>
+                                Data produkcji
+                                <input id="buildDate" type="date" />
+                            </label>
+                            <button id="addBuildItemBtn" type="button" class="secondary">Dodaj do planu</button>
+                        </div>
 
-        <div class="thresholds">
-            <div class="thresholdRow">
-                <label>
-                    Próg żółty (poniżej)
-                    <input id="warnRange" max="1000" min="0" step="10" type="range" value="100" />
-                </label>
-                <span class="pill"><strong id="warnValue">100</strong> szt.</span>
+                        <hr class="divider">
+
+                        <div class="row">
+                            <label>
+                                Tryb pobierania części
+                                <select id="consumeMode">
+                                    <option selected value="fifo">Automatyczny (FIFO)</option>
+                                    <option value="manual">Ręczny wybór partii</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="missingBox" hidden id="missingBox">
+                            <strong>Braki magazynowe!</strong>
+                            <p class="small">Nie można wyprodukować. Brakuje następujących części:</p>
+                            <ul class="small" id="missingList"></ul>
+                        </div>
+                    </div>
+
+                    <div class="uiSection listSection">
+                        <div class="tableWrap">
+                            <table id="buildItemsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Maszyna</th>
+                                        <th class="right">Ilość</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <div class="missingBox infoBox" hidden id="manualConsumeBox">
+                            <strong>Wybór partii (Manual)</strong>
+                            <div id="manualConsumeUI" class="manualConsumeGrid"></div>
+                        </div>
+
+                        <div class="deliveryActions">
+                            <div class="summary">
+                                <div><span>Maszyn do zrobienia:</span> <strong id="buildItemsCount">0</strong></div>
+                            </div>
+                            <button class="primary" id="finalizeBuildBtn" type="button" disabled>Finalizuj produkcję</button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="thresholdRow">
-                <label>
-                    Próg czerwony (poniżej)
-                    <input id="dangerRange" max="1000" min="0" step="10" type="range" value="50" />
-                </label>
-                <span class="pill danger"><strong id="dangerValue">50</strong> szt.</span>
-            </div>
-        </div>
-        <div class="toolbar">
-            <input id="searchParts" placeholder="Szukaj po typie / nazwie..." type="text" />
-        </div>
+        </section>
 
-
-        <div class="partsSplit">
-            <!-- Lewa: podsumowanie -->
-            <section class="splitCol">
-                <h3 class="subhead">Podsumowanie (per Nazwę)</h3>
+        <section class="tabPanel" data-tab-panel="machines" hidden>
+            <div class="card">
+                <h2>Magazyn Wyrobów Gotowych</h2>
+                <div class="toolbar">
+                    <input id="searchMachines" placeholder="Szukaj maszyny..." type="text" autocomplete="off" />
+                </div>
                 <div class="tableWrap">
-                    <table id="skuSummaryTable" class="tightTable">
+                    <table id="machinesStockTable">
                         <thead>
                             <tr>
-                                <th>Nazwa</th>
-                                <th>Typ</th>
-                                <th class="right">Łącznie szt.</th>
-                                <th class="right">Wartość łączna</th>
+                                <th>Nazwa Maszyny (ID)</th>
+                                <th>Typ (Nazwa handlowa)</th>
+                                <th class="right">Stan Magazynowy</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
-            </section>
+            </div>
+        </section>
 
-            <!-- Prawa: partie -->
-            <section class="splitCol">
-                <h3 class="subhead">Partie (różne ceny osobno)</h3>
-                <div class="tableWrap">
-                    <div class="summaryRow">
-                        <div class="muted small">Łączna wartość magazynu:</div>
-                        <div class="right"><strong id="warehouseTotal">0,00 zł</strong></div>
+        <section class="tabPanel" data-tab-panel="catalog_parts" hidden>
+            <div class="card">
+                <h2>Baza Części (Globalna)</h2>
+                <div class="uiSection">
+                    <div class="uiSectionHead">
+                        <h3>Nowa Część</h3>
+                        <span class="uiHint">Definiujesz tylko raz.</span>
+                    </div>
+                    <div class="row items-end">
+                        <label>
+                            Nazwa (Unikalne ID)
+                            <input id="partSkuInput" placeholder="np. SR-M6-30" type="text" autocomplete="off" />
+                        </label>
+                        <label>
+                            Typ (Opis)
+                            <input id="partNameInput" placeholder="np. Śruba M6x30" type="text" autocomplete="off" />
+                        </label>
                     </div>
 
-                    <table id="partsTable" class="tightTable">
+                    <div class="miniSubhead" style="margin-top:10px; margin-bottom:5px; font-size:0.9rem; color:var(--muted)">
+                        Przypisz do istniejących dostawców:
+                    </div>
+
+                    <div id="partNewSuppliersChecklist" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
+                        <span class="small muted">Brak zdefiniowanych dostawców. Dodaj ich w zakładce "Dostawcy".</span>
+                    </div>
+
+                    <div class="row">
+                        <button id="addPartBtn" type="button" class="compact primary">Zapisz w bazie</button>
+                    </div>
+                </div>
+
+                <div class="tableWrap">
+                    <table id="partsCatalogTable">
                         <thead>
                             <tr>
-                                <th>Nazwa</th>
+                                <th>Nazwa (ID)</th>
                                 <th>Typ</th>
-                                <th>Dostawca</th>
-                                <th class="right">Cena zakupu</th>
-                                <th class="right">Ilość</th>
-                                <th class="right">Wartość</th>
+                                <th>Dostawcy (Przypisani)</th>
+                                <th class="right">Akcje</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
-            </section>
-        </div>
-
-        <p class="small muted">
-            Partie są osobno, bo cena zakupu może się różnić. Podświetlenie żółte/czerwone dotyczy <strong>podsumowania per Nazwę</strong> (łączny stan).
-        </p>
-    </div>
-</section>
-<!-- TAB: NOWA DOSTAWA -->
-<section class="tabPanel" data-tab-panel="delivery" hidden="">
-<div class="card">
-<h2>Nowa dostawa</h2>
-<p class="small muted">
-                    Dodajesz dostawę od dostawcy. Lista części pochodzi z jego cennika, a cena uzupełnia się automatycznie.
-                    Możesz ją zmienić ręcznie dla tej jednej dostawy (np. rabat lub inna cena na fakturze).
-                </p>
-<div class="row">
-<label>
-                        Dostawca
-                        <select id="supplierSelect"></select>
-</label>
-<label>
-                        Data
-                        <input id="deliveryDate" type="date"/>
-</label>
-</div>
-<div class="row">
-<label>
-                        Część od dostawcy
-                        <select id="supplierPartsSelect"></select>
-</label>
-<label>
-                        Ilość
-                        <input id="deliveryQty" min="1" step="1" type="number" value="1"/>
-</label>
-</div>
-<div class="row">
-<label>
-                        Cena za szt. (PLN)
-                        <input id="deliveryPrice" min="0" step="0.01" type="number" value="0"/>
-</label>
-<button id="addDeliveryItemBtn" type="button" class="secondary compact">Dodaj pozycję</button>
-</div>
-<div class="tableWrap">
-<table id="deliveryItemsTable">
-<thead>
-<tr>
-<th>Część</th>
-<th class="right">Ilość</th>
-<th class="right">Cena</th>
-<th class="right">Wartość</th>
-<th></th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-<div class="summary">
-<div><span>Pozycji:</span> <strong id="itemsCount">0</strong></div>
-<div><span>Suma:</span> <strong id="itemsTotal">0,00 zł</strong></div>
-</div>
-<div class="deliveryActions">
-<button class="primary" id="finalizeDeliveryBtn" type="button">Zapisz dostawę (dodaj partie)</button>
-</div>
-<p class="small muted">
-                    W tej wersji dane są lokalne (bez kont/logowania).
-                </p>
-</div>
-</section>
-<!-- TAB: PRODUKCJA -->
-<section class="tabPanel" data-tab-panel="build" hidden="">
-<div class="card">
-<h2>Nowa produkcja</h2>
-<p class="small muted">
-                    Dodaj maszyny do listy, a potem finalizuj. System sprawdzi braki części, odejmie stany z magazynu i doda gotowe maszyny do “Magazynu maszyn”.
-                </p>
-<div class="row">
-<label>
-                        Maszyna
-                        <select id="machineSelect"></select>
-</label>
-<label>
-                        Ilość
-                        <input id="buildQty" min="1" step="1" type="number" value="1"/>
-</label>
-</div>
-<div class="row">
-<label>
-                        Data
-                        <input id="buildDate" type="date"/>
-</label>
-<button id="addBuildItemBtn" type="button" class="compact">Dodaj do listy</button>
-</div>
-<div class="row">
-<label>
-                        Tryb zużycia
-                        <select id="consumeMode">
-<option selected="" value="fifo">Auto (FIFO)</option>
-<option value="manual">Ręczny wybór partii</option>
-</select>
-</label>
-</div>
-<div class="missingBox" hidden="" id="missingBox">
-<strong>Braki części:</strong>
-<ul class="small" id="missingList"></ul>
-</div>
-<div class="missingBox" hidden="" id="manualConsumeBox">
-<strong>Ręczny wybór partii do zużycia:</strong>
-<div class="small muted" id="manualConsumeUI" style="margin-top:8px">
-                        (Dodaj maszyny do listy, a potem wybierz partie do pobrania.)
-                    </div>
-</div>
-<div class="tableWrap">
-<table id="buildItemsTable">
-<thead>
-<tr>
-<th>Maszyna</th>
-<th class="right">Ilość</th>
-<th></th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-<div class="summary">
-<div><span>Pozycji:</span> <strong id="buildItemsCount">0</strong></div>
-</div>
-<button class="primary" id="finalizeBuildBtn" type="button">Finalizuj produkcję</button>
-<p class="small muted">
-                    Tryby: <strong>Auto (FIFO)</strong> zużywa najstarsze partie. <strong>Ręczny</strong> pozwala wybrać konkretne partie do pobrania.
-                </p>
-</div>
-</section>
-<!-- TAB: MAGAZYN MASZYN -->
-<section class="tabPanel" data-tab-panel="machines" hidden="">
-<div class="card">
-<h2>Magazyn maszyn</h2>
-<p class="small muted">
-                    Tu są gotowe maszyny, które powstały po finalizacji produkcji. To jest stan „na magazynie”.
-                </p>
-<div class="toolbar">
-<input id="searchMachines" placeholder="Szukaj po nazwie / kodzie..." type="text"/>
-</div>
-<div class="tableWrap">
-<table id="machinesStockTable">
-<thead>
-<tr>
-<th>Nazwa</th>
-<th>Kod</th>
-<th class="right">Ilość</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-</div>
-</section><section class="tabPanel" data-tab-panel="catalog_parts" hidden=""><div class="card">
-<h2>Katalog części (globalny)</h2>
-<p class="small muted">
-                        Lista wszystkich części. <strong>Nazwa</strong> jest unikalna (jeden identyfikator = jedna część). <strong>Typ</strong> może się powtarzać. Ceny są w cennikach dostawców.
-                    </p>
-
-<div class="uiSection">
-  <div class="uiSectionHead">
-    <h3>Dodaj część</h3>
-    <span class="uiHint">Jedna Nazwa = jedna część. Typ może się powtarzać.</span>
-  </div>
-
-  <div class="row">
-<label>
-                            Nazwa (unikatowa)
-                            <input id="partSkuInput" placeholder="np. Śruba M6x30 ocynk" type="text"/>
-</label>
-<label>
-                            Typ
-                            <input id="partNameInput" placeholder="np. Śruba" type="text"/>
-</label>
-</div>
-
-  <div class="miniSubhead">Dostawcy (opcjonalnie)</div>
-<div class="supplierPicker" id="partSuppliersPicker">
-  <div class="supplierChips" id="partSuppliersChips"></div>
-
-  <div class="supplierPickRow">
-    <input id="partSuppliersInput" type="text" placeholder="Dodaj dostawcę..." autocomplete="off"/>
-    <button id="partSuppliersClearBtn" type="button" class="secondary compact">Wyczyść</button>
-  </div>
-
-  <div class="supplierDropdown" id="partSuppliersDropdown" hidden></div>
-
-  <div class="small muted">Kliknij dostawcę, żeby dodać/usunąć. Możesz wpisać fragment nazwy.</div>
-</div>
-
-  <div class="row">
-    <button id="addPartBtn" type="button" class="compact">Dodaj część</button>
-  </div>
-</div>
-<div class="tableWrap">
-<table id="partsCatalogTable">
-<thead>
-<tr>
-<th>Nazwa</th>
-<th>Typ</th>
-<th>Dostawcy</th>
-<th class="right">Akcje</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-
-</div></section><section class="tabPanel" data-tab-panel="catalog_suppliers" hidden=""><div class="card">
-<h2>Dostawcy i cenniki</h2>
-<p class="small muted">
-                        Każdy dostawca ma swój cennik (Nazwa → cena). To zasila listę części w „Nowej dostawie”.
-                    </p>
-<div class="uiSection">
-  <div class="uiSectionHead">
-    <h3>Dodaj dostawcę</h3>
-    <span class="uiHint">Tworzenie nowego dostawcy</span>
-  </div>
-
-  <div class="row">
-    <label>
-      Nowy dostawca
-      <input id="supplierNameInput" placeholder="np. ABC-Tools" type="text"/>
-    </label>
-    <button id="addSupplierBtn" type="button" class="compact">Dodaj dostawcę</button>
-  </div>
-</div>
-
-<div id="supplierEditorTemplate" class="uiSection" hidden>
-  <div class="uiSectionHead">
-    <h3>Edytuj dostawcę i cennik</h3>
-    <span class="uiHint">Wybierz część i ustaw ceny</span>
-  </div>
-
-  <div class="row">
-    <div class="summaryRow" style="width:100%">
-      <div class="muted small">Dostawca:</div>
-      <div><strong id="supplierEditorName">—</strong></div>
-    </div>
-  </div>
-
-  <div class="row">
-    <label>
-      Część
-      <select id="supplierEditorPartSelect"></select>
-    </label>
-    <label>
-      Cena (PLN/szt.)
-      <input id="supplierEditorPriceInput" min="0" step="0.01" type="number" value="0"/>
-    </label>
-    <button id="supplierEditorSetPriceBtn" type="button" class="compact">Ustaw cenę</button>
-  </div>
-
-  <div class="tableWrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Nazwa</th>
-          <th>Typ</th>
-          <th class="right">Cena</th>
-        </tr>
-      </thead>
-      <tbody id="supplierEditorPriceBody"></tbody>
-    </table>
-  </div>
-
-  <div class="editorActions" style="margin-top:10px">
-    <button id="supplierEditorSaveBtn" type="button" class="success">Zapisz</button>
-    <button id="supplierEditorCancelBtn" type="button" class="secondary">Anuluj</button>
-  </div>
-</div>
-
-<h3 class="subhead">Wszyscy dostawcy</h3>
-<p class="small muted">Lista wszystkich dostawców dodanych w systemie. Możesz ich usuwać (jeśli nie mają partii w magazynie).</p>
-<div class="tableWrap">
-  <table id="suppliersListTable">
-    <thead>
-      <tr>
-        <th>Nazwa dostawcy</th>
-        <th class="right">Akcje</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-</div></section><section class="tabPanel" data-tab-panel="catalog_machines" hidden="">
-
-      <div class="card">
-        <h2>Katalog maszyn (BOM)</h2>
-        <p class="small muted">
-          Tutaj dodajesz nowe typy maszyn, edytujesz ich skład (BOM) oraz zarządzasz listą maszyn.
-          BOM to lista części (Nazwa) i ilości potrzebnych na <strong>1 sztukę</strong> maszyny.
-        </p>
-
-        <div class="uiSection">
-          <div class="uiSectionHead">
-            <h3>Nowa maszyna</h3>
-            <span class="uiHint">Dodaj nowy typ maszyny</span>
-          </div>
-
-          <div class="row">
-            <label>
-              Kod maszyny
-              <input id="machineCodeInput" type="text" placeholder="np. M-IR02" />
-            </label>
-
-            <label>
-              Nazwa maszyny
-              <input id="machineNameInput" type="text" placeholder="np. Maszyna IR-02" />
-            </label>
-          </div>
-
-          <div class="row">
-            <button id="addMachineBtn" type="button" class="compact">Dodaj maszynę</button>
-          </div>
-        </div>
-
-        
-        <div id="machineEditorTemplate" class="uiSection" hidden>
-          <div class="uiSectionHead">
-            <h3>Edytuj maszynę i BOM</h3>
-            <span class="uiHint">Dodawaj/usuń części</span>
-          </div>
-
-          <div class="row">
-            <div class="inlineMeta">
-              <span class="muted small">Maszyna:</span>
-              <strong id="machineEditorName">—</strong>
-              <span class="badge" id="machineEditorCode">—</span>
             </div>
-          </div>
+        </section>
 
-          <!-- select techniczny dla istniejącej logiki (ukryty) -->
-          <div class="row" style="display:none">
-            <label>
-              Edytuj maszynę
-              <select id="machineManageSelect"></select>
-            </label>
-          </div>
+        <section class="tabPanel" data-tab-panel="catalog_suppliers" hidden>
+            <div class="card">
+                <h2>Dostawcy i Cenniki</h2>
 
-          <div class="row">
-            <label>
-              Część
-              <select id="bomSkuSelect"></select>
-            </label>
+                <div class="grid2">
+                    <div>
+                        <div class="uiSection">
+                            <div class="row items-end">
+                                <label>
+                                    Nazwa dostawcy
+                                    <input id="supplierNameInput" placeholder="np. Hurtownia X" type="text" autocomplete="off" />
+                                </label>
+                                <button id="addSupplierBtn" type="button" class="compact">Dodaj</button>
+                            </div>
+                        </div>
+                        <div class="tableWrap">
+                            <table id="suppliersListTable">
+                                <thead>
+                                    <tr>
+                                        <th>Dostawca</th>
+                                        <th class="right">Akcje</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
 
-            <label>
-              Ilość / 1 szt.
-              <input id="bomQtyInput" type="number" min="1" step="1" value="1" />
-            </label>
+                    <div id="supplierEditorTemplate" class="uiSection editorPanel" hidden>
+                        <div class="uiSectionHead">
+                            <h3>Edycja cennika: <span id="supplierEditorName" class="accent">—</span></h3>
+                        </div>
 
-            <button id="addBomItemBtn" type="button" class="compact">Dodaj do BOM</button>
-          </div>
+                        <div class="row items-end">
+                            <label>
+                                Wybierz część
+                                <select id="supplierEditorPartSelect"></select>
+                            </label>
+                            <label style="max-width: 100px;">
+                                Cena
+                                <input id="supplierEditorPriceInput" min="0" step="0.01" type="number" value="0" />
+                            </label>
+                            <button id="supplierEditorSetPriceBtn" type="button" class="compact">Ustaw</button>
+                        </div>
 
-          <div class="tableWrap">
-            <table id="bomTable">
-              <thead>
-                <tr>
-                  <th>Nazwa</th>
-                  <th>Typ</th>
-                  <th class="right">Ilość</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
+                        <div class="tableWrap" style="max-height: 300px; overflow-y: auto;">
+                            <table class="tightTable">
+                                <thead>
+                                    <tr>
+                                        <th>Nazwa (ID)</th>
+                                        <th>Typ</th>
+                                        <th>Cena PLN</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="supplierEditorPriceBody"></tbody>
+                            </table>
+                        </div>
 
-          <p class="small muted">
-            Wskazówka: jeśli nie ma jakiejś części na liście BOM, dodaj ją najpierw w „Katalog części (globalny)”.
-          </p>
+                        <div class="editorActions">
+                            <button id="supplierEditorSaveBtn" type="button" class="success">Zapisz zmiany</button>
+                            <button id="supplierEditorCancelBtn" type="button" class="secondary">Anuluj</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-          <div class="row rowActionsRight">
-            <button id="machineEditorSaveBtn" type="button" class="success">Zapisz</button>
-            <button id="machineEditorCancelBtn" type="button" class="secondary">Anuluj</button>
-          </div>
-        </div>
+        <section class="tabPanel" data-tab-panel="catalog_machines" hidden>
+            <div class="card">
+                <h2>Definicje Maszyn (BOM)</h2>
+                <p class="small muted">Bill of Materials - z czego składa się jedna sztuka maszyny.</p>
 
+                <div class="uiSection">
+                    <div class="uiSectionHead">
+                        <h3>Nowa definicja</h3>
+                    </div>
+                    <div class="row items-end">
+                        <label>
+                            Nazwa Maszyny (ID/Kod)
+                            <input id="machineCodeInput" type="text" placeholder="np. M-100" autocomplete="off" />
+                        </label>
+                        <label>
+                            Typ (Nazwa handlowa)
+                            <input id="machineNameInput" type="text" placeholder="np. Wiertarka Stołowa" autocomplete="off" />
+                        </label>
+                        <button id="addMachineBtn" type="button" class="compact">Utwórz</button>
+                    </div>
+                </div>
 
-        <div class="subhead">Wszystkie maszyny</div>
-        <p class="small muted">
-          Lista wszystkich maszyn z katalogu. Możesz je usuwać (jeśli nie są na magazynie i nie są dodane do bieżącej produkcji).
-        </p>
+                <div id="machineEditorTemplate" class="uiSection editorPanel" hidden>
+                    <div class="uiSectionHead">
+                        <h3>Edycja BOM: <span id="machineEditorName" class="accent">—</span> <span id="machineEditorCode" class="badge"></span></h3>
+                    </div>
 
-        <div class="tableWrap">
-          <table id="machinesCatalogTable">
-            <thead>
-              <tr>
-                <th>Nazwa</th>
-                <th>Kod</th>
-                <th class="right">Pozycji w BOM</th>
-                <th class="right">Akcje</th>
-              </tr>
-            </thead>
-            <tbody id="machinesCatalogBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+                    <select id="machineManageSelect" hidden></select>
 
-<footer class="foot muted small">
-            Wersja 0.4.
+                    <div class="row items-end">
+                        <label>
+                            Dodaj część do składu
+                            <select id="bomSkuSelect"></select>
+                        </label>
+                        <label style="max-width: 100px;">
+                            Ilość
+                            <input id="bomQtyInput" type="number" min="1" step="1" value="1" />
+                        </label>
+                        <button id="addBomItemBtn" type="button" class="compact">Dodaj / Aktualizuj</button>
+                    </div>
+
+                    <div class="tableWrap">
+                        <table id="bomTable">
+                            <thead>
+                                <tr>
+                                    <th>Część (Nazwa)</th>
+                                    <th>Typ</th>
+                                    <th class="right">Ilość na 1 szt.</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div class="editorActions">
+                        <button id="machineEditorSaveBtn" type="button" class="success">Zapisz BOM</button>
+                        <button id="machineEditorCancelBtn" type="button" class="secondary">Anuluj</button>
+                    </div>
+                </div>
+
+                <div class="subhead">Lista Maszyn</div>
+                <div class="tableWrap">
+                    <table id="machinesCatalogTable">
+                        <thead>
+                            <tr>
+                                <th>Nazwa (ID)</th>
+                                <th>Typ (Opis)</th>
+                                <th class="right">Liczba części</th>
+                                <th class="right">Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="machinesCatalogBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <footer class="foot muted small">
+            Magazyn PRO v2.1 • Dane zapisywane lokalnie w przeglądarce.
         </footer>
-</main>
-<script src="script.js"></script>
+    </main>
+    <script src="script.js"></script>
 </body>
 </html>
