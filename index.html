@@ -300,7 +300,38 @@
                     </div>
                 </div>
 
-                <div class="tableWrap">
+                
+                <div class="uiSection editorPanel collapsed" id="partEditSection" hidden>
+                    <div class="uiSectionHead">
+                        <h3 id="partEditTitle">Edycja Części</h3>
+                        <span class="uiHint">Zapisz albo anuluj. SKU jest stałe.</span>
+                    </div>
+
+                    <div class="row items-end">
+                        <label>
+                            Nazwa (Unikalne ID)
+                            <input id="editPartSkuInput" placeholder="np. SR-M6-30" type="text" autocomplete="off" readonly />
+                        </label>
+                        <label>
+                            Typ (Opis)
+                            <input id="editPartNameInput" placeholder="np. Śruba M6x30" type="text" autocomplete="off" />
+                        </label>
+                    </div>
+
+                    <div class="miniSubhead" style="margin-top:10px; margin-bottom:5px; font-size:0.9rem; color:var(--muted)">
+                        Przypisz do istniejących dostawców:
+                    </div>
+
+                    <div id="editPartSuppliersChecklist" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
+                        <span class="small muted">Brak zdefiniowanych dostawców.</span>
+                    </div>
+
+                    <div class="row" style="gap:10px;">
+                        <button id="saveEditPartBtn" type="button" class="compact primary">Zapisz zmiany</button>
+                        <button id="cancelEditPartBtn" type="button" class="compact">Anuluj</button>
+                    </div>
+                </div>
+<div class="tableWrap">
                     <table id="partsCatalogTable">
                         <thead>
                             <tr>

@@ -626,3 +626,25 @@ tr:hover td {
         text-align: right;
         padding: 4px;
     }
+
+
+/* Readonly inputs look intentionally disabled but still consistent */
+input[readonly]{
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+
+.iconBtn.primary:hover {
+    filter: brightness(1.05);
+}
+
+
+
+
+/* Defensive: jeśli kiedyś użyjesz iconBtn + success, nie rób czerwonego hovera */
+.iconBtn.success:hover {
+    background: rgba(33,202,162,0.25);
+    color: #21caa2;
+    border-color: rgba(33,202,162,0.3);
+}

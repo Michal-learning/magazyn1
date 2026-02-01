@@ -20,6 +20,7 @@ const state = {
 
 // Zmienne pomocnicze
 let _idCounter = 1;
+let currentEditPartKey = null; // SKU key edytowanej części
 let LOW_WARN = 100;
 let LOW_DANGER = 50;
 
@@ -527,7 +528,10 @@ function refreshCatalogsUI() {
             <td><span class="badge">${p.sku}</span></td>
             <td>${p.name}</td>
             <td>${suppliers.length ? suppliers.map(s => `<span class="supplierChip small">${s}</span>`).join(" ") : '<span class="muted">-</span>'}</td>
-            <td class="right"><button class="iconBtn" onclick="askDeletePart('${p.sku}')">Usuń</button></td>
+            <td class="right">
+                <button class="success compact" onclick="startEditPart('${p.sku}')">Edytuj</button>
+                <button class="iconBtn" onclick="askDeletePart('${p.sku}')">Usuń</button>
+            </td>
         </tr>`;
     }).join("");
 
@@ -608,6 +612,10 @@ function init() {
         document.getElementById("dangerValue").textContent = LOW_DANGER;
         save(); renderWarehouse();
     });
+    // Edycja części (Baza Części)
+    document.getElementById("saveEditPartBtn")?.addEventListener("click", saveEditPart);
+    document.getElementById("cancelEditPartBtn")?.addEventListener("click", cancelEditPart);
+
 }
 
 // EVENTS
@@ -899,3 +907,118 @@ document.getElementById("clearDataBtn").addEventListener("click", () => {
 });
 
 init();
+
+// === EDYCJA CZĘŚCI (Baza Części) ===
+
+function buildEditPartSuppliersChecklist(partKey) {
+    const box = document.getElementById("editPartSuppliersChecklist");
+    if (!box) return;
+
+    const allSups = Array.from(state.suppliers.keys()).sort();
+    if (!allSups.length) {
+        box.innerHTML = '<span class="small muted">Brak zdefiniowanych dostawców.</span>';
+        return;
+    }
+
+    box.innerHTML = allSups.map(name => {
+        const sup = state.suppliers.get(name);
+        const checked = sup && sup.prices && sup.prices.has(partKey);
+        return `
+            <label class="checkRow">
+                <input type="checkbox" value="${name}" ${checked ? "checked" : ""}>
+                <span>${name}</span>
+            </label>
+        `;
+    }).join("");
+}
+
+function startEditPart(sku) {
+    const section = document.getElementById("partEditSection");
+    const title = document.getElementById("partEditTitle");
+    const skuInput = document.getElementById("editPartSkuInput");
+    const nameInput = document.getElementById("editPartNameInput");
+
+    if (!section || !title || !skuInput || !nameInput) {
+        return toast("Brakuje elementów UI do edycji części (HTML).");
+    }
+
+    const key = skuKey(sku);
+    const part = state.partsCatalog.get(key);
+    if (!part) return toast("Nie znaleziono części w bazie.");
+
+    currentEditPartKey = key;
+
+    title.textContent = `Edycja Części: ${part.sku}`;
+    skuInput.value = part.sku;
+    nameInput.value = part.name || "";
+
+    buildEditPartSuppliersChecklist(key);
+
+    section.hidden = false;
+    // slide-open (hidden nie da się animować, więc robimy transition po klasie)
+    section.classList.add("collapsed");
+    requestAnimationFrame(() => {
+        section.classList.remove("collapsed");
+        setTimeout(() => section.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    });
+}
+
+function cancelEditPart() {
+    const section = document.getElementById("partEditSection");
+    if (section) {
+        section.classList.add("collapsed");
+        const onEnd = () => { section.hidden = true; };
+        section.addEventListener("transitionend", onEnd, { once: true });
+    }
+
+    currentEditPartKey = null;
+
+    const title = document.getElementById("partEditTitle");
+    if (title) title.textContent = "Edycja Części";
+
+    const skuInput = document.getElementById("editPartSkuInput");
+    const nameInput = document.getElementById("editPartNameInput");
+    if (skuInput) skuInput.value = "";
+    if (nameInput) nameInput.value = "";
+}
+
+function saveEditPart() {
+    if (!currentEditPartKey) return toast("Nie wybrano części do edycji.");
+
+    const nameInput = document.getElementById("editPartNameInput");
+    const checklist = document.getElementById("editPartSuppliersChecklist");
+
+    const part = state.partsCatalog.get(currentEditPartKey);
+    if (!part) return toast("Nie znaleziono części w bazie.");
+
+    const newName = (nameInput?.value || "").trim();
+    if (!newName) return toast("Uzupełnij pole Typ (Opis).");
+
+    // Aktualizacja opisu
+    part.name = newName;
+
+    // Aktualizacja przypisania do dostawców
+    if (checklist) {
+        const checked = new Set(
+            Array.from(checklist.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+        );
+
+        for (const [supName, sup] of state.suppliers.entries()) {
+            const has = sup.prices.has(currentEditPartKey);
+            const shouldHave = checked.has(supName);
+
+            if (shouldHave && !has) {
+                // dodaj z ceną 0 jako start (użytkownik może potem edytować cennik)
+                sup.prices.set(currentEditPartKey, 0);
+            } else if (!shouldHave && has) {
+                sup.prices.delete(currentEditPartKey);
+            }
+        }
+    }
+
+    save();
+    refreshCatalogsUI();
+    cancelEditPart();
+    toast("Zapisano zmiany części.");
+}
+
