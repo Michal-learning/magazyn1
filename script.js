@@ -32,6 +32,11 @@ const state = {
   }
 };
 
+// UI: wybrani dostawcy przy dodawaniu części
+let uiSelectedPartSuppliers = new Set();
+
+
+
 let _id = 1;
 function nextId() { return _id++; }
 
@@ -220,6 +225,10 @@ bomBody: document.querySelector("#bomTable tbody"),
   // NOWE: katalog części + dostawcy
   partSkuInput: document.getElementById("partSkuInput"),
   partNameInput: document.getElementById("partNameInput"),
+  partSuppliersInput: document.getElementById("partSuppliersInput"),
+  partSuppliersDropdown: document.getElementById("partSuppliersDropdown"),
+  partSuppliersChips: document.getElementById("partSuppliersChips"),
+  partSuppliersClearBtn: document.getElementById("partSuppliersClearBtn"),
   addPartBtn: document.getElementById("addPartBtn"),
   partsCatalogBody: document.querySelector("#partsCatalogTable tbody"),
 
@@ -284,6 +293,16 @@ function getPartName(sku) {
   return it ? it.name : String(sku || "").toUpperCase();
 }
 
+
+function renderPartSuppliersBadges(partKey) {
+  const names = Array.from(state.suppliers.keys())
+    .filter((n) => state.suppliers.get(n)?.prices?.has(partKey))
+    .sort((a, b) => a.localeCompare(b, "pl"));
+
+  if (!names.length) return `<span class="muted small">—</span>`;
+  return names.map(n => `<span class="badge supplierBadge">${escapeHtml(n)}</span>`).join(" ");
+}
+
 function renderPartsCatalogTable() {
   if (!els.partsCatalogBody) return;
 
@@ -300,6 +319,7 @@ function renderPartsCatalogTable() {
     <tr>
       <td><span class="badge">${escapeHtml(p.sku)}</span></td>
       <td>${escapeHtml(p.name)}</td>
+      <td>${renderPartSuppliersBadges(p.skuLower)}</td>
       <td class="right">
         <button type="button" class="secondary" data-delete-part="${escapeAttr(p.skuLower)}" ${disabled} ${title}>Usuń</button>
       </td>
@@ -433,6 +453,78 @@ function renderSupplierSelects() {
   renderSupplierPriceTable();
   renderSuppliersList();
   renderSupplierPartsForDelivery();
+  renderPartSuppliersPicker();
+}
+
+
+function renderPartSuppliersPicker() {
+  if (!els.partSuppliersDropdown || !els.partSuppliersInput || !els.partSuppliersChips) return;
+
+  // usuń zaznaczenia, które już nie istnieją
+  const supplierNames = Array.from(state.suppliers.keys());
+  uiSelectedPartSuppliers = new Set(
+    Array.from(uiSelectedPartSuppliers).filter((n) => supplierNames.includes(n))
+  );
+
+  const q = (els.partSuppliersInput.value || "").trim().toLowerCase();
+  const filtered = supplierNames
+    .filter((n) => n.toLowerCase().includes(q))
+    .sort((a, b) => a.localeCompare(b, "pl"));
+
+  // chips
+  els.partSuppliersChips.innerHTML = "";
+  for (const name of Array.from(uiSelectedPartSuppliers).sort((a, b) => a.localeCompare(b, "pl"))) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "supplierChip";
+    chip.textContent = name;
+    chip.title = "Usuń";
+    chip.addEventListener("click", () => {
+      uiSelectedPartSuppliers.delete(name);
+      renderPartSuppliersPicker();
+    });
+    els.partSuppliersChips.appendChild(chip);
+  }
+
+  // dropdown
+  els.partSuppliersDropdown.innerHTML = "";
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "supplierOption empty";
+    empty.textContent = supplierNames.length ? "Brak wyników" : "Brak dostawców (dodaj w Katalogu dostawców)";
+    els.partSuppliersDropdown.appendChild(empty);
+  } else {
+    for (const name of filtered) {
+      const opt = document.createElement("button");
+      opt.type = "button";
+      opt.className = "supplierOption";
+      opt.setAttribute("data-supplier", name);
+
+      const isOn = uiSelectedPartSuppliers.has(name);
+      opt.innerHTML = `<span class="tick">${isOn ? "✓" : ""}</span><span class="label">${escapeHtml(name)}</span>`;
+
+      opt.addEventListener("click", () => {
+        if (uiSelectedPartSuppliers.has(name)) uiSelectedPartSuppliers.delete(name);
+        else uiSelectedPartSuppliers.add(name);
+        renderPartSuppliersPicker();
+      });
+
+      els.partSuppliersDropdown.appendChild(opt);
+    }
+  }
+
+  // pokaż/ukryj dropdown: tylko gdy input jest w fokusie lub ma query
+  // (samo hidden sterujemy w eventach, tu nie ruszamy)
+}
+
+function openPartSuppliersDropdown() {
+  if (!els.partSuppliersDropdown) return;
+  els.partSuppliersDropdown.hidden = false;
+}
+
+function closePartSuppliersDropdown() {
+  if (!els.partSuppliersDropdown) return;
+  els.partSuppliersDropdown.hidden = true;
 }
 
 function renderSupplierSkuDropdown() {
@@ -1434,17 +1526,71 @@ els.addPartBtn?.addEventListener("click", () => {
   const res = upsertPart(sku, name);
   if (!res.ok) return alert(res.msg);
 
+  // przypisz do zaznaczonych dostawców (cena startowa 0)
+  const partKey = skuKey(sku);
+  for (const supName of Array.from(uiSelectedPartSuppliers)) {
+    const sup = state.suppliers.get(supName);
+    if (!sup) continue;
+    if (!sup.prices.has(partKey)) sup.prices.set(partKey, 0);
+  }
+
   els.partSkuInput.value = "";
   els.partNameInput.value = "";
+  uiSelectedPartSuppliers.clear();
+  if (els.partSuppliersInput) els.partSuppliersInput.value = "";
+  closePartSuppliersDropdown();
+  renderPartSuppliersPicker();
 
   renderPartsCatalogTable();
+  renderSupplierSelects();
   renderSupplierSkuDropdown();
   renderSupplierPartsForDelivery();
   alert(res.msg);
   renderBomSkuSelect();
+});
 
-  saveState();
+// ===== Picker dostawców w katalogu części (multi) =====
+els.partSuppliersInput?.addEventListener("focus", () => {
+  renderPartSuppliersPicker();
+  openPartSuppliersDropdown();
+});
 
+els.partSuppliersInput?.addEventListener("input", () => {
+  renderPartSuppliersPicker();
+  openPartSuppliersDropdown();
+});
+
+els.partSuppliersInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closePartSuppliersDropdown();
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    // przełącz pierwszą widoczną opcję
+    const first = els.partSuppliersDropdown?.querySelector(".supplierOption[data-supplier]");
+    const name = first?.getAttribute("data-supplier");
+    if (name) {
+      if (uiSelectedPartSuppliers.has(name)) uiSelectedPartSuppliers.delete(name);
+      else uiSelectedPartSuppliers.add(name);
+      renderPartSuppliersPicker();
+      openPartSuppliersDropdown();
+    }
+  }
+});
+
+els.partSuppliersClearBtn?.addEventListener("click", () => {
+  uiSelectedPartSuppliers.clear();
+  if (els.partSuppliersInput) els.partSuppliersInput.value = "";
+  renderPartSuppliersPicker();
+  openPartSuppliersDropdown();
+});
+
+document.addEventListener("click", (e) => {
+  const picker = document.getElementById("partSuppliersPicker");
+  if (!picker) return;
+  if (picker.contains(e.target)) return;
+  closePartSuppliersDropdown();
 });
 
 // ===== Dostawcy + cenniki =====

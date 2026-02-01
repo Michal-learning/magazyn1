@@ -989,3 +989,95 @@ button.compact{
 }
 
 
+
+/* ===== Multi-dostawcy: picker + badge ===== */
+.supplierBadge{
+  background: rgba(33,202,162,0.12);
+  border-color: rgba(33,202,162,0.28);
+}
+
+.supplierPicker{
+  display: grid;
+  gap: 10px;
+}
+
+.supplierChips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 14px;
+}
+
+.supplierChip{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.supplierChip:hover{
+  border-color: rgba(255,99,132,0.35);
+}
+
+.supplierPickRow{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.supplierDropdown{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(20,22,28,0.96);
+  border-radius: 12px;
+  padding: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.supplierOption{
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255,255,255,0.9);
+}
+.supplierOption:hover{
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+}
+.supplierOption .tick{
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  font-weight: 900;
+  color: rgba(33,202,162,0.95);
+}
+.supplierOption.empty{
+  grid-template-columns: 1fr;
+  opacity: 0.75;
+  cursor: default;
+}
+
+
+/* ===== Small section title inside a uiSection ===== */
+.miniSubhead{
+  margin: 10px 0 8px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.82);
+}

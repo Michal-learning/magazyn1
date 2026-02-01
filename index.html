@@ -277,7 +277,14 @@
 <p class="small muted">
                         Lista wszystkich części. <strong>Nazwa</strong> jest unikalna (jeden identyfikator = jedna część). <strong>Typ</strong> może się powtarzać. Ceny są w cennikach dostawców.
                     </p>
-<div class="row">
+
+<div class="uiSection">
+  <div class="uiSectionHead">
+    <h3>Dodaj część</h3>
+    <span class="uiHint">Jedna Nazwa = jedna część. Typ może się powtarzać.</span>
+  </div>
+
+  <div class="row">
 <label>
                             Nazwa (unikatowa)
                             <input id="partSkuInput" placeholder="np. Śruba M6x30 ocynk" type="text"/>
@@ -287,8 +294,24 @@
                             <input id="partNameInput" placeholder="np. Śruba" type="text"/>
 </label>
 </div>
-<div class="row">
-<button id="addPartBtn" type="button" class="compact">Dodaj część</button>
+
+  <div class="miniSubhead">Dostawcy (opcjonalnie)</div>
+<div class="supplierPicker" id="partSuppliersPicker">
+  <div class="supplierChips" id="partSuppliersChips"></div>
+
+  <div class="supplierPickRow">
+    <input id="partSuppliersInput" type="text" placeholder="Dodaj dostawcę..." autocomplete="off"/>
+    <button id="partSuppliersClearBtn" type="button" class="secondary compact">Wyczyść</button>
+  </div>
+
+  <div class="supplierDropdown" id="partSuppliersDropdown" hidden></div>
+
+  <div class="small muted">Kliknij dostawcę, żeby dodać/usunąć. Możesz wpisać fragment nazwy.</div>
+</div>
+
+  <div class="row">
+    <button id="addPartBtn" type="button" class="compact">Dodaj część</button>
+  </div>
 </div>
 <div class="tableWrap">
 <table id="partsCatalogTable">
@@ -296,6 +319,7 @@
 <tr>
 <th>Nazwa</th>
 <th>Typ</th>
+<th>Dostawcy</th>
 <th class="right">Akcje</th>
 </tr>
 </thead>
