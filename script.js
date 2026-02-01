@@ -1,23 +1,6 @@
 // ====== Dane w pamięci (MVP) ======
-const DEFAULT_MACHINE_CATALOG = [
-  {
-    code: "M-IR01",
-    name: "Maszyna IR-01",
-    bom: [
-      { sku: "SEN-IR01", qty: 1 },
-      { sku: "SCR-M6-30", qty: 8 },
-      { sku: "BRG-6204", qty: 2 }
-    ]
-  },
-  {
-    code: "M-BASIC",
-    name: "Maszyna BASIC",
-    bom: [
-      { sku: "SCR-M6-30", qty: 20 },
-      { sku: "BLT-A32", qty: 1 }
-    ]
-  }
-];
+// Startujemy bez "demo" maszyn. Użytkownik dodaje własny katalog.
+const DEFAULT_MACHINE_CATALOG = [];
 
 const state = {
   // partie magazynowe
@@ -54,7 +37,7 @@ function nextId() { return _id++; }
 
 const fmtPLN = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
 
-// progi podświetlania w podsumowaniu per SKU (jeśli masz suwaki, to je podepniemy)
+// progi podświetlania w podsumowaniu per Nazwę (unikat)
 let LOW_WARN = 100;
 let LOW_DANGER = 50;
 
@@ -193,7 +176,6 @@ bomBody: document.querySelector("#bomTable tbody"),
 
   // magazyn części
   searchParts: document.getElementById("searchParts"),
-  seedDemoBtn: document.getElementById("seedDemoBtn"),
   clearDataBtn: document.getElementById("clearDataBtn"),
   skuSummaryBody: document.querySelector("#skuSummaryTable tbody"),
   lotsBody: document.querySelector("#partsTable tbody"),
@@ -284,7 +266,7 @@ function safePrice(val, fallback = 0) {
 function upsertPart(sku, name) {
   const s = normSku(sku);
   const n = String(name || "").trim();
-  if (!s || !n) return { ok: false, msg: "Podaj SKU i nazwę." };
+  if (!s || !n) return { ok: false, msg: "Podaj Nazwę (unikat) i Typ." };
 
   const key = skuKey(s);
   if (state.partsCatalog.has(key)) {
@@ -305,9 +287,10 @@ function getPartName(sku) {
 function renderPartsCatalogTable() {
   if (!els.partsCatalogBody) return;
 
+  // sortuj po Nazwie (unikatowej), bo to jest klucz i najłatwiej to znaleźć
   const rows = Array.from(state.partsCatalog.entries())
     .map(([skuLower, p]) => ({ skuLower, ...p }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
+    .sort((a, b) => a.sku.localeCompare(b.sku, "pl"));
 
   els.partsCatalogBody.innerHTML = rows.map(p => {
     const reason = getPartDeleteBlockReason(p.skuLower);
@@ -315,8 +298,8 @@ function renderPartsCatalogTable() {
     const title = reason ? `title="${escapeAttr(reason)}"` : "";
     return `
     <tr>
-      <td>${escapeHtml(p.name)}</td>
       <td><span class="badge">${escapeHtml(p.sku)}</span></td>
+      <td>${escapeHtml(p.name)}</td>
       <td class="right">
         <button type="button" class="secondary" data-delete-part="${escapeAttr(p.skuLower)}" ${disabled} ${title}>Usuń</button>
       </td>
@@ -408,14 +391,14 @@ function setSupplierPrice(supplierName, sku, price) {
   if (!n) return { ok: false, msg: "Podaj nazwę dostawcy." };
 
   const s = normSku(sku);
-  if (!s) return { ok: false, msg: "Podaj SKU." };
+  if (!s) return { ok: false, msg: "Podaj Nazwę części." };
 
   const p = safePrice(price, 0);
   const key = skuKey(s);
 
-  // SKU musi istnieć w katalogu (żeby nie robić śmietnika)
+  // Nazwa części musi istnieć w katalogu (żeby nie robić śmietnika)
   if (!state.partsCatalog.has(key)) {
-    return { ok: false, msg: "Najpierw dodaj to SKU do katalogu części." };
+    return { ok: false, msg: "Najpierw dodaj tę część do katalogu części." };
   }
 
   state.suppliers.get(n).prices.set(key, p);
@@ -455,10 +438,10 @@ function renderSupplierSelects() {
 function renderSupplierSkuDropdown() {
   if (!els.supplierSkuSelect) return;
   const parts = Array.from(state.partsCatalog.values())
-    .sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+    .sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
 
   els.supplierSkuSelect.innerHTML = parts.length
-    ? parts.map(p => `<option value="${escapeAttr(p.sku)}">${escapeHtml(p.name)} (${escapeHtml(p.sku)})</option>`).join("")
+    ? parts.map(p => `<option value="${escapeAttr(p.sku)}">${escapeHtml(p.sku)} • ${escapeHtml(p.name)}</option>`).join("")
     : `<option value="">(dodaj części do katalogu)</option>`;
 }
 
@@ -483,12 +466,13 @@ function renderSupplierPriceTable() {
       name: part?.name || skuLower.toUpperCase(),
       price
     };
-  }).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  }).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
 
+  // Kolumny: Nazwa, Typ, Cena
   els.supplierPriceBody.innerHTML = rows.map(r => `
     <tr>
-      <td>${escapeHtml(r.name)}</td>
       <td><span class="badge">${escapeHtml(r.sku)}</span></td>
+      <td>${escapeHtml(r.name)}</td>
       <td class="right">${fmtPLN.format(r.price)}</td>
     </tr>
   `).join("");
@@ -523,11 +507,10 @@ function deleteSupplier(name) {
       }
 
       saveState();
+      // odśwież UI po usunięciu dostawcy
       renderSupplierSelects();
-      renderSupplierManageSelect();
       renderSupplierPriceTable();
       renderSupplierPartsForDelivery();
-      renderSuppliersListTable?.();
 
       toast("Usunięto", `Dostawca: ${name}`, "ok");
     }
@@ -577,11 +560,11 @@ function renderSupplierPartsForDelivery() {
       name: part?.name || skuLower.toUpperCase(),
       price
     };
-  }).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  }).sort((a,b)=>a.sku.localeCompare(b.sku,"pl"));
 
   els.supplierPartsSelect.innerHTML = rows.map((it, idx) => `
     <option value="${idx}" data-sku="${escapeAttr(it.sku)}" data-price="${it.price}">
-      ${escapeHtml(it.name)} (${escapeHtml(it.sku)}) • ${fmtPLN.format(it.price)}
+      ${escapeHtml(it.sku)} • ${escapeHtml(it.name)} • ${fmtPLN.format(it.price)}
     </option>
   `).join("");
 
@@ -637,7 +620,7 @@ function renderDeliveryItems() {
 
   els.deliveryItemsBody.innerHTML = rows.map(it => `
     <tr>
-      <td>${escapeHtml(it.name)} <span class="badge">${escapeHtml(it.sku)}</span></td>
+      <td><span class="badge">${escapeHtml(it.sku)}</span> ${escapeHtml(it.name)}</td>
       <td class="right">${it.qty}</td>
       <td class="right">${fmtPLN.format(it.price)}</td>
       <td class="right">${fmtPLN.format(it.qty * it.price)}</td>
@@ -696,7 +679,7 @@ function finalizeDelivery() {
   state.currentDelivery.dateISO = els.deliveryDate.value || "";
 
   for (const it of state.currentDelivery.items) {
-    // upewnij się, że SKU istnieje w katalogu
+    // upewnij się, że część (Nazwa) istnieje w katalogu
     if (!state.partsCatalog.has(skuKey(it.sku))) {
       upsertPart(it.sku, it.name);
     }
@@ -744,10 +727,11 @@ function renderBomTable() {
   const m = getManagedMachine();
   if (!m) { els.bomBody.innerHTML = ""; return; }
 
+  // Kolumny: Nazwa, Typ, Ilość
   els.bomBody.innerHTML = (m.bom || []).map((b, idx) => `
     <tr>
-      <td>${escapeHtml(getPartName(b.sku))}</td>
       <td><span class="badge">${escapeHtml(b.sku)}</span></td>
+      <td>${escapeHtml(getPartName(b.sku))}</td>
       <td class="right">${Number(b.qty || 0)}</td>
       <td class="right"><button class="iconBtn" data-del-bom="${idx}">Usuń</button></td>
     </tr>
@@ -803,7 +787,6 @@ function deleteMachine(code) {
 
       renderMachineManageSelect();
       renderMachineSelect();
-      renderMachinesListTable?.();
 
       toast("Usunięto", `Maszyna: ${m.name}`, "ok");
     }
@@ -834,14 +817,14 @@ function addBomItem(machineCode, sku, qty) {
   if (!m) return { ok:false, msg:"Nie znaleziono maszyny." };
 
   const s = String(sku || "").trim();
-  if (!s) return { ok:false, msg:"Wybierz SKU." };
+  if (!s) return { ok:false, msg:"Wybierz część." };
 
   const q = Math.max(1, Math.floor(Number(qty || 1)));
   const key = skuKey(s);
 
-  // SKU musi istnieć globalnie
+  // Część musi istnieć globalnie
   if (!state.partsCatalog.has(key)) {
-    return { ok:false, msg:"Najpierw dodaj to SKU do katalogu części." };
+    return { ok:false, msg:"Najpierw dodaj tę część do katalogu części." };
   }
 
   // jeśli już jest w BOM, to NADPISUJ ilość (logiczniejsze)
@@ -871,11 +854,12 @@ function renderSkuSummary() {
     row.totalValue += qty * price;
   }
 
-  const rows = Array.from(map.values()).sort((a,b)=>a.name.localeCompare(b.name,"pl"));
+  // sortuj po Nazwie (unikatowej)
+  const rows = Array.from(map.values()).sort((a,b)=>String(a.sku||"").localeCompare(String(b.sku||""),"pl"));
   els.skuSummaryBody.innerHTML = rows.map(r => `
     <tr class="${stockClass(r.totalQty)}">
-      <td>${escapeHtml(r.name)}</td>
       <td><span class="badge">${escapeHtml(r.sku)}</span></td>
+      <td>${escapeHtml(r.name)}</td>
       <td class="right">${r.totalQty}</td>
       <td class="right">${fmtPLN.format(r.totalValue)}</td>
     </tr>
@@ -899,8 +883,8 @@ function renderLotsTable() {
     const value = Number(l.qty||0) * Number(l.unitPrice||0);
     return `
       <tr>
-        <td>${escapeHtml(l.name)}</td>
         <td><span class="badge">${escapeHtml(l.sku)}</span></td>
+        <td>${escapeHtml(l.name)}</td>
         <td>${escapeHtml(l.supplier || "-")}</td>
         <td class="right">${fmtPLN.format(l.unitPrice || 0)}</td>
         <td class="right">${Number(l.qty || 0)}</td>
@@ -1242,51 +1226,6 @@ function bindThresholds() {
   clamp();
 }
 
-// ====== Demo dane ======
-function seedDemoData() {
-  // katalog części
-  upsertPart("BRG-6204", "Łożysko 6204");
-  upsertPart("SCR-M6-30", "Śruba M6x30");
-  upsertPart("SEN-IR01", "Czujnik IR");
-  upsertPart("BLT-A32", "Pasek A32");
-  upsertPart("PLT-3MM", "Blacha 3mm");
-  upsertPart("ROD-10", "Pręt 10mm");
-  upsertPart("PSU-12V5A", "Zasilacz 12V 5A");
-
-  // dostawcy + cenniki
-  ensureSupplier("ABC-Tools");
-  setSupplierPrice("ABC-Tools", "BRG-6204", 12.50);
-  setSupplierPrice("ABC-Tools", "SCR-M6-30", 0.35);
-  setSupplierPrice("ABC-Tools", "BLT-A32", 19.90);
-
-  ensureSupplier("Elektronix");
-  setSupplierPrice("Elektronix", "SEN-IR01", 14.99);
-  setSupplierPrice("Elektronix", "PSU-12V5A", 39.00);
-
-  ensureSupplier("Metal-Pol");
-  setSupplierPrice("Metal-Pol", "PLT-3MM", 180.00);
-  setSupplierPrice("Metal-Pol", "ROD-10", 25.00);
-
-  // partie magazynu
-  addLot({ name: getPartName("BRG-6204"), sku: "BRG-6204", supplier: "ABC-Tools", qty: 10, unitPrice: 12.50 });
-  addLot({ name: getPartName("BRG-6204"), sku: "BRG-6204", supplier: "ABC-Tools", qty: 10, unitPrice: 15.00 });
-  addLot({ name: getPartName("SCR-M6-30"), sku: "SCR-M6-30", supplier: "ABC-Tools", qty: 400, unitPrice: 0.35 });
-  addLot({ name: getPartName("SEN-IR01"), sku: "SEN-IR01", supplier: "Elektronix", qty: 10, unitPrice: 14.99 });
-  addLot({ name: getPartName("BLT-A32"), sku: "BLT-A32", supplier: "ABC-Tools", qty: 10, unitPrice: 19.90 });
-
-  renderPartsCatalogTable();
-  renderSupplierSelects();
-
-  renderSkuSummary();
-  renderLotsTable();
-  renderWarehouseTotal();
-  renderMachinesStock();
-
-  saveState();
-
-  alert("Wgrano demo dane + katalog + dostawcy.");
-}
-
 // ====== Init + eventy ======
 
 
@@ -1395,8 +1334,6 @@ els.searchParts?.addEventListener("input", () => {
   renderSkuSummary();
   renderLotsTable();
 });
-
-els.seedDemoBtn?.addEventListener("click", seedDemoData);
 
 els.clearDataBtn?.addEventListener("click", () => {
   const ok = confirm(

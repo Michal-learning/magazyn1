@@ -13,7 +13,8 @@
     <header class="top">
         <h1>Magazyn</h1>
         <p class="small muted">
-            Skróty: <strong>SKU</strong> = kod części. <strong>FIFO</strong> = najpierw zużywane są najstarsze partie.
+            Skróty: <strong>Nazwa</strong> = unikalny identyfikator części. <strong>Typ</strong> może się powtarzać.
+            <strong>FIFO</strong> = najpierw zużywane są najstarsze partie.
         </p>
         <!-- TABS -->
         <nav class="tabsBar" aria-label="Nawigacja">
@@ -43,70 +44,85 @@
     </header>
 <!-- TAB: MAGAZYN CZĘŚCI (startowy, szeroki) -->
 <section class="tabPanel widePanel" data-tab-panel="parts">
-<div class="card">
-<h2>Magazyn części</h2>
-<p class="small muted">
-                    Najpierw jest podsumowanie per SKU (ile łącznie sztuk i wartość), a niżej partie, czyli te same części kupione po różnych cenach osobno.
-                </p>
-<div class="toolbar">
-<input id="searchParts" placeholder="Szukaj po nazwie / SKU..." type="text"/>
-<button class="secondary" id="seedDemoBtn" type="button">Wgraj demo dane</button>
-<button class="secondary" id="clearDataBtn" type="button">Wyczyść dane</button>
-</div>
-<div class="thresholds">
-<div class="thresholdRow">
-<label>
-                            Próg żółty (poniżej)
-                            <input id="warnRange" max="1000" min="0" step="10" type="range" value="100"/>
-</label>
-<span class="pill"><strong id="warnValue">100</strong> szt.</span>
-</div>
-<div class="thresholdRow">
-<label>
-                            Próg czerwony (poniżej)
-                            <input id="dangerRange" max="1000" min="0" step="10" type="range" value="50"/>
-</label>
-<span class="pill danger"><strong id="dangerValue">50</strong> szt.</span>
-</div>
-</div>
-<h3 class="subhead">Podsumowanie (per SKU)</h3>
-<div class="tableWrap">
-<table id="skuSummaryTable">
-<thead>
-<tr>
-<th>Nazwa</th>
-<th>SKU</th>
-<th class="right">Łącznie szt.</th>
-<th class="right">Wartość łączna</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-<h3 class="subhead">Partie (różne ceny osobno)</h3>
-<div class="tableWrap">
-<div class="summaryRow">
-<div class="muted small">Łączna wartość magazynu:</div>
-<div class="right"><strong id="warehouseTotal">0,00 zł</strong></div>
-</div>
-<table id="partsTable">
-<thead>
-<tr>
-<th>Nazwa</th>
-<th>SKU</th>
-<th>Dostawca</th>
-<th class="right">Cena zakupu</th>
-<th class="right">Ilość</th>
-<th class="right">Wartość</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-<p class="small muted">
-                    Partie są osobno, bo cena zakupu może się różnić. Podświetlenie żółte/czerwone dotyczy <strong>podsumowania per SKU</strong> (łączny stan).
-                </p>
-</div>
+    <div class="card">
+        <h2>Magazyn części</h2>
+        <p class="small muted">
+            Najpierw jest podsumowanie per <strong>Nazwę</strong> (unikatową), a niżej partie (różne ceny zakupu osobno). <strong>Typ</strong> może się powtarzać.
+        </p>
+        <div class="toolbar">
+            <button class="secondary" id="clearDataBtn" type="button">Wyczyść dane</button>
+        </div>
+
+        <div class="thresholds">
+            <div class="thresholdRow">
+                <label>
+                    Próg żółty (poniżej)
+                    <input id="warnRange" max="1000" min="0" step="10" type="range" value="100" />
+                </label>
+                <span class="pill"><strong id="warnValue">100</strong> szt.</span>
+            </div>
+            <div class="thresholdRow">
+                <label>
+                    Próg czerwony (poniżej)
+                    <input id="dangerRange" max="1000" min="0" step="10" type="range" value="50" />
+                </label>
+                <span class="pill danger"><strong id="dangerValue">50</strong> szt.</span>
+            </div>
+        </div>
+        <div class="toolbar">
+            <input id="searchParts" placeholder="Szukaj po typie / nazwie..." type="text" />
+        </div>
+
+
+        <div class="partsSplit">
+            <!-- Lewa: podsumowanie -->
+            <section class="splitCol">
+                <h3 class="subhead">Podsumowanie (per Nazwę)</h3>
+                <div class="tableWrap">
+                    <table id="skuSummaryTable" class="tightTable">
+                        <thead>
+                            <tr>
+                                <th>Nazwa</th>
+                                <th>Typ</th>
+                                <th class="right">Łącznie szt.</th>
+                                <th class="right">Wartość łączna</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Prawa: partie -->
+            <section class="splitCol">
+                <h3 class="subhead">Partie (różne ceny osobno)</h3>
+                <div class="tableWrap">
+                    <div class="summaryRow">
+                        <div class="muted small">Łączna wartość magazynu:</div>
+                        <div class="right"><strong id="warehouseTotal">0,00 zł</strong></div>
+                    </div>
+
+                    <table id="partsTable" class="tightTable">
+                        <thead>
+                            <tr>
+                                <th>Nazwa</th>
+                                <th>Typ</th>
+                                <th>Dostawca</th>
+                                <th class="right">Cena zakupu</th>
+                                <th class="right">Ilość</th>
+                                <th class="right">Wartość</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <p class="small muted">
+            Partie są osobno, bo cena zakupu może się różnić. Podświetlenie żółte/czerwone dotyczy <strong>podsumowania per Nazwę</strong> (łączny stan).
+        </p>
+    </div>
 </section>
 <!-- TAB: NOWA DOSTAWA -->
 <section class="tabPanel" data-tab-panel="delivery" hidden="">
@@ -141,7 +157,7 @@
                         Cena za szt. (PLN)
                         <input id="deliveryPrice" min="0" step="0.01" type="number" value="0"/>
 </label>
-<button id="addDeliveryItemBtn" type="button" class="secondary">Dodaj pozycję</button>
+<button id="addDeliveryItemBtn" type="button" class="secondary compact">Dodaj pozycję</button>
 </div>
 <div class="tableWrap">
 <table id="deliveryItemsTable">
@@ -191,7 +207,7 @@
                         Data
                         <input id="buildDate" type="date"/>
 </label>
-<button id="addBuildItemBtn" type="button">Dodaj do listy</button>
+<button id="addBuildItemBtn" type="button" class="compact">Dodaj do listy</button>
 </div>
 <div class="row">
 <label>
@@ -259,27 +275,27 @@
 </section><section class="tabPanel" data-tab-panel="catalog_parts" hidden=""><div class="card">
 <h2>Katalog części (globalny)</h2>
 <p class="small muted">
-                        Lista wszystkich części. <strong>SKU</strong> jest unikalne (jeden kod = jedna część). Ceny nie są tutaj, tylko w cennikach dostawców.
+                        Lista wszystkich części. <strong>Nazwa</strong> jest unikalna (jeden identyfikator = jedna część). <strong>Typ</strong> może się powtarzać. Ceny są w cennikach dostawców.
                     </p>
 <div class="row">
 <label>
-                            SKU
-                            <input id="partSkuInput" placeholder="np. BRG-6204" type="text"/>
+                            Nazwa (unikatowa)
+                            <input id="partSkuInput" placeholder="np. Śruba M6x30 ocynk" type="text"/>
 </label>
 <label>
-                            Nazwa
-                            <input id="partNameInput" placeholder="np. Łożysko 6204" type="text"/>
+                            Typ
+                            <input id="partNameInput" placeholder="np. Śruba" type="text"/>
 </label>
 </div>
 <div class="row">
-<button id="addPartBtn" type="button">Dodaj część</button>
+<button id="addPartBtn" type="button" class="compact">Dodaj część</button>
 </div>
 <div class="tableWrap">
 <table id="partsCatalogTable">
 <thead>
 <tr>
 <th>Nazwa</th>
-<th>SKU</th>
+<th>Typ</th>
 <th class="right">Akcje</th>
 </tr>
 </thead>
@@ -290,7 +306,7 @@
 </div></section><section class="tabPanel" data-tab-panel="catalog_suppliers" hidden=""><div class="card">
 <h2>Dostawcy i cenniki</h2>
 <p class="small muted">
-                        Każdy dostawca ma swój cennik (SKU → cena). To zasila listę części w „Nowej dostawie”.
+                        Każdy dostawca ma swój cennik (Nazwa → cena). To zasila listę części w „Nowej dostawie”.
                     </p>
 <div class="uiSection">
   <div class="uiSectionHead">
@@ -303,14 +319,14 @@
       Nowy dostawca
       <input id="supplierNameInput" placeholder="np. ABC-Tools" type="text"/>
     </label>
-    <button id="addSupplierBtn" type="button">Dodaj dostawcę</button>
+    <button id="addSupplierBtn" type="button" class="compact">Dodaj dostawcę</button>
   </div>
 </div>
 
 <div class="uiSection">
   <div class="uiSectionHead">
     <h3>Edytuj dostawcę i cennik</h3>
-    <span class="uiHint">Wybierz dostawcę i ustaw ceny SKU</span>
+    <span class="uiHint">Wybierz dostawcę i ustaw ceny dla Nazw części</span>
   </div>
 
   <div class="row">
@@ -322,14 +338,14 @@
 
   <div class="row">
     <label>
-      Część (SKU)
+      Część (Nazwa)
       <select id="supplierSkuSelect"></select>
     </label>
     <label>
       Cena (PLN/szt.)
       <input id="supplierPriceInput" min="0" step="0.01" type="number" value="0"/>
     </label>
-    <button id="setSupplierPriceBtn" type="button">Ustaw cenę</button>
+    <button id="setSupplierPriceBtn" type="button" class="compact">Ustaw cenę</button>
   </div>
 
   <div class="tableWrap">
@@ -337,7 +353,7 @@
       <thead>
         <tr>
           <th>Nazwa</th>
-          <th>SKU</th>
+          <th>Typ</th>
           <th class="right">Cena</th>
         </tr>
       </thead>
@@ -366,7 +382,7 @@
         <h2>Katalog maszyn (BOM)</h2>
         <p class="small muted">
           Tutaj dodajesz nowe typy maszyn, edytujesz ich skład (BOM) oraz zarządzasz listą maszyn.
-          BOM to lista części (SKU) i ilości potrzebnych na <strong>1 sztukę</strong> maszyny.
+          BOM to lista części (Nazwa) i ilości potrzebnych na <strong>1 sztukę</strong> maszyny.
         </p>
 
         <div class="uiSection">
@@ -388,7 +404,7 @@
           </div>
 
           <div class="row">
-            <button id="addMachineBtn" type="button">Dodaj maszynę</button>
+            <button id="addMachineBtn" type="button" class="compact">Dodaj maszynę</button>
           </div>
         </div>
 
@@ -407,7 +423,7 @@
 
           <div class="row">
             <label>
-              Część (SKU)
+              Część (Nazwa)
               <select id="bomSkuSelect"></select>
             </label>
 
@@ -416,7 +432,7 @@
               <input id="bomQtyInput" type="number" min="1" step="1" value="1" />
             </label>
 
-            <button id="addBomItemBtn" type="button">Dodaj do BOM</button>
+            <button id="addBomItemBtn" type="button" class="compact">Dodaj do BOM</button>
           </div>
 
           <div class="tableWrap">
@@ -424,7 +440,7 @@
               <thead>
                 <tr>
                   <th>Nazwa</th>
-                  <th>SKU</th>
+                  <th>Typ</th>
                   <th class="right">Ilość</th>
                   <th></th>
                 </tr>

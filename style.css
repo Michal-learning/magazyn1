@@ -911,3 +911,81 @@ body {
 .deliveryActions .secondary {
   width: auto;
 }
+
+/* ===== Narrow content inside cards ===== */
+.cardContent {
+    max-width: 500px;
+}
+
+button.primary {
+    width: auto;
+    min-width: 180px;
+}
+
+/* ===== UI width tuning: mniej "full-width", więcej hierarchii ===== */
+
+/* Zawężaj "treść roboczą" (formularze), ale zostaw tabele szerokie */
+.cardContent{
+  max-width: 760px;
+}
+
+/* W siatce (.row) przyciski NIE mają się rozciągać na całą kolumnę */
+.row > button,
+.row .button,
+.row .btn{
+  justify-self: start;
+  width: auto;
+}
+
+/* Primary domyślnie kompaktowy (full-width tylko tam, gdzie trzeba) */
+button.primary{
+  width: auto;
+  min-width: 180px;
+}
+
+/* CTA: te mają być szerokie */
+.deliveryActions .primary,
+#finalizeBuildBtn{
+  width: 100%;
+  justify-self: stretch;
+}
+
+/* Drobne akcje wyglądają lepiej jako "compact" */
+button.compact{
+  padding: 7px 10px;
+  font-size: 0.92rem;
+  min-width: auto;
+}
+
+/* ===== Magazyn części: Podsumowanie + Partie obok siebie ===== */
+.partsSplit {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+}
+
+    /* żeby zawartość mogła się “ściskać” w gridzie */
+    .partsSplit .splitCol {
+        min-width: 0;
+    }
+
+    /* zabijamy wymuszone min-width tabel (bo inaczej się nie zmieszczą obok siebie) */
+    .partsSplit table {
+        min-width: 0 !important;
+    }
+
+/* opcjonalnie: bardziej kompaktowe tabele w tym widoku */
+.tightTable th,
+.tightTable td {
+    padding: 9px 8px;
+}
+
+/* jak ekran wąski, to wraca jedna kolumna */
+@media (max-width: 1100px) {
+    .partsSplit {
+        grid-template-columns: 1fr;
+    }
+}
+
+
