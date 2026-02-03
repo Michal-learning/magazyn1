@@ -16,6 +16,25 @@
     --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --trans-fast: 0.15s var(--ease);
     --trans-med: 0.25s var(--ease);
+    --bg-grad-1: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.15), transparent 60%);
+    --bg-grad-2: radial-gradient(900px 500px at 90% 20%, rgba(33,202,162,0.12), transparent 55%);
+    --field-bg: rgba(0,0,0,0.20);
+    --table-bg: rgba(0,0,0,0.20);
+    --thead-bg: rgba(255,255,255,0.03);
+    --stickyhead-bg: #1a1d24;
+    --label: rgba(255,255,255,0.80);
+    --toast-bg: #1a1d24;
+    --modal-bg: #1a1d24;
+    --sideTitle: rgba(255,255,255,0.65);
+    /* Surfaces & interactive (theme-aware) */
+    --surface-2: rgba(0,0,0,0.20);
+    --surface-3: rgba(0,0,0,0.30);
+    --row-hover: rgba(255,255,255,0.02);
+    --secondary-bg: rgba(255,255,255,0.05);
+    --secondary-hover: rgba(255,255,255,0.10);
+    --badge-bg: rgba(255,255,255,0.10);
+    --badge-border: rgba(255,255,255,0.14);
+    --section-bg: rgba(255,255,255,0.02);
 }
 
 /* --- Global Reset & Body --- */
@@ -27,9 +46,10 @@ body {
     margin: 0;
     padding: 18px;
     font-family: var(--font-ui);
-    background: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.15), transparent 60%), radial-gradient(900px 500px at 90% 20%, rgba(33,202,162,0.12), transparent 55%), var(--bg);
+    background: var(--bg-grad-1), var(--bg-grad-2), var(--bg);
     color: var(--text);
     min-height: 100vh;
+    color: var(--text);
     color-scheme: dark; /* Wymusza ciemne paski przewijania i inputy */
 }
 
@@ -74,10 +94,44 @@ h2 {
 }
 
 /* --- Layout --- */
-.app {
-    max-width: 1200px;
+.appShell {
+    max-width: 1520px;
     margin: 0 auto;
     padding-bottom: 40px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+    gap: 16px;
+    align-items: start;
+}
+
+.appMain {
+    min-width: 0;
+}
+
+.globalSide {
+    min-width: 0;
+}
+
+.stickySide {
+    position: sticky;
+    top: 18px;
+}
+
+@media (min-width: 1101px) {
+    /* Align right-side panel with the tabs line (not the big title block) */
+    .globalSide {
+        padding-top: 92px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .appShell {
+        grid-template-columns: 1fr;
+    }
+
+    .stickySide {
+        position: static;
+    }
 }
 
 .grid2 {
@@ -145,7 +199,7 @@ label {
     gap: 6px;
     font-size: 0.9rem;
     font-weight: 500;
-    color: rgba(255,255,255,0.8);
+    color: var(--label);
 }
 
 input, select, button {
@@ -155,9 +209,9 @@ input, select, button {
 }
 
 input, select {
-    background: rgba(0,0,0,0.2);
+    background: var(--field-bg);
     border: 1px solid var(--border);
-    color: #fff;
+    color: var(--text);
     padding: 10px 12px;
     transition: border-color var(--trans-fast), box-shadow var(--trans-fast);
     width: 100%;
@@ -199,13 +253,13 @@ button {
         }
 
     button.secondary {
-        background: rgba(255,255,255,0.05);
+        background: var(--secondary-bg);
         border-color: var(--border);
         color: var(--text);
     }
 
         button.secondary:hover {
-            background: rgba(255,255,255,0.1);
+            background: var(--secondary-hover);
         }
 
     button.compact {
@@ -242,7 +296,7 @@ button {
     overflow-x: auto;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: rgba(0,0,0,0.2);
+    background: var(--table-bg);
 }
 
 table {
@@ -259,7 +313,7 @@ th, td {
 }
 
 th {
-    background: rgba(255,255,255,0.03);
+    background: var(--thead-bg);
     font-weight: 600;
     color: var(--muted);
     font-size: 0.85rem;
@@ -276,14 +330,14 @@ tr:last-child td {
 }
 
 tr:hover td {
-    background: rgba(255,255,255,0.02);
+    background: var(--row-hover);
 }
 
 .stickyHeader th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background: #1a1d24;
+    background: var(--stickyhead-bg);
 }
 
 /* Status Rows */
@@ -346,7 +400,7 @@ table.tightTable {
 
     .tabBtn:hover {
         color: #fff;
-        background: rgba(255,255,255,0.05);
+        background: var(--secondary-bg);
     }
 
     .tabBtn.active {
@@ -360,7 +414,7 @@ table.tightTable {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.1);
+    background: var(--secondary-hover);
     font-size: 0.8rem;
     font-family: monospace;
 }
@@ -390,7 +444,7 @@ table.tightTable {
 
 /* --- Components: UI Sections (Grouping) --- */
 .uiSection {
-    background: rgba(255,255,255,0.02);
+    background: var(--section-bg);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 16px;
@@ -421,7 +475,7 @@ table.tightTable {
     top: 100%;
     left: 0;
     right: 0;
-    background: #1a1d24;
+    background: var(--stickyhead-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     max-height: 200px;
@@ -446,7 +500,7 @@ table.tightTable {
 }
 
     .supplierOption:hover {
-        background: rgba(255,255,255,0.05);
+        background: var(--secondary-bg);
     }
 
     .supplierOption .tick {
@@ -487,13 +541,13 @@ table.tightTable {
     justify-content: space-between;
     align-items: center;
     padding: 10px;
-    background: rgba(255,255,255,0.03);
+    background: var(--thead-bg);
     border-bottom: 1px solid var(--border);
 }
 
 .deliveryActions {
     margin-top: 16px;
-    background: rgba(0,0,0,0.3);
+    background: var(--surface-3);
     padding: 16px;
     border-radius: 8px;
     border: 1px solid var(--border);
@@ -518,7 +572,7 @@ table.tightTable {
 }
 
 .toast {
-    background: #1a1d24;
+    background: var(--stickyhead-bg);
     border-left: 4px solid var(--success);
     color: #fff;
     padding: 12px 16px;
@@ -561,7 +615,7 @@ table.tightTable {
     }
 
 .modal {
-    background: #1a1d24;
+    background: var(--stickyhead-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 24px;
@@ -613,7 +667,7 @@ table.tightTable {
 }
 
 .consumePart {
-    background: rgba(0,0,0,0.3);
+    background: var(--surface-3);
     padding: 10px;
     border-radius: 8px;
 }
@@ -643,3 +697,238 @@ input[readonly] {
 .iconBtn.primary:hover {
     filter: brightness(1.05);
 }
+
+
+/* === Globalny panel boczny === */
+.sideSection {
+    display: grid;
+    gap: 10px;
+    padding-top: 8px;
+}
+
+    .sideSection + .sideSection {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+    }
+
+.sideTitle {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sideTitle);
+}
+
+.sideBtn {
+    width: 100%;
+    justify-content: center;
+}
+
+
+/* === LIGHT MODE — calm, enterprise, long-use === */
+:root[data-theme="light"] {
+    --bg: #f3f5fb;
+    --card-bg: #f9faff;
+    --border: rgba(15, 23, 42, 0.10);
+    --text: rgba(15, 23, 42, 0.92);
+    --muted: rgba(15, 23, 42, 0.60);
+    --label: rgba(15, 23, 42, 0.75);
+    --accent: #6d5cff;
+    --accent-glow: rgba(109, 92, 255, 0.18);
+    /* zero ciężkich cieni */
+    --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    --bg-grad-1: radial-gradient( 1200px 600px at 12% 10%, rgba(109,92,255,0.08), transparent 65% );
+    --bg-grad-2: radial-gradient( 900px 500px at 88% 20%, rgba(33,202,162,0.06), transparent 60% );
+    --field-bg: rgba(15,23,42,0.035);
+    --table-bg: rgba(15,23,42,0.03);
+    --thead-bg: rgba(15,23,42,0.045);
+    --stickyhead-bg: rgba(249,250,255,0.98);
+    --surface-2: rgba(15,23,42,0.03);
+    --surface-3: rgba(15,23,42,0.05);
+    --row-hover: rgba(15,23,42,0.03);
+    --secondary-bg: rgba(15,23,42,0.04);
+    --secondary-hover: rgba(15,23,42,0.07);
+    --badge-bg: rgba(109,92,255,0.10);
+    --badge-border: rgba(109,92,255,0.18);
+    --section-bg: rgba(15,23,42,0.02);
+    --toast-bg: rgba(249,250,255,0.98);
+    --modal-bg: rgba(249,250,255,0.98);
+    --sideTitle: rgba(15,23,42,0.55);
+}
+
+    :root[data-theme="light"] body {
+        color-scheme: light;
+    }
+
+
+/* --- History (Ostatnie akcje) --- */
+.historyType {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 650;
+}
+
+.historyPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--secondary-bg);
+    font-size: 0.82rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+    .historyPill.delivery {
+        border-color: rgba(33,202,162,0.35);
+        background: rgba(33,202,162,0.10);
+        color: var(--success);
+    }
+
+    .historyPill.build {
+        border-color: rgba(124,92,255,0.35);
+        background: rgba(124,92,255,0.10);
+        color: var(--accent);
+    }
+
+.historyPreviewBtn {
+    min-width: 96px;
+}
+
+tr.historyDetailRow td {
+    padding: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+:root[data-theme="light"] tr.historyDetailRow td {
+    border-bottom: 1px solid rgba(15,23,42,0.08);
+}
+
+.historyDetails {
+    background: var(--section-bg);
+    border-top: 1px solid var(--border);
+    padding: 14px 14px 16px;
+    animation: historyDrop 0.18s var(--ease);
+}
+
+@keyframes historyDrop {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.historyGrid {
+    display: grid;
+    gap: 10px;
+}
+
+.historyMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+}
+
+    .historyMeta .muted {
+        margin: 0;
+    }
+
+.historyList {
+    margin: 0;
+    padding-left: 18px;
+}
+
+    .historyList li {
+        margin: 6px 0;
+    }
+
+.historyMoney {
+    font-variant-numeric: tabular-nums;
+}
+
+
+/* === History preview v3: mniej ciasno, brak hover, ramka jak panele === */
+
+/* większy "panel" */
+tr.historyDetailRow td {
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+tr.historyDetailRow:hover td {
+    background: transparent !important;
+}
+
+/* sam kontener podglądu */
+.historyDetails {
+    padding: 24px 24px 26px !important;
+    margin: 16px 16px 18px !important;
+    border-radius: 14px !important;
+    /* ramka + ring jak w innych wysuwanych panelach */
+    border: 2px solid rgba(124,92,255,0.38) !important;
+    box-shadow: 0 0 0 6px rgba(124,92,255,0.10) !important;
+}
+
+:root[data-theme="light"] .historyDetails {
+    border-color: rgba(109,92,255,0.32) !important;
+    box-shadow: 0 0 0 6px rgba(109,92,255,0.08) !important;
+}
+
+/* Więcej oddechu w sekcjach i tabelach w środku */
+.historyDetails .uiSection {
+    padding: 18px !important;
+    border-radius: 12px !important;
+}
+
+.historyDetails .tableWrap {
+    margin: 0 !important;
+    padding: 10px !important;
+    border-radius: 12px !important;
+}
+
+/* większe paddingi w tabelach szczegółów */
+.historyDetails table.tightTable th,
+.historyDetails table.tightTable td {
+    padding: 14px 16px !important;
+}
+
+/* === Najważniejsze: wyłącz hover highlight w podglądzie (różne selektory, różna specyficzność) === */
+.historyDetails table tr:hover td,
+.historyDetails table tbody tr:hover td,
+.historyDetails table.tightTable tr:hover td,
+.historyDetails table.tightTable tbody tr:hover td,
+.historyDetails .tableWrap tr:hover td {
+    background: transparent !important;
+}
+
+/* jeśli ktoś ma globalne podświetlanie całego wiersza */
+.historyDetails table tr:hover {
+    background: transparent !important;
+}
+
+/* === Thresholds toggle (Magazyn Części) === */
+/* Minimal: only hide/show with smooth height, no layout refactor */
+.thresholds.slidePanel {
+    overflow: hidden;
+    max-height: 280px;
+    transition: max-height var(--trans-med), opacity var(--trans-med);
+}
+
+    .thresholds.slidePanel.collapsed {
+        max-height: 0;
+        opacity: 0;
+    }
+
+        /* avoid accidental focus outline gaps when collapsed */
+        .thresholds.slidePanel.collapsed * {
+            pointer-events: none;
+        }

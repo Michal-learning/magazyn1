@@ -5,6 +5,35 @@
 
 // === KONFIGURACJA I STAN ===
 const STORAGE_KEY = "magazyn_state_v2_1";
+const THEME_KEY = "magazyn_theme";
+const THRESHOLDS_OPEN_KEY = "magazyn_thresholds_open";
+
+
+function applyTheme(theme) {
+    const t = (theme === "light") ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem(THEME_KEY, t);
+
+    const btn = document.getElementById("themeToggleBtn");
+    if (btn) btn.textContent = `Tryb: ${t === "light" ? "Jasny" : "Ciemny"}`;
+}
+
+function initTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") {
+        applyTheme(saved);
+    } else {
+        applyTheme("dark");
+    }
+
+    const btn = document.getElementById("themeToggleBtn");
+    if (btn) {
+        btn.addEventListener("click", () => {
+            const current = document.documentElement.getAttribute("data-theme") || "dark";
+            applyTheme(current === "dark" ? "light" : "dark");
+        });
+    }
+}
 
 const state = {
     lots: [],           // Partie materiału {id, sku, name, supplier, unitPrice, qty}
@@ -15,7 +44,10 @@ const state = {
 
     // Stan tymczasowy
     currentDelivery: { supplier: null, dateISO: "", items: [] },
-    currentBuild: { dateISO: "", items: [] }
+    currentBuild: { dateISO: "", items: [] },
+
+    // Historia zdarzeń (dostawy + produkcja)
+    history: []
 };
 
 // Zmienne pomocnicze
@@ -31,6 +63,35 @@ const fmtPLN = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PL
 
 function nextId() { return _idCounter++; }
 
+/**
+ * Zapobiega kolizjom ID po odświeżeniu strony.
+ * Ustawia licznik na (max ID w zapisanych danych + 1).
+ */
+function syncIdCounter() {
+    let maxId = 0;
+
+    const scan = (arr) => {
+        if (!Array.isArray(arr)) return;
+        for (const x of arr) {
+            const v = x && x.id;
+            if (typeof v === "number" && v > maxId) maxId = v;
+        }
+    };
+
+    scan(state.lots);
+    scan(state.machinesStock);
+    scan(state.machineCatalog);
+    scan(state.history);
+    scan(state.currentDelivery?.items);
+    scan(state.currentBuild?.items);
+
+    // partsCatalog is a Map of objects; some may carry id
+    try { scan(Array.from(state.partsCatalog?.values?.() || [])); } catch {}
+
+    _idCounter = Math.max(_idCounter, maxId + 1);
+}
+
+
 function serializeState() {
     return {
         lots: state.lots,
@@ -38,6 +99,7 @@ function serializeState() {
         machineCatalog: state.machineCatalog,
         currentDelivery: state.currentDelivery,
         currentBuild: state.currentBuild,
+        history: state.history,
         LOW_WARN,
         LOW_DANGER,
         partsCatalog: Array.from(state.partsCatalog.entries()),
@@ -55,6 +117,7 @@ function restoreState(data) {
     state.machineCatalog = data.machineCatalog || [];
     state.currentDelivery = data.currentDelivery || { supplier: null, dateISO: "", items: [] };
     state.currentBuild = data.currentBuild || { dateISO: "", items: [] };
+    state.history = data.history || [];
     
     LOW_WARN = data.LOW_WARN ?? 100;
     LOW_DANGER = data.LOW_DANGER ?? 50;
@@ -64,13 +127,7 @@ function restoreState(data) {
     (data.suppliers || []).forEach(s => {
         state.suppliers.set(s.name, { prices: new Map(s.prices || []) });
     });
-
-    const allIds = [
-        ...state.lots.map(x => x.id),
-        ...state.currentDelivery.items.map(x => x.id),
-        ...state.currentBuild.items.map(x => x.id)
-    ];
-    _idCounter = allIds.length ? Math.max(...allIds) + 1 : 1;
+    syncIdCounter();
 }
 
 function save() {
@@ -103,6 +160,14 @@ const safeFloat = (val) => {
 };
 
 const safeInt = (val) => Math.max(1, parseInt(val) || 1);
+
+// DOM helpers (defensive, minimal)
+const byId = (id) => document.getElementById(id);
+
+function setExpanded(btn, expanded) {
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+}
 
 // === LOGIKA BIZNESOWA: KATALOG CZĘŚCI ===
 
@@ -158,6 +223,7 @@ function addSupplier(name) {
     save();
     renderAllSuppliers();
     refreshCatalogsUI();
+    renderHistory();
     toast("OK", "Dodano dostawcę.", "ok");
     return true;
 }
@@ -226,6 +292,22 @@ function finalizeDelivery() {
         });
     });
 
+
+    // Historia: zapis dostawy (snapshot)
+    addHistoryEvent({
+        id: nextId(),
+        ts: Date.now(),
+        type: "delivery",
+        dateISO: d.dateISO,
+        supplier: d.supplier,
+        items: d.items.map(it => ({
+            sku: it.sku,
+            name: it.name,
+            qty: safeInt(it.qty),
+            price: safeFloat(it.price)
+        }))
+    });
+
     state.currentDelivery.items = [];
     state.currentDelivery.supplier = null;
     
@@ -236,6 +318,7 @@ function finalizeDelivery() {
     save();
     renderDelivery();
     renderWarehouse();
+    renderHistory();
     toast("Sukces", "Towar przyjęty na stan.", "ok");
 }
 
@@ -271,6 +354,11 @@ function checkStockAvailability(needs) {
 }
 
 function finalizeBuild(manualAllocation = null) {
+
+    // Pobierz datę produkcji z formularza (jeśli puste, użyj dzisiejszej)
+    const buildDateInput = document.getElementById("buildDate");
+    const buildISO = (buildDateInput && buildDateInput.value) ? buildDateInput.value : (new Date().toISOString().slice(0,10));
+
     const requirements = calculateBuildRequirements();
     const missing = checkStockAvailability(requirements);
 
@@ -326,15 +414,49 @@ function finalizeBuild(manualAllocation = null) {
         }
     });
 
+
+    // Historia: zapis produkcji (snapshot)
+    addHistoryEvent({
+        id: nextId(),
+        ts: Date.now(),
+        type: "build",
+        dateISO: buildISO,
+        items: state.currentBuild.items.map(bi => {
+            const def = state.machineCatalog.find(m => m.code === bi.machineCode);
+            return {
+                code: bi.machineCode,
+                name: def ? def.name : bi.machineCode,
+                qty: safeInt(bi.qty)
+            };
+        })
+    });
+
     state.currentBuild.items = [];
+    if (buildDateInput) buildDateInput.value = "";
     save();
     
     renderBuild();
     renderWarehouse();
     renderMachinesStock();
+    renderHistory();
     toast("Produkcja zakończona", "Stany zaktualizowane.", "ok");
 }
 
+
+
+function fmtDateISO(iso) {
+    if (!iso) return "—";
+    // iso expected: YYYY-MM-DD
+    try {
+        const [y,m,d] = String(iso).split("-").map(x => parseInt(x,10));
+        if (!y || !m || !d) return iso;
+        const dt = new Date(Date.UTC(y, m-1, d));
+        return dt.toLocaleDateString("pl-PL", { year:"numeric", month:"2-digit", day:"2-digit" });
+    } catch {
+        return iso;
+    }
+    // TODO: syncIdCounter() was here but unreachable; leaving it out on purpose.
+}
 
 // === INTERFEJS UŻYTKOWNIKA (UI) ===
 
@@ -353,7 +475,8 @@ const els = {
 };
 
 function renderWarehouse() {
-    const q = normalize(document.getElementById("searchParts").value).toLowerCase();
+    if (!els.partsTable || !els.summaryTable || !els.whTotal) return;
+    const q = normalize(document.getElementById("searchParts")?.value).toLowerCase();
     const summary = new Map();
     let grandTotal = 0;
 
@@ -399,6 +522,7 @@ function renderWarehouse() {
 }
 
 function renderDelivery() {
+    if (!els.deliveryItems) return;
     const items = state.currentDelivery.items;
     let total = 0;
     els.deliveryItems.innerHTML = items.map(i => {
@@ -413,12 +537,16 @@ function renderDelivery() {
         </tr>`;
     }).join("");
     
-    document.getElementById("itemsCount").textContent = items.length;
-    document.getElementById("itemsTotal").textContent = fmtPLN.format(total);
-    document.getElementById("finalizeDeliveryBtn").disabled = items.length === 0;
+    const itemsCountEl = document.getElementById("itemsCount");
+    const itemsTotalEl = document.getElementById("itemsTotal");
+    const finalizeBtn = document.getElementById("finalizeDeliveryBtn");
+    if (itemsCountEl) itemsCountEl.textContent = String(items.length);
+    if (itemsTotalEl) itemsTotalEl.textContent = fmtPLN.format(total);
+    if (finalizeBtn) finalizeBtn.disabled = items.length === 0;
 }
 
 function renderBuild() {
+    if (!els.buildItems) return;
     els.buildItems.innerHTML = state.currentBuild.items.map(i => {
         const m = state.machineCatalog.find(x => x.code === i.machineCode);
         return `<tr>
@@ -428,15 +556,20 @@ function renderBuild() {
         </tr>`;
     }).join("");
     
-    document.getElementById("buildItemsCount").textContent = state.currentBuild.items.length;
-    document.getElementById("finalizeBuildBtn").disabled = state.currentBuild.items.length === 0;
+    const buildCountEl = document.getElementById("buildItemsCount");
+    const finalizeBuildBtn = document.getElementById("finalizeBuildBtn");
+    if (buildCountEl) buildCountEl.textContent = String(state.currentBuild.items.length);
+    if (finalizeBuildBtn) finalizeBuildBtn.disabled = state.currentBuild.items.length === 0;
     els.missingBox.hidden = true;
     els.manualBox.hidden = true;
 }
 
 function renderMissingParts(missing) {
+    if (!els.missingBox) return;
     els.missingBox.hidden = false;
-    document.getElementById("missingList").innerHTML = missing.map(m =>
+    const list = byId("missingList");
+    if (!list) return;
+    list.innerHTML = missing.map(m =>
         `<li><strong>${m.sku}</strong>: Potrzeba ${m.needed}, stan: ${m.has} (brak: ${m.needed - m.has})</li>`
     ).join("");
 }
@@ -444,6 +577,7 @@ function renderMissingParts(missing) {
 function renderManualConsume() {
     const req = calculateBuildRequirements();
     const container = document.getElementById("manualConsumeUI");
+    if (!container) return;
     container.innerHTML = "";
     
     const missing = checkStockAvailability(req);
@@ -480,9 +614,10 @@ function renderManualConsume() {
 }
 
 function renderMachinesStock() {
-    const q = normalize(document.getElementById("searchMachines").value).toLowerCase();
+    const q = normalize(document.getElementById("searchMachines")?.value).toLowerCase();
     const tbody = document.querySelector("#machinesStockTable tbody");
-    
+    if (!tbody) return;
+
     tbody.innerHTML = state.machinesStock
         .filter(m => !q || m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
         .map(m => `<tr>
@@ -492,8 +627,142 @@ function renderMachinesStock() {
         </tr>`).join("");
 }
 
+
+function renderHistory() {
+    const tbody = document.querySelector("#historyTable tbody");
+    if (!tbody) return;
+
+    const rows = (state.history || [])
+        .slice()
+        .sort((a,b) => (b.ts || 0) - (a.ts || 0));
+
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="3" class="muted small">Brak zapisanych akcji. Zatwierdź dostawę albo finalizuj produkcję, a pojawią się tutaj.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(ev => {
+        const typeLabel = ev.type === "delivery" ? "Dostawa" : "Produkcja";
+        const pillClass = ev.type === "delivery" ? "delivery" : "build";
+        return `
+        <tr data-hid="${ev.id}">
+            <td><span class="historyPill ${pillClass}">${typeLabel}</span></td>
+            <td>${fmtDateISO(ev.dateISO)}</td>
+            <td class="right">
+                <button class="secondary compact historyPreviewBtn" type="button" data-action="toggleHistory" data-hid="${ev.id}">Podgląd</button>
+            </td>
+        </tr>
+        <tr class="historyDetailRow" data-hid-detail="${ev.id}" hidden>
+            <td colspan="3">
+                <div class="historyDetails"></div>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function buildHistoryDetails(ev) {
+    if (!ev) return "";
+    const typeLabel = ev.type === "delivery" ? "Dostawa" : "Produkcja";
+    const metaBits = [];
+
+    if (ev.type === "delivery") {
+        if (ev.supplier) metaBits.push(`<span class="badge">${ev.supplier}</span>`);
+        metaBits.push(`<span class="muted small">Pozycji: <strong>${(ev.items||[]).length}</strong></span>`);
+        const total = (ev.items||[]).reduce((s,i)=>s + (safeFloat(i.price) * safeInt(i.qty)), 0);
+        metaBits.push(`<span class="muted small">Suma: <strong class="historyMoney">${fmtPLN.format(total)}</strong></span>`);
+        return `
+            <div class="historyGrid">
+                <div class="historyMeta">
+                    <strong>${typeLabel}</strong>
+                    <span class="muted small">•</span>
+                    <span class="muted small">${fmtDateISO(ev.dateISO)}</span>
+                    ${metaBits.join("")}
+                </div>
+                <div class="uiSection" style="margin:0">
+                    <div class="uiSectionHead">
+                        <div class="small muted">Szczegóły dostawy</div>
+                    </div>
+                    <div class="tableWrap" style="margin:0">
+                        <table class="tightTable" style="min-width:auto">
+                            <thead>
+                                <tr>
+                                    <th>Nazwa (ID)</th>
+                                    <th class="right">Ilość</th>
+                                    <th class="right">Cena</th>
+                                    <th class="right">Razem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(ev.items||[]).map(i => {
+                                    const rowVal = safeInt(i.qty) * safeFloat(i.price);
+                                    return `<tr>
+                                        <td><span class="badge">${i.sku}</span> ${i.name || ""}</td>
+                                        <td class="right">${safeInt(i.qty)}</td>
+                                        <td class="right">${fmtPLN.format(safeFloat(i.price))}</td>
+                                        <td class="right">${fmtPLN.format(rowVal)}</td>
+                                    </tr>`;
+                                }).join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // build
+    metaBits.push(`<span class="muted small">Pozycji: <strong>${(ev.items||[]).length}</strong></span>`);
+    const totalQty = (ev.items||[]).reduce((s,i)=>s + safeInt(i.qty), 0);
+    metaBits.push(`<span class="muted small">Sztuk: <strong>${totalQty}</strong></span>`);
+
+    return `
+        <div class="historyGrid">
+            <div class="historyMeta">
+                <strong>${typeLabel}</strong>
+                <span class="muted small">•</span>
+                <span class="muted small">${fmtDateISO(ev.dateISO)}</span>
+                ${metaBits.join("")}
+            </div>
+
+            <div class="uiSection" style="margin:0">
+                <div class="uiSectionHead">
+                    <div class="small muted">Zbudowane maszyny</div>
+                </div>
+                <div class="tableWrap" style="margin:0">
+                    <table class="tightTable" style="min-width:auto">
+                        <thead>
+                            <tr>
+                                <th>Maszyna</th>
+                                <th class="right">Ilość</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(ev.items||[]).map(i => {
+                                return `<tr>
+                                    <td>${i.name || "—"} <span class="badge">${i.code}</span></td>
+                                    <td class="right">${safeInt(i.qty)}</td>
+                                </tr>`;
+                            }).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function addHistoryEvent(ev) {
+    if (!state.history) state.history = [];
+    state.history.push(ev);
+    // limit to last 200 entries to keep localStorage sane
+    if (state.history.length > 200) state.history = state.history.slice(-200);
+    save();
+}
+
 function renderAllSuppliers() {
-    const tbody = document.getElementById("suppliersListTable").querySelector("tbody");
+    const table = byId("suppliersListTable");
+    const tbody = table ? table.querySelector("tbody") : null;
+    if (!tbody) return;
     tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => `
         <tr>
             <td>${name}</td>
@@ -508,6 +777,9 @@ function renderAllSuppliers() {
 }
 
 function refreshCatalogsUI() {
+    // Defensive: if a tab panel is removed/renamed in HTML, don't crash.
+    if (!els.partsCatalog || !els.machinesCatalog) return;
+
     // 1. PARTS CATALOG TABLE
     const parts = Array.from(state.partsCatalog.values());
     els.partsCatalog.innerHTML = parts.map(p => {
@@ -547,8 +819,9 @@ function refreshCatalogsUI() {
     });
 
     // 4. GENERATE SUPPLIER CHECKBOXES FOR NEW PART
-    const supCheckList = document.getElementById("partNewSuppliersChecklist");
+    const supCheckList = byId("partNewSuppliersChecklist");
     const allSups = Array.from(state.suppliers.keys()).sort();
+    if (!supCheckList) return;
     
     if (allSups.length === 0) {
         supCheckList.innerHTML = '<span class="small muted">Brak zdefiniowanych dostawców. Dodaj ich w zakładce "Dostawcy".</span>';
@@ -572,36 +845,111 @@ function renderSelectOptions(select, values, displayMapFn = x => x) {
 }
 
 function toast(title, msg, type="ok") {
+    // Defensive: ensure host exists (toast can be called before init() in edge-cases)
+    let host = document.querySelector(".toastHost");
+    if (!host) {
+        host = document.createElement("div");
+        host.className = "toastHost";
+        document.body.appendChild(host);
+    }
+
     const el = document.createElement("div");
     el.className = `toast ${type}`;
     el.innerHTML = `<div style="font-weight:bold">${title}</div><div>${msg}</div>`;
-    document.querySelector(".toastHost").appendChild(el);
+    host.appendChild(el);
     requestAnimationFrame(() => el.classList.add("show"));
     setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 3000);
 }
 
 // === INITIALIZATION ===
+function initThresholdsToggle() {
+    const panel = byId("thresholdsPanel");
+    const btn = byId("toggleThresholdsBtn");
+    if (!panel || !btn) return;
+
+    // Default: collapsed. Persist only open/closed state (no schema impact).
+    const saved = localStorage.getItem(THRESHOLDS_OPEN_KEY);
+    const isOpen = saved === "1";
+
+    panel.classList.toggle("collapsed", !isOpen);
+    setExpanded(btn, isOpen);
+
+    btn.addEventListener("click", () => {
+        const nowOpen = panel.classList.contains("collapsed");
+        panel.classList.toggle("collapsed", !nowOpen);
+        localStorage.setItem(THRESHOLDS_OPEN_KEY, nowOpen ? "1" : "0");
+        setExpanded(btn, nowOpen);
+    });
+}
+
 function init() {
+    initTheme();
+    initThresholdsToggle();
     if (!document.querySelector(".toastHost")) {
         const h = document.createElement("div"); h.className = "toastHost"; document.body.appendChild(h);
     }
     load();
     bindTabs();
     bindSearch();
+
+    // Historia: podgląd (delegacja zdarzeń)
+    document.addEventListener("click", (e) => {
+        const btn = e.target && e.target.closest ? e.target.closest('[data-action="toggleHistory"]') : null;
+        if (!btn) return;
+
+        const id = btn.getAttribute("data-hid");
+        const detailRow = document.querySelector(`[data-hid-detail="${id}"]`);
+        if (!detailRow) return;
+
+        const ev = (state.history || []).find(x => String(x.id) === String(id));
+        if (!ev) return;
+
+        const willOpen = detailRow.hidden;
+
+        // zamknij wszystkie
+        document.querySelectorAll("tr.historyDetailRow").forEach(r => { r.hidden = true; });
+        document.querySelectorAll('[data-action="toggleHistory"]').forEach(b => {
+            b.textContent = "Podgląd";
+            b.classList.remove("primary");
+            b.classList.add("secondary");
+        });
+
+        if (!willOpen) return;
+
+        detailRow.hidden = false;
+        const box = detailRow.querySelector(".historyDetails");
+        if (box) box.innerHTML = buildHistoryDetails(ev);
+
+        btn.textContent = "Zamknij";
+        btn.classList.add("primary");
+        btn.classList.remove("secondary");
+        detailRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
     
     renderWarehouse();
     renderAllSuppliers();
     renderMachinesStock();
     refreshCatalogsUI();
 
-    document.getElementById("warnRange").addEventListener("input", (e) => {
+    // Sync threshold UI with persisted values
+    const warnRange = document.getElementById("warnRange");
+    const dangerRange = document.getElementById("dangerRange");
+    const warnValue = document.getElementById("warnValue");
+    const dangerValue = document.getElementById("dangerValue");
+    if (warnRange) warnRange.value = String(LOW_WARN);
+    if (dangerRange) dangerRange.value = String(LOW_DANGER);
+    if (warnValue) warnValue.textContent = String(LOW_WARN);
+    if (dangerValue) dangerValue.textContent = String(LOW_DANGER);
+
+    document.getElementById("warnRange")?.addEventListener("input", (e) => {
         LOW_WARN = parseInt(e.target.value);
-        document.getElementById("warnValue").textContent = LOW_WARN;
+        document.getElementById("warnValue") && (document.getElementById("warnValue").textContent = LOW_WARN);
         save(); renderWarehouse();
     });
-    document.getElementById("dangerRange").addEventListener("input", (e) => {
+    document.getElementById("dangerRange")?.addEventListener("input", (e) => {
         LOW_DANGER = parseInt(e.target.value);
-        document.getElementById("dangerValue").textContent = LOW_DANGER;
+        document.getElementById("dangerValue") && (document.getElementById("dangerValue").textContent = LOW_DANGER);
         save(); renderWarehouse();
     });
     // Edycja części (Baza Części)
@@ -612,7 +960,7 @@ function init() {
  // EVENTS
 
 // --- Delivery ---
-document.getElementById("supplierSelect").addEventListener("change", (e) => {
+document.getElementById("supplierSelect")?.addEventListener("change", (e) => {
   if (state.currentDelivery.items.length > 0 && state.currentDelivery.supplier && state.currentDelivery.supplier !== e.target.value) {
     if (!confirm("Zmiana dostawcy spowoduje usunięcie bieżących pozycji dostawy. Kontynuować?")) {
       e.target.value = state.currentDelivery.supplier || "";
@@ -650,7 +998,7 @@ document.getElementById("supplierSelect").addEventListener("change", (e) => {
   skuSelect.dispatchEvent(new Event("change"));
 });
 
-document.getElementById("supplierPartsSelect").addEventListener("change", (e) => {
+document.getElementById("supplierPartsSelect")?.addEventListener("change", (e) => {
   const opt = e.target.selectedOptions[0];
 
   // FIX: placeholder/brak wyboru nie powinien wpychać undefined/NaN
@@ -662,7 +1010,7 @@ document.getElementById("supplierPartsSelect").addEventListener("change", (e) =>
   document.getElementById("deliveryPrice").value = opt.dataset.price ?? 0;
 });
 
-document.getElementById("addDeliveryItemBtn").addEventListener("click", () => {
+document.getElementById("addDeliveryItemBtn")?.addEventListener("click", () => {
     const sup = document.getElementById("supplierSelect").value;
     if (!sup) return toast("Błąd", "Wybierz dostawcę.", "warn");
     
@@ -676,14 +1024,14 @@ document.getElementById("addDeliveryItemBtn").addEventListener("click", () => {
     addToDelivery(sup, part.sku, qty, price);
 });
 
-document.getElementById("finalizeDeliveryBtn").addEventListener("click", finalizeDelivery);
+document.getElementById("finalizeDeliveryBtn")?.addEventListener("click", finalizeDelivery);
 window.removeDeliveryItem = (id) => {
     state.currentDelivery.items = state.currentDelivery.items.filter(x => x.id !== id);
     save(); renderDelivery();
 }
 
 // --- Build ---
-document.getElementById("addBuildItemBtn").addEventListener("click", () => {
+document.getElementById("addBuildItemBtn")?.addEventListener("click", () => {
     const code = els.machineSelect.value;
     if (!code) {
         toast("Błąd", "Wybierz maszynę.", "warn");
@@ -700,7 +1048,7 @@ window.removeBuildItem = (id) => {
     save(); renderBuild();
 }
 
-document.getElementById("finalizeBuildBtn").addEventListener("click", () => {
+document.getElementById("finalizeBuildBtn")?.addEventListener("click", () => {
     const mode = document.getElementById("consumeMode").value;
     if (mode === 'manual') {
         const inputs = document.querySelectorAll(".manual-lot-input");
@@ -732,7 +1080,7 @@ document.getElementById("finalizeBuildBtn").addEventListener("click", () => {
     }
 });
 
-document.getElementById("consumeMode").addEventListener("change", (e) => {
+document.getElementById("consumeMode")?.addEventListener("change", (e) => {
     if (e.target.value === 'manual') renderManualConsume();
     else {
         els.manualBox.hidden = true;
@@ -741,7 +1089,7 @@ document.getElementById("consumeMode").addEventListener("change", (e) => {
 });
 
 // --- Catalogs ---
-document.getElementById("addPartBtn").addEventListener("click", () => {
+document.getElementById("addPartBtn")?.addEventListener("click", () => {
     const sku = document.getElementById("partSkuInput").value;
     const name = document.getElementById("partNameInput").value;
     
@@ -768,7 +1116,7 @@ window.askDeletePart = (sku) => {
     }
 };
 
-document.getElementById("addSupplierBtn").addEventListener("click", () => {
+document.getElementById("addSupplierBtn")?.addEventListener("click", () => {
     const name = document.getElementById("supplierNameInput").value;
     const added = addSupplier(name);
     if (added) {
@@ -777,7 +1125,7 @@ document.getElementById("addSupplierBtn").addEventListener("click", () => {
 });
 window.askDeleteSupplier = (n) => { if(confirm("Czy na pewno usunąć dostawcę " + n + "?")) deleteSupplier(n); };
 
-document.getElementById("addMachineBtn").addEventListener("click", () => {
+document.getElementById("addMachineBtn")?.addEventListener("click", () => {
     const c = normalize(document.getElementById("machineCodeInput").value);
     const n = normalize(document.getElementById("machineNameInput").value);
     if (!c || !n) {
@@ -821,28 +1169,29 @@ window.openSupplierEditor = (name) => {
 };
 
 function renderSupEditorTable() {
-    const tbody = document.getElementById("supplierEditorPriceBody");
-    const sup = state.suppliers.get(editingSup);
+    const tbody = byId("supplierEditorPriceBody");
+    const sup = editingSup ? state.suppliers.get(editingSup) : null;
+    if (!tbody || !sup || !sup.prices) return;
     tbody.innerHTML = Array.from(sup.prices.entries()).map(([k, price]) => {
         const p = state.partsCatalog.get(k);
         return `<tr><td>${p ? p.sku : k}</td><td>${p ? p.name : '-'}</td><td>${fmtPLN.format(price)}</td></tr>`;
     }).join("");
 }
 
-document.getElementById("supplierEditorSetPriceBtn").addEventListener("click", () => {
+document.getElementById("supplierEditorSetPriceBtn")?.addEventListener("click", () => {
     const sku = document.getElementById("supplierEditorPartSelect").value;
     const price = document.getElementById("supplierEditorPriceInput").value;
     updateSupplierPrice(editingSup, sku, price);
     renderSupEditorTable();
 });
 
-document.getElementById("supplierEditorSaveBtn").addEventListener("click", () => {
+document.getElementById("supplierEditorSaveBtn")?.addEventListener("click", () => {
     document.getElementById("supplierEditorTemplate").hidden = true;
     editingSup = null;
     renderAllSuppliers();
     refreshCatalogsUI();
 });
-document.getElementById("supplierEditorCancelBtn").addEventListener("click", () => {
+document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", () => {
     document.getElementById("supplierEditorTemplate").hidden = true;
     editingSup = null;
 });
@@ -867,6 +1216,7 @@ window.openMachineEditor = (code) => {
 
 function renderBomTable() {
     const tbody = document.querySelector("#bomTable tbody");
+    if (!tbody || !editingMachine || !Array.isArray(editingMachine.bom)) return;
     tbody.innerHTML = editingMachine.bom.map((b, idx) => {
         const p = state.partsCatalog.get(skuKey(b.sku));
         return `<tr>
@@ -878,7 +1228,7 @@ function renderBomTable() {
     }).join("");
 }
 
-document.getElementById("addBomItemBtn").addEventListener("click", () => {
+document.getElementById("addBomItemBtn")?.addEventListener("click", () => {
     const sku = document.getElementById("bomSkuSelect").value;
     if (!sku) {
         toast("Błąd", "Wybierz część do składu.", "warn");
@@ -898,13 +1248,13 @@ window.removeBomItem = (idx) => {
     renderBomTable();
 };
 
-document.getElementById("machineEditorSaveBtn").addEventListener("click", () => {
+document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () => {
     save();
     document.getElementById("machineEditorTemplate").hidden = true;
     editingMachine = null;
     refreshCatalogsUI();
 });
-document.getElementById("machineEditorCancelBtn").addEventListener("click", () => {
+document.getElementById("machineEditorCancelBtn")?.addEventListener("click", () => {
     document.getElementById("machineEditorTemplate").hidden = true;
     load();
     editingMachine = null;
@@ -919,7 +1269,8 @@ function bindTabs() {
                 document.getElementById("machineEditorCancelBtn")?.click();
                 editingMachine = null;
             }
-            if (!document.getElementById("supplierEditorTemplate").hidden) {
+            const supPanel = byId("supplierEditorTemplate");
+            if (supPanel && !supPanel.hidden) {
                 document.getElementById("supplierEditorCancelBtn")?.click();
                 editingSup = null;
             }
@@ -930,16 +1281,22 @@ function bindTabs() {
             btn.classList.add("active");
             document.querySelectorAll(".tabPanel").forEach(p => p.hidden = true);
             document.querySelector(`[data-tab-panel="${btn.dataset.tabTarget}"]`).hidden = false;
+            if (btn.dataset.tabTarget === "history") { renderHistory(); }
         });
     });
 }
 
 function bindSearch() {
-    document.getElementById("searchParts").addEventListener("input", renderWarehouse);
-    document.getElementById("searchMachines").addEventListener("input", renderMachinesStock);
+    document.getElementById("searchParts")?.addEventListener("input", renderWarehouse);
+    document.getElementById("searchMachines")?.addEventListener("input", renderMachinesStock);
 }
 
-document.getElementById("clearDataBtn").addEventListener("click", () => {
+document.getElementById("clearDataBtn")?.addEventListener("click", () => {
+    if(confirm("Czy na pewno chcesz usunąć WSZYSTKIE dane?")) resetData();
+});
+
+// Drugi przycisk resetu w zakładce Historia (ten sam efekt)
+document.getElementById("clearDataBtnHistory")?.addEventListener("click", () => {
     if(confirm("Czy na pewno chcesz usunąć WSZYSTKIE dane?")) resetData();
 });
 
