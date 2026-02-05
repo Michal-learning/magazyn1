@@ -418,14 +418,51 @@ function finalizeBuild(manualAllocation = null) {
     const lotsClone = JSON.parse(JSON.stringify(state.lots));
     
     if (manualAllocation) {
+        // 1) policz ile wzięto per SKU (na podstawie faktycznych partii, nie datasetów z DOM)
+        const takenBySku = new Map();
+
         for (const [lotId, qty] of Object.entries(manualAllocation)) {
+            const take = safeQtyInt(qty);
+            if (take <= 0) continue;
+
+            const lot = lotsClone.find(l => l.id == lotId);
+            if (!lot) return toast("Błąd", `Nie znaleziono partii #${lotId}.`, "bad");
+
+            const k = skuKey(lot.sku);
+
+            // Manual nie może pobierać czegokolwiek spoza wymagań bieżącego planu.
+            if (!requirements.has(k)) {
+                return toast(
+                    "Błąd manualny",
+                    `Wybrano partię #${lotId} dla części ${lot.sku}, która nie jest wymagana w tym planie.`,
+                    "bad"
+                );
+            }
+
+            // Nigdy nie pozwól nadpisać stanu partii.
+            if (take > safeQtyInt(lot.qty)) {
+                return toast("Błąd", "Próba pobrania więcej niż jest w partii.", "bad");
+            }
+
+            takenBySku.set(k, (takenBySku.get(k) || 0) + take);
+        }
+
+        // 2) wymuś dokładne dopasowanie do wymagań (i brak braków oraz brak nadmiaru)
+        for (const [k, needed] of requirements.entries()) {
+            const got = takenBySku.get(k) || 0;
+            if (got !== needed) {
+                const skuLabel = state.partsCatalog.get(k)?.sku || k;
+                return toast("Błąd manualny", `Dla części ${skuLabel} wybrano ${got}, a potrzeba ${needed}.`, "bad");
+            }
+        }
+
+        // 3) dopiero teraz fizycznie zdejmij ze stanu
+        for (const [lotId, qty] of Object.entries(manualAllocation)) {
+            const take = safeQtyInt(qty);
+            if (take <= 0) continue;
             const lot = lotsClone.find(l => l.id == lotId);
             if (!lot) continue;
-
-            // Manual allocation is user-input driven: enforce integer >= 0 and never overdraw a lot.
-            const take = safeQtyInt(qty);
-            if (take > lot.qty) return toast("Błąd", "Próba pobrania więcej niż jest w partii.", "bad"); // invariant: qty >= 0
-            lot.qty -= take;
+            lot.qty = safeQtyInt(lot.qty) - take;
         }
     } else {
         for (const [k, qtyNeeded] of requirements.entries()) {

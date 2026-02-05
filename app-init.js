@@ -106,6 +106,8 @@ function init() {
     renderMachinesStock();
     refreshCatalogsUI();
 
+    bindSupplierPricesUI();
+
     // Sync threshold UI with persisted values
     const warnRange = document.getElementById("warnRange");
     const dangerRange = document.getElementById("dangerRange");
@@ -303,21 +305,38 @@ document.getElementById("consumeMode")?.addEventListener("change", (e) => {
 
 // --- Catalogs ---
 document.getElementById("addPartBtn")?.addEventListener("click", () => {
-    const sku = document.getElementById("partSkuInput").value;
-    const name = document.getElementById("partNameInput").value;
-    
+    const sku = document.getElementById("partSkuInput")?.value || "";
+    const name = document.getElementById("partNameInput")?.value || "";
+
     // Pobierz zaznaczonych dostawców
     const checkboxes = document.querySelectorAll('input[name="newPartSupplier"]:checked');
     const selectedSups = Array.from(checkboxes).map(cb => cb.value);
 
     const res = upsertPart(sku, name, selectedSups);
-    toast(res.success?"OK":"Błąd", res.msg, res.success?"ok":"warn");
+    toast(res.success ? "OK" : "Błąd", res.msg, res.success ? "ok" : "warn");
+
     if (res.success) {
-        document.getElementById("partSkuInput").value = "";
-        document.getElementById("partNameInput").value = "";
+        // Zapisz ceny dla zaznaczonych dostawców (jeśli wpisane)
+        const k = skuKey(sku);
+        const panel = document.getElementById("newPartSupplierPrices");
+        const inputs = panel ? panel.querySelectorAll('input[data-sup]') : [];
+        inputs.forEach(inp => {
+            const sup = inp.getAttribute("data-sup");
+            if (!sup) return;
+            updateSupplierPrice(sup, sku, inp.value);
+        });
+
+        // Reset pól
+        const skuEl = document.getElementById("partSkuInput");
+        const nameEl = document.getElementById("partNameInput");
+        if (skuEl) skuEl.value = "";
+        if (nameEl) nameEl.value = "";
+
         // Reset checkboxów
         checkboxes.forEach(cb => cb.checked = false);
+
         refreshCatalogsUI();
+        syncNewPartSupplierPricesUI(); // schowa panel
     }
 });
 
@@ -559,6 +578,7 @@ function startEditPart(sku) {
     nameInput.value = part.name || "";
 
     buildEditPartSuppliersChecklist(key);
+    syncEditPartSupplierPricesUI();
 
     section.hidden = false;
     // slide-open (hidden nie da się animować, więc robimy transition po klasie)
@@ -578,6 +598,10 @@ function cancelEditPart() {
     }
 
     currentEditPartKey = null;
+
+    // schowaj panel cen dostawców
+    const pricePanel = document.getElementById("editPartSupplierPrices");
+    if (pricePanel) { pricePanel.hidden = true; const body = pricePanel.querySelector(".supplierPriceBody"); if (body) body.innerHTML = ""; }
 
     const title = document.getElementById("partEditTitle");
     if (title) title.textContent = "Edycja Części";
@@ -619,10 +643,120 @@ function saveEditPart() {
                 sup.prices.delete(currentEditPartKey);
             }
         }
+
+    }
+
+    // Aktualizacja cen (tylko dla zaznaczonych dostawców)
+    const pricePanel = document.getElementById("editPartSupplierPrices");
+    if (pricePanel && !pricePanel.hidden) {
+        const inputs = pricePanel.querySelectorAll('input[data-sup]');
+        inputs.forEach(inp => {
+            const supName = inp.getAttribute("data-sup");
+            if (!supName) return;
+            updateSupplierPrice(supName, part.sku, inp.value);
+        });
     }
 
     save();
     refreshCatalogsUI();
     cancelEditPart();
     toast("Zapisano zmiany części.");
+}
+
+
+// === Supplier prices UI (Baza Części) ===
+function bindSupplierPricesUI() {
+    if (window.__supplierPricesBound) return;
+    window.__supplierPricesBound = true;
+
+    // NEW PART: checkbox changes
+    const newBox = document.getElementById("partNewSuppliersChecklist");
+    newBox?.addEventListener("change", (e) => {
+        const t = e.target;
+        if (t && t.matches && t.matches('input[name="newPartSupplier"]')) {
+            syncNewPartSupplierPricesUI();
+        }
+    });
+
+    // NEW PART: SKU changes (so we can bind prices to proper key)
+    document.getElementById("partSkuInput")?.addEventListener("input", () => {
+        syncNewPartSupplierPricesUI();
+    });
+
+    // EDIT PART: checkbox changes
+    const editBox = document.getElementById("editPartSuppliersChecklist");
+    editBox?.addEventListener("change", (e) => {
+        const t = e.target;
+        if (t && t.matches && t.matches('input[type="checkbox"]')) {
+            syncEditPartSupplierPricesUI();
+        }
+    });
+}
+
+function renderSupplierPricesPanel(panelEl, selectedSuppliers, partKey, opts = {}) {
+    if (!panelEl) return;
+    const body = panelEl.querySelector(".supplierPriceBody");
+    if (!body) return;
+
+    const skuEmpty = !!opts.skuEmpty;
+    const disableInputs = !!opts.disableInputs;
+
+    if (!selectedSuppliers || selectedSuppliers.length === 0) {
+        panelEl.hidden = true;
+        body.innerHTML = "";
+        return;
+    }
+
+    panelEl.hidden = false;
+
+    // If SKU is empty (new part), don't let user type prices that we can't safely map yet
+    if (skuEmpty || !partKey) {
+        body.innerHTML = `<div class="supplierPriceHint">Wpisz najpierw <strong>Nazwa (Unikalne ID)</strong>, żeby przypisać ceny do dostawców.</div>`;
+        return;
+    }
+
+    body.innerHTML = selectedSuppliers.map(supName => {
+        const sup = state.suppliers.get(supName);
+        const current = sup && sup.prices ? (sup.prices.get(partKey) ?? 0) : 0;
+
+        return `
+            <div class="supplierPriceRow">
+                <div class="supplierName">
+                    <span class="supplierLabel">${supName}</span>
+                    <span class="supplierMeta">aktualnie: ${fmtPLN.format(safeFloat(current))}</span>
+                </div>
+                <input type="number" min="0" step="0.01"
+                    ${disableInputs ? "disabled" : ""}
+                    data-sup="${supName}"
+                    value="${safeFloat(current)}"
+                    aria-label="Cena dla dostawcy ${supName}">
+            </div>
+        `;
+    }).join("");
+}
+
+function syncNewPartSupplierPricesUI() {
+    const skuEl = document.getElementById("partSkuInput");
+    const skuVal = skuEl ? skuEl.value : "";
+    const key = skuKey(skuVal);
+
+    const selected = Array.from(document.querySelectorAll('input[name="newPartSupplier"]:checked')).map(cb => cb.value);
+    const panel = document.getElementById("newPartSupplierPrices");
+
+    renderSupplierPricesPanel(panel, selected, key, {
+        skuEmpty: !normalize(skuVal),
+        disableInputs: false
+    });
+}
+
+function syncEditPartSupplierPricesUI() {
+    const panel = document.getElementById("editPartSupplierPrices");
+    const key = currentEditPartKey;
+
+    const checklist = document.getElementById("editPartSuppliersChecklist");
+    const selected = checklist
+        ? Array.from(checklist.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+        : [];
+
+    renderSupplierPricesPanel(panel, selected, key, { skuEmpty: false, disableInputs: false });
 }
