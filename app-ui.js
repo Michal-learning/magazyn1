@@ -15,9 +15,24 @@ const els = {
 
     // Side panel
     sideWarehouseTotal: document.getElementById('sideWarehouseTotal'),
-    sideMissingList: document.getElementById('sideMissingList'),
+    sideMissingSignals: document.getElementById('sideMissingSignals'),
+    sideHealthLabel: document.getElementById('sideHealthLabel'),
+    sideHealthHint: document.getElementById('sideHealthHint'),
+    sideCriticalCount: document.getElementById('sideCriticalCount'),
+    sideLowCount: document.getElementById('sideLowCount'),
     sideRecentActions: document.getElementById('sideRecentActions'),
 };
+
+// Simple HTML escaping for safe UI templates
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 
 // =========================
 // UI-only state for batches grouping expand/collapse
@@ -71,7 +86,7 @@ function computePartsSummary() {
 }
 
 function renderSideMissingTop5() {
-  if (!els.sideMissingList) return;
+  if (!els.sideMissingSignals) return;
 
   const rows = computePartsSummary()
     .filter(r => Number.isFinite(r.qty))
@@ -79,34 +94,37 @@ function renderSideMissingTop5() {
     .slice(0, 5);
 
   if (!rows.length) {
-    els.sideMissingList.innerHTML = `
-      <tr><td colspan="3" class="muted small">Brak danych.</td></tr>
+    els.sideMissingSignals.innerHTML = `
+      <div class="sideEmpty muted small">Brak danych.</div>
     `;
     return;
   }
 
-  els.sideMissingList.innerHTML = rows.map(r => {
+  els.sideMissingSignals.innerHTML = rows.map(r => {
     const cls =
       r.qty <= LOW_DANGER ? "danger" :
       r.qty <= LOW_WARN ? "warn" :
       "ok";
 
     const status =
-      r.qty <= LOW_DANGER ? "Krytyczny" :
-      r.qty <= LOW_WARN ? "Niski" :
+      r.qty <= LOW_DANGER ? "Krytyczne" :
+      r.qty <= LOW_WARN ? "Niskie" :
       "OK";
 
+    const safeSku = String(r.sku ?? "");
+    const safeName = String(r.name ?? "—");
+
     return `
-      <tr>
-        <td>
-          <div class="sidePartCell">
-            <span class="badge sidePartSku">${r.sku}</span>
-            <span class="sidePartName">${r.name || "—"}</span>
-          </div>
-        </td>
-        <td><span class="statusPill ${cls}">${status}</span></td>
-        <td class="right sideQty">${r.qty}</td>
-      </tr>
+      <button class="sideSignalRow" type="button" data-sku="${escapeHtml(safeSku)}" aria-label="Przejdź do części ${escapeHtml(safeSku)}">
+        <span class="sigMain">
+          <span class="badge sigSku">${escapeHtml(safeSku)}</span>
+          <span class="sigName" title="${escapeHtml(safeName)}">${escapeHtml(safeName)}</span>
+        </span>
+        <span class="sigMeta">
+          <span class="statusPill ${cls}">${status}</span>
+          <span class="sigQty">${Number.isFinite(r.qty) ? r.qty : 0}</span>
+        </span>
+      </button>
     `;
   }).join("");
 }
@@ -146,7 +164,44 @@ function renderSideRecentActions5() {
   }).join("");
 }
 
+function renderSideHealth() {
+    if (!els.sideHealthLabel || !els.sideHealthHint || !els.sideCriticalCount || !els.sideLowCount) return;
+
+    const rows = computePartsSummary().filter(r => Number.isFinite(r.qty));
+
+    let critical = 0;
+    let low = 0;
+
+    for (const r of rows) {
+        if (r.qty <= LOW_DANGER) critical++;
+        else if (r.qty <= LOW_WARN) low++;
+    }
+
+    els.sideCriticalCount.textContent = String(critical);
+    els.sideLowCount.textContent = String(low);
+
+    const label = els.sideHealthLabel;
+    const hint = els.sideHealthHint;
+
+    label.classList.remove("ok", "warn", "danger");
+
+    if (critical > 0) {
+        label.classList.add("danger");
+        label.textContent = "Uwaga";
+        hint.textContent = `Krytyczne braki: ${critical}`;
+    } else if (low > 0) {
+        label.classList.add("warn");
+        label.textContent = "Obserwuj";
+        hint.textContent = `Niskie stany: ${low}`;
+    } else {
+        label.classList.add("ok");
+        label.textContent = "OK";
+        hint.textContent = "Brak krytycznych braków";
+    }
+}
+
 function renderSidePanel() {
+    renderSideHealth();
     renderSideMissingTop5();
     renderSideRecentActions5();
 }
@@ -562,6 +617,19 @@ function buildHistoryDetails(ev) {
     const totalQty = (ev.items||[]).reduce((s,i)=>s + safeInt(i.qty), 0);
     metaBits.push(`<span class="muted small">Sztuk: <strong>${totalQty}</strong></span>`);
 
+    // Wartość zużycia (PLN) per cała akcja produkcji
+    const totalConsumptionValue = (ev.items||[]).reduce((sum, it) => {
+        const machineVal = (it?.partsUsed || []).reduce((ms, p) => {
+            const lots = Array.isArray(p?.lots) ? p.lots : [];
+            return ms + lots.reduce((ls, lot) => ls + (safeInt(lot?.qty) * safeFloat(lot?.unitPrice || 0)), 0);
+        }, 0);
+        return sum + machineVal;
+    }, 0);
+    if (Number.isFinite(totalConsumptionValue) && totalConsumptionValue > 0) {
+        const perUnit = totalQty > 0 ? (totalConsumptionValue / totalQty) : 0;
+        metaBits.push(`<span class="muted small">Wartość zużycia: <strong class="historyMoney">${fmtPLN.format(totalConsumptionValue)}</strong></span>`);
+          }
+
     return `
         <div class="historyGrid">
             <div class="historyMeta">
@@ -575,20 +643,101 @@ function buildHistoryDetails(ev) {
                 <div class="uiSectionHead">
                     <div class="small muted">Zbudowane maszyny</div>
                 </div>
+
                 <div class="tableWrap" style="margin:0">
-                    <table class="tightTable" style="min-width:auto">
+                    <table class="tightTable buildMachineTable" style="min-width:auto">
                         <thead>
                             <tr>
                                 <th>Maszyna</th>
                                 <th class="right">Ilość</th>
+                                <th class="right">Wartość</th>
+                                <th class="right">Podgląd</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${(ev.items||[]).map(i => {
-                                return `<tr>
-                                    <td>${i.name || "—"} <span class="badge">${i.code}</span></td>
-                                    <td class="right">${safeInt(i.qty)}</td>
-                                </tr>`;
+                            ${(ev.items||[]).map((i, idx) => {
+                                const bmid = `${ev.id}-${idx}`;
+                                const hasParts = Array.isArray(i.partsUsed) && i.partsUsed.length > 0;
+
+                                const machineConsumptionValue = (i?.partsUsed || []).reduce((ms, p) => {
+                                    const lots = Array.isArray(p?.lots) ? p.lots : [];
+                                    return ms + lots.reduce((ls, lot) => ls + (safeInt(lot?.qty) * safeFloat(lot?.unitPrice || 0)), 0);
+                                }, 0);
+                                const machinePerUnit = safeInt(i?.qty) > 0 ? (machineConsumptionValue / safeInt(i.qty)) : 0;
+
+                                const btn = hasParts
+                                    ? `<button class="secondary compact" type="button" data-action="toggleBuildMachine" data-bmid="${bmid}" aria-expanded="false">Podgląd</button>`
+                                    : `<span class="muted small">—</span>`;
+
+                                const partsRows = (hasParts ? i.partsUsed : []).flatMap(p => {
+                                    const lots = Array.isArray(p.lots) ? p.lots : [];
+                                    if (!lots.length) return [];
+                                    return lots.map(lot => {
+                                        const d = lot.dateIn ? fmtDateISO(lot.dateIn) : "—";
+                                        const price = fmtPLN.format(safeFloat(lot.unitPrice || 0));
+                                        const rowVal = safeInt(lot.qty) * safeFloat(lot.unitPrice || 0);
+                                        const supplier = lot.supplier || "-";
+                                        const sku = lot.sku || p.sku || "—";
+                                        const name = lot.name || p.name || "";
+                                        return `
+                                            <tr>
+                                                <td><span class="badge">${escapeHtml(sku)}</span> ${escapeHtml(name)}</td>
+                                                <td>${escapeHtml(supplier)}</td>
+                                                <td>${escapeHtml(d)}</td>
+                                                <td class="right">${price}</td>
+                                                <td class="right"><strong>${safeInt(lot.qty)}</strong></td>
+                                                <td class="right">${fmtPLN.format(rowVal)}</td>
+                                            </tr>
+                                        `;
+                                    });
+                                }).join("");
+
+                                const empty = !partsRows
+                                    ? `<div class="muted small">Brak danych o zużyciu dla tej maszyny (stara akcja lub brak BOM).</div>`
+                                    : `
+                                        </div>
+
+                                        <div class="tableWrap buildPartsWrap">
+                                            <table class="tightTable" style="min-width:auto">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nazwa (ID)</th>
+                                                        <th>Dostawca</th>
+                                                        <th>Data</th>
+                                                        <th class="right">Cena zak.</th>
+                                                        <th class="right">Ilość</th>
+                                                        <th class="right">Razem</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${partsRows}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    `;
+
+                                return `
+                                    <tr class="buildMachineRow">
+                                        <td>${escapeHtml(i.name || "—")} <span class="badge">${escapeHtml(i.code || "—")}</span></td>
+                                        <td class="right">${safeInt(i.qty)}</td>
+                                        <td class="right"><strong class="historyMoney">${fmtPLN.format(machineConsumptionValue || 0)}</strong></td>
+                                        <td class="right">${btn}</td>
+                                    </tr>
+                                    <tr class="buildMachineDetailRow" data-bmid-detail="${bmid}" hidden>
+                                        <td colspan="4">
+                                            <div class="buildPartsDetails">
+                                                <div class="buildPartsHeader">
+                                                    <div class="small muted">Zużyte części (partie)</div>
+                                                    <div class="buildPartsMeta">
+                                                        <div class="small muted">Maszyna: <strong>${escapeHtml(i.code || "—")}</strong></div>
+                                                        <div class="small muted">Suma zużycia: <strong class="historyMoney">${fmtPLN.format(machineConsumptionValue || 0)}</strong></div>
+                                                    </div>
+                                                </div>
+                                                ${empty}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
                             }).join("")}
                         </tbody>
                     </table>

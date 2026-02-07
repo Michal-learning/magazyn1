@@ -416,7 +416,21 @@ function finalizeBuild(manualAllocation = null) {
     }
 
     const lotsClone = JSON.parse(JSON.stringify(state.lots));
-    
+
+    // Snapshot partii BEFORE zużycie — potrzebne do historii (żeby nie zgubić danych po wyzerowaniu partii)
+    const lotSnapshotById = new Map();
+    (state.lots || []).forEach(l => { if (l && l.id != null) lotSnapshotById.set(String(l.id), JSON.parse(JSON.stringify(l))); });
+
+    // Track exactly what lots were consumed (per SKU) in deterministic order
+    const takenLotsBySku = new Map(); // k -> [{lotId, qty}]
+    function pushTaken(k, lotId, qty) {
+        const take = safeQtyInt(qty);
+        if (take <= 0) return;
+        const id = String(lotId);
+        if (!takenLotsBySku.has(k)) takenLotsBySku.set(k, []);
+        takenLotsBySku.get(k).push({ lotId: id, qty: take });
+    }
+
     if (manualAllocation) {
         // 1) policz ile wzięto per SKU (na podstawie faktycznych partii, nie datasetów z DOM)
         const takenBySku = new Map();
@@ -457,12 +471,21 @@ function finalizeBuild(manualAllocation = null) {
         }
 
         // 3) dopiero teraz fizycznie zdejmij ze stanu
-        for (const [lotId, qty] of Object.entries(manualAllocation)) {
-            const take = safeQtyInt(qty);
-            if (take <= 0) continue;
-            const lot = lotsClone.find(l => l.id == lotId);
-            if (!lot) continue;
-            lot.qty = safeQtyInt(lot.qty) - take;
+        const manualEntries = Object.entries(manualAllocation)
+            .map(([lotId, qty]) => {
+                const take = safeQtyInt(qty);
+                if (take <= 0) return null;
+                const lot = lotsClone.find(l => l.id == lotId);
+                if (!lot) return null;
+                return { lot, take };
+            })
+            .filter(Boolean)
+            // deterministic: always apply by lot id asc
+            .sort((a, b) => (safeInt(a.lot.id) - safeInt(b.lot.id)));
+
+        for (const ent of manualEntries) {
+            ent.lot.qty = safeQtyInt(ent.lot.qty) - ent.take;
+            pushTaken(skuKey(ent.lot.sku), ent.lot.id, ent.take);
         }
     } else {
         for (const [k, qtyNeeded] of requirements.entries()) {
@@ -476,6 +499,7 @@ function finalizeBuild(manualAllocation = null) {
                 const take = Math.min(lot.qty, remain);
                 lot.qty -= take;
                 remain -= take;
+                pushTaken(k, lot.id, take);
             }
         }
     }
@@ -500,6 +524,79 @@ function finalizeBuild(manualAllocation = null) {
             });
         }
     });
+    // =========================
+    // Historia: rozpiska zużycia części per maszyna (podgląd partii)
+    // =========================
+    // Build a mutable pool of taken lots per SKU, then distribute to each machine's BOM in stable order.
+    const takenPoolBySku = new Map();
+    for (const [k, arr] of takenLotsBySku.entries()) {
+        takenPoolBySku.set(k, arr.map(x => ({ lotId: String(x.lotId), qty: safeQtyInt(x.qty) })));
+    }
+
+    function takeForSku(k, needed) {
+        let remain = safeQtyInt(needed);
+        const used = [];
+        const pool = takenPoolBySku.get(k) || [];
+        while (remain > 0 && pool.length) {
+            const head = pool[0];
+            const take = Math.min(safeQtyInt(head.qty), remain);
+            if (take > 0) {
+                used.push({ lotId: String(head.lotId), qty: take });
+                head.qty = safeQtyInt(head.qty) - take;
+                remain -= take;
+            }
+            if (safeQtyInt(head.qty) <= 0) pool.shift();
+        }
+        if (remain !== 0) {
+            // Defensive: should not happen because requirements were verified, but don't crash history
+            // TODO: investigate mismatch between requirements and takenLotsBySku
+        }
+        return used;
+    }
+
+    const buildItemsDetailed = state.currentBuild.items.map(bi => {
+        const def = state.machineCatalog.find(m => m.code === bi.machineCode);
+        const currentName = def ? def.name : bi.machineCode;
+
+        const partsUsed = (def && Array.isArray(def.bom) ? def.bom : []).map(bomItem => {
+            const k = skuKey(bomItem.sku);
+            const need = safeQtyInt(bomItem.qty) * safeQtyInt(bi.qty);
+
+            const lotsUsed = takeForSku(k, need).map(t => {
+                const snap = lotSnapshotById.get(String(t.lotId)) || {};
+                // NOTE: lots in core do not store "type"; if the catalog has it, snapshot it here for history UI.
+                const catalogType = (state.partsCatalog && state.partsCatalog.get)
+                    ? (state.partsCatalog.get(k)?.type || "")
+                    : "";
+                return {
+                    lotId: String(t.lotId),
+                    qty: safeQtyInt(t.qty),
+                    sku: snap.sku || (state.partsCatalog.get(k)?.sku || k),
+                    name: snap.name || (state.partsCatalog.get(k)?.name || ""),
+                    type: normalize(snap.type || catalogType || ""),
+                    supplier: snap.supplier || "-",
+                    dateIn: snap.dateIn || snap.dateISO || null,
+                    unitPrice: safeFloat(snap.unitPrice || 0)
+                };
+            });
+
+            return {
+                sku: state.partsCatalog.get(k)?.sku || k,
+                name: state.partsCatalog.get(k)?.name || "",
+                qty: need,
+                lots: lotsUsed
+            };
+        });
+
+        return {
+            code: bi.machineCode,
+            name: currentName,
+            qty: safeInt(bi.qty),
+            partsUsed
+        };
+    });
+
+
 
 
     // Historia: zapis produkcji (snapshot)
@@ -508,17 +605,9 @@ function finalizeBuild(manualAllocation = null) {
         ts: Date.now(),
         type: "build",
         dateISO: buildISO,
-        items: state.currentBuild.items.map(bi => {
-            const def = state.machineCatalog.find(m => m.code === bi.machineCode);
-            return {
-                code: bi.machineCode,
-                name: def ? def.name : bi.machineCode,
-                qty: safeInt(bi.qty)
-            };
-        })
+        items: buildItemsDetailed
     });
-
-    state.currentBuild.items = [];
+state.currentBuild.items = [];
     if (buildDateInput) buildDateInput.value = "";
     save();
     

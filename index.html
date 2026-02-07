@@ -589,11 +589,28 @@
                 </div>
 
                 <div class="sideSection">
-                    <div class="sideTitle">Szybkie akcje</div>
-                    <button id="themeToggleBtn" type="button" class="secondary sideBtn">Tryb: Ciemny</button>
+                    <div class="sideTitle">Status</div>
+
+                    <div class="sideStatus">
+                        <div class="sideStatusTop">
+                            <span id="sideHealthLabel" class="statusPill ok">OK</span>
+                            <span id="sideHealthHint" class="muted small">Brak krytycznych braków</span>
+                        </div>
+
+                        <div class="sideCounters">
+                            <div class="sideCounter">
+                                <div class="muted small">Krytyczne</div>
+                                <div class="sideCounterValue" id="sideCriticalCount">0</div>
+                            </div>
+                            <div class="sideCounter">
+                                <div class="muted small">Niskie</div>
+                                <div class="sideCounterValue" id="sideLowCount">0</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- NOWA: sekcja Magazyn -->
+                <!-- Magazyn: sygnały i metryki -->
                 <div class="sideSection">
                     <div class="sideTitle">Magazyn</div>
 
@@ -602,27 +619,18 @@
                         <div class="metricValue" id="sideWarehouseTotal">0,00 zł</div>
                     </div>
 
-                    <div class="sideTableWrap">
-                        <table class="sideTable">
-                            <thead>
-                                <tr>
-                                    <th>Część</th>
-                                    <th>Status</th>
-                                    <th class="right">Stan</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sideMissingList"></tbody>
-                        </table>
-                    </div>
+                    <div class="sideSignals" id="sideMissingSignals" aria-label="Najniższe stany części"></div>
                 </div>
 
-
-                <!-- Bonus: już masz renderer, więc dałem miejsce -->
                 <div class="sideSection">
                     <div class="sideTitle">Ostatnie akcje</div>
                     <ul id="sideRecentActions" class="sideList"></ul>
                 </div>
 
+                <div class="sideSection sideUtilities">
+                    <div class="sideTitle">Szybkie akcje</div>
+                    <button id="themeToggleBtn" type="button" class="secondary sideBtn">Tryb: Ciemny</button>
+                </div>
 
             </div>
         </aside>

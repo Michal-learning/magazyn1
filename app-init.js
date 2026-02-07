@@ -35,6 +35,45 @@ function initWarehouseViewToggle() {
     bCompact?.addEventListener("click", () => setWarehouseView("compact"));
     bBatches?.addEventListener("click", () => setWarehouseView("batches"));
 }
+
+
+function initSidePanelSignals() {
+    // Click-through from side panel (signals) to main parts view
+    if (window.__sidePanelSignalsBound) return;
+    window.__sidePanelSignalsBound = true;
+
+    document.addEventListener("click", (e) => {
+        const row = e.target && e.target.closest ? e.target.closest(".sideSignalRow") : null;
+        if (!row) return;
+
+        const sku = row.getAttribute("data-sku");
+        if (!sku) return;
+
+        // Switch to parts tab
+        const partsTabBtn = document.querySelector('.tabBtn[data-tab-target="parts"]');
+        if (partsTabBtn) partsTabBtn.click();
+
+        // Prefer compact view for SKU focus
+        setWarehouseView("compact");
+
+        // Apply search filter
+        const search = document.getElementById("searchParts");
+        if (search) {
+            search.value = sku;
+            search.dispatchEvent(new Event("input"));
+            search.focus();
+        }
+
+        // Bring panel into view (avoid hunting)
+        const partsPanel = document.querySelector('[data-tab-panel="parts"]');
+        if (partsPanel && partsPanel.scrollIntoView) {
+            partsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    });
+}
+
+
+
 function initThresholdsToggle() {
     const panel = byId("thresholdsPanel");
     const btn = byId("toggleThresholdsBtn");
@@ -65,6 +104,7 @@ function init() {
     bindTabs();
     bindSearch();
     initWarehouseViewToggle();
+    initSidePanelSignals();
 
     // Historia: podgląd (delegacja zdarzeń)
     document.addEventListener("click", (e) => {
@@ -99,6 +139,36 @@ function init() {
         btn.classList.remove("secondary");
         detailRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
+
+
+    // Toggle podglądu zużytych części per maszyna (wewnątrz historii produkcji)
+    document.addEventListener("click", (e) => {
+        const btn = e.target && e.target.closest ? e.target.closest('[data-action="toggleBuildMachine"]') : null;
+        if (!btn) return;
+
+        const bmid = btn.getAttribute("data-bmid");
+        if (!bmid) return;
+
+        const scope = btn.closest(".historyDetails") || document;
+        const detailRow = scope.querySelector(`[data-bmid-detail="${bmid}"]`);
+        if (!detailRow) return;
+
+        const willOpen = detailRow.hidden;
+
+        // Zamknij inne w tym samym podglądzie historii (żeby nie robić spaghetti w UI)
+        scope.querySelectorAll("tr.buildMachineDetailRow").forEach(r => { r.hidden = true; });
+        scope.querySelectorAll('[data-action="toggleBuildMachine"]').forEach(b => {
+            b.textContent = "Podgląd";
+            b.setAttribute("aria-expanded", "false");
+        });
+
+        if (!willOpen) return;
+
+        detailRow.hidden = false;
+        btn.textContent = "Zamknij";
+        btn.setAttribute("aria-expanded", "true");
+    });
+
 
     
     renderWarehouse();

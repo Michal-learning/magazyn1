@@ -99,7 +99,7 @@ h2 {
     margin: 0 auto;
     padding-bottom: 40px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 420px);
     gap: 16px;
     align-items: start;
 }
@@ -1429,4 +1429,696 @@ button.success {
     padding: 10px 12px;
     color: var(--muted);
     font-size: 0.85rem;
+}
+/* =========================================================
+   ENTERPRISE POLISH PACK (append at END of style.css)
+   Goal: calm, readable, “expensive”, low-fatigue data UI
+   No framework, no redesign, incremental-only
+   ========================================================= */
+
+/* ---------- 0) Spacing system + typography rhythm ---------- */
+:root {
+    /* spacing steps (predictable vertical rhythm) */
+    --space-1: 6px;
+    --space-2: 12px;
+    --space-3: 18px;
+    --space-4: 24px;
+    /* density knobs */
+    --cell-y: 10px;
+    --cell-x: 14px;
+    /* focus ring */
+    --focus-ring: 0 0 0 3px var(--accent-glow);
+    /* zebra rows (subtle, not loud) */
+    --row-zebra: rgba(255,255,255,0.015);
+}
+
+    :root[data-theme="light"] {
+        --row-zebra: rgba(15,23,42,0.02);
+    }
+
+/* Consistent vertical rhythm */
+.card {
+    padding: var(--space-4);
+}
+
+.cardHeader {
+    margin-bottom: var(--space-3);
+}
+
+.toolbar {
+    margin: var(--space-2) 0 var(--space-3);
+}
+
+.uiSection {
+    padding: calc(var(--space-3) - 2px);
+    margin-bottom: var(--space-4);
+}
+
+.uiSectionHead {
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.row {
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.subhead {
+    margin: var(--space-3) 0 var(--space-2);
+}
+
+/* Tighter typography rhythm (scan-first) */
+h1 {
+    line-height: 1.15;
+}
+
+h2 {
+    line-height: 1.2;
+    margin-bottom: 10px;
+}
+
+h3 {
+    line-height: 1.25;
+}
+
+/* Prevent “double bottom margins” in headers */
+.cardHeader h2 {
+    margin-bottom: 0;
+}
+
+/* ---------- 1) Focus: visible only when it matters ---------- */
+/* Don’t show ugly rings on mouse click, show on keyboard navigation */
+:focus {
+    outline: none;
+}
+
+:focus-visible {
+    box-shadow: var(--focus-ring);
+    border-color: var(--accent);
+}
+
+/* Buttons: keep focus ring clean */
+button:focus-visible {
+    box-shadow: var(--focus-ring);
+}
+
+/* Inputs/selects: keep your existing focus, but ensure keyboard focus works */
+input:focus-visible, select:focus-visible {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+/* ---------- 2) Micro-interactions: calm, not circus ---------- */
+button, .tabBtn, .toast, .historyDetails {
+    transition: background-color var(--trans-fast), border-color var(--trans-fast), box-shadow var(--trans-fast), transform 120ms var(--ease), opacity var(--trans-fast);
+}
+
+    /* Hover should “hint”, not “celebrate” */
+    button.secondary:hover:not(:disabled),
+    .tabBtn:hover:not(.active) {
+        filter: none; /* avoid brightness pumping */
+    }
+
+/* Reduce motion for long sessions or accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---------- 3) Tables: scanability upgrades ---------- */
+/* Use tabular numbers so columns visually align */
+.right,
+.metricValue,
+.sideQty,
+.historyMoney,
+td.right {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Table spacing driven by variables */
+th, td {
+    padding: var(--cell-y) var(--cell-x);
+}
+
+/* Zebra striping: subtle, helps eye track long tables */
+table tbody tr:nth-child(even) td {
+    background: var(--row-zebra);
+}
+
+/* Hover stays subtle (you already do; make it consistent across themes) */
+tr:hover td {
+    background: var(--row-hover);
+}
+
+/* Sticky headers: ensure background is solid enough */
+.stickyHeader th {
+    backdrop-filter: blur(6px);
+}
+
+/* ---------- 4) Stock status: signal without painting everything ---------- */
+/* Instead of flooding the whole row with color, add a left “status rail”.
+   Keep your existing .stock-warn/.stock-danger backgrounds, but make the rail primary.
+*/
+.stock-warn td:first-child {
+    box-shadow: inset 4px 0 0 rgba(255,193,7,0.85);
+}
+
+.stock-danger td:first-child {
+    box-shadow: inset 4px 0 0 rgba(255,107,107,0.85);
+}
+
+/* Optional: tone down full-row background a bit (less fatigue). */
+.stock-warn td {
+    background: rgba(255, 193, 7, 0.08) !important;
+    color: inherit; /* keep text readable */
+}
+
+.stock-danger td {
+    background: rgba(255, 107, 107, 0.08) !important;
+    color: inherit;
+}
+
+/* Keep badges readable on status rows */
+.stock-warn .badge,
+.stock-danger .badge {
+    border: 1px solid var(--border);
+}
+
+/* ---------- 5) “Expensive” alignment patterns (small, but you feel it) ---------- */
+/* Make headers feel like “labels”, not content */
+th {
+    letter-spacing: 0.06em;
+}
+
+/* Monospace badges: consistent density and alignment */
+.badge {
+    background: var(--badge-bg, var(--secondary-hover));
+    border: 1px solid var(--badge-border, var(--border));
+}
+
+/* Align action buttons in tables: reduce visual noise */
+table td:last-child button.compact,
+table td:last-child button.iconBtn {
+    margin-left: 6px;
+}
+
+/* ---------- 6) Segmented controls: stronger “selected” affordance ---------- */
+.segmented {
+    border: 1px solid var(--border);
+    background: var(--secondary-bg);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+    .segmented > button {
+        padding: 6px 12px;
+    }
+
+        .segmented > button.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+/* ---------- 7) Table containers: calmer frame + empty state ---------- */
+.tableWrap {
+    border-radius: 10px;
+}
+
+    /* Empty state (CSS-only; Chrome supports :has; safe no-op elsewhere) */
+    .tableWrap:has(tbody:empty) {
+        min-height: 120px;
+        position: relative;
+    }
+
+        .tableWrap:has(tbody:empty)::after {
+            content: "Brak danych do wyświetlenia";
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            padding: 14px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+/* ---------- 8) Side panel: “internal tool” density & hierarchy ---------- */
+.globalSide .card.stickySide {
+    padding: 14px;
+}
+
+.sideMetric {
+    border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+}
+
+:root[data-theme="light"] .sideMetric {
+    background: rgba(15,23,42,0.02);
+    border-color: rgba(15,23,42,0.08);
+}
+
+.sideTableWrap,
+.sideList li {
+    border-radius: 14px;
+}
+
+.sideTable thead th {
+    background: var(--surface-3);
+}
+
+.sideList li:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+:root[data-theme="light"] .sideList li:hover {
+    background: rgba(15,23,42,0.03);
+}
+
+/* ---------- 9) Perceived performance: gentle skeleton hint for slow paints ----------
+   (Optional, purely visual; apply class .is-loading on body if you ever want.)
+*/
+body.is-loading .card {
+    opacity: 0.92;
+}
+
+body.is-loading .tableWrap {
+    position: relative;
+    overflow: hidden;
+}
+
+    body.is-loading .tableWrap::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient( 90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100% );
+        transform: translateX(-60%);
+        animation: shimmer 1.2s linear infinite;
+        pointer-events: none;
+    }
+
+:root[data-theme="light"] body.is-loading .tableWrap::before {
+    background: linear-gradient( 90deg, transparent 0%, rgba(15,23,42,0.05) 50%, transparent 100% );
+}
+
+@keyframes shimmer {
+    to {
+        transform: translateX(60%);
+    }
+}
+
+/* === Zebra fix for History table (pairs: main row + hidden detail row) === */
+/* Pattern repeats every 4 rows:
+   1: main, 2: detail, 3: main, 4: detail ...
+   So we stripe main rows by targeting 4n+1 and 4n+3.
+*/
+#historyTable tbody tr[data-hid]:nth-child(4n + 1) td {
+    background: transparent;
+}
+
+#historyTable tbody tr[data-hid]:nth-child(4n + 3) td {
+    background: var(--row-zebra);
+}
+
+/* Keep detail rows clean regardless of zebra */
+#historyTable tbody tr.historyDetailRow td {
+    background: transparent !important;
+}
+
+
+/* =========================
+   Sidebar: monitor-style panel (lighter, signal-first)
+   ========================= */
+
+.globalSide .card.stickySide{
+    padding: 12px;
+    box-shadow: none;
+}
+
+.globalSide .sideSection{
+    padding: 10px 2px;
+    gap: 8px;
+}
+
+.globalSide .sideSection + .sideSection{
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.globalSide .sideTitle{
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+/* Status block */
+.sideStatus{
+    display: grid;
+    gap: 10px;
+}
+
+.sideStatusTop{
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 10px;
+}
+
+.sideCounters{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.sideCounter{
+    padding: 10px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+}
+
+.sideCounterValue{
+    font-size: 1.15rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    margin-top: 4px;
+}
+
+/* Signals list (replaces table) */
+.sideSignals{
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.sideEmpty{
+    padding: 10px 10px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.015);
+}
+
+.sideSignalRow{
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    text-align: left;
+    cursor: pointer;
+}
+
+.sideSignalRow:hover{
+    background: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.10);
+}
+
+.sideSignalRow:active{
+    transform: translateY(1px);
+}
+
+.sideSignalRow:focus-visible{
+    outline: 2px solid rgba(255,255,255,0.22);
+    outline-offset: 2px;
+}
+
+.sigMain{
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.sigSku{
+    justify-self: start;
+}
+
+.sigName{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgba(255,255,255,0.82);
+    font-size: 0.9rem;
+}
+
+.sigMeta{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sigQty{
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Utilities section should be quiet */
+.sideUtilities .sideBtn{
+    width: 100%;
+}
+
+/* Light theme parity */
+:root[data-theme="light"] .globalSide .sideSection + .sideSection{
+    border-top-color: rgba(15,23,42,0.08);
+}
+:root[data-theme="light"] .sideCounter,
+:root[data-theme="light"] .sideSignalRow{
+    border-color: rgba(15,23,42,0.10);
+    background: rgba(15,23,42,0.02);
+}
+:root[data-theme="light"] .sideSignalRow:hover{
+    background: rgba(15,23,42,0.04);
+    border-color: rgba(15,23,42,0.14);
+}
+:root[data-theme="light"] .sigName{
+    color: rgba(15,23,42,0.78);
+}
+:root[data-theme="light"] .sideEmpty{
+    border-color: rgba(15,23,42,0.18);
+    background: rgba(15,23,42,0.015);
+}
+
+/* ========================================================================
+   LIGHT MODE UPGRADE (clean final)
+   - fixes: stickyHeader selector (matches your CSS)
+   - focus uses --accent / --accent-glow (no random blue)
+   - sidebar "glass" toned down (more enterprise, less demo)
+   - removed: light-only appShell gap tweak
+   - removed: globalSide divider line (::before)
+   Paste at END of style.css
+   ======================================================================== */
+
+:root[data-theme="light"] {
+    /* Base */
+    --bg: #f2f4f8;
+    --text: rgba(15,23,42,0.92);
+    --muted: rgba(15,23,42,0.62);
+    --label: rgba(15,23,42,0.78);
+    /* Planes (clear layers) */
+    --card-bg: #fbfcff;
+    --section-bg: rgba(15,23,42,0.028);
+    --surface-2: rgba(15,23,42,0.040);
+    --surface-3: rgba(15,23,42,0.060);
+    /* Lines */
+    --border: rgba(15,23,42,0.12);
+    --border-strong: rgba(15,23,42,0.18);
+    /* Tables */
+    --table-bg: rgba(15,23,42,0.032);
+    --thead-bg: rgba(15,23,42,0.060);
+    --row-hover: rgba(15,23,42,0.040);
+    /* Sticky header surface */
+    --stickyhead-bg: rgba(251,252,255,0.96);
+    /* Shadows: tiny, controlled */
+    --shadow: 0 10px 22px rgba(15,23,42,0.05);
+    --lift-ring: 0 1px 0 rgba(255,255,255,0.70), 0 0 0 1px rgba(15,23,42,0.06);
+    /* If you use these vars (you do in the polish pack) */
+    --cell-y: 9px;
+    --cell-x: 14px;
+}
+
+    /* Depth without heavy shadows */
+    :root[data-theme="light"] .card {
+        background: var(--card-bg);
+        border-color: var(--border);
+        box-shadow: var(--shadow), var(--lift-ring);
+    }
+
+    :root[data-theme="light"] .uiSection {
+        border-color: var(--border);
+        background: linear-gradient(to bottom, rgba(255,255,255,0.75), rgba(255,255,255,0.00)), var(--section-bg);
+    }
+
+    :root[data-theme="light"] .tableWrap {
+        border-color: var(--border-strong);
+        background: var(--table-bg);
+    }
+
+    /* Table header + hover readability */
+    :root[data-theme="light"] thead th {
+        background: var(--thead-bg);
+        color: rgba(15,23,42,0.62);
+        border-bottom: 1px solid rgba(15,23,42,0.10);
+    }
+
+    :root[data-theme="light"] tbody tr:hover td {
+        background: var(--row-hover) !important;
+    }
+
+    /* ✅ FIX: Your sticky header is .stickyHeader th (not .stickyHead / .tableStickyHead) */
+    :root[data-theme="light"] .stickyHeader th {
+        background: var(--stickyhead-bg);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid rgba(15,23,42,0.10);
+    }
+
+    /* Panel vs main separation: peripheral, instrument-like (toned down glass) */
+    :root[data-theme="light"] .globalSide .card.stickySide {
+        background: rgba(255,255,255,0.88);
+        border-color: rgba(15,23,42,0.14);
+        box-shadow: 0 6px 16px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.05);
+        backdrop-filter: blur(6px);
+    }
+
+    /* Status signaling (noticeable, controlled) */
+    :root[data-theme="light"] .stock-warn td:first-child {
+        box-shadow: inset 4px 0 0 rgba(217, 154, 0, 0.85);
+    }
+
+    :root[data-theme="light"] .stock-danger td:first-child {
+        box-shadow: inset 4px 0 0 rgba(220, 38, 38, 0.70);
+    }
+
+    /* Reduce full-row tint in light mode */
+    :root[data-theme="light"] .stock-warn td {
+        background: rgba(217, 154, 0, 0.06) !important;
+    }
+
+    :root[data-theme="light"] .stock-danger td {
+        background: rgba(220, 38, 38, 0.05) !important;
+    }
+
+    /* Pills: bordered, calm fills */
+    :root[data-theme="light"] .statusPill {
+        border-color: rgba(15,23,42,0.14);
+        background: rgba(255,255,255,0.65);
+    }
+
+        :root[data-theme="light"] .statusPill.warn {
+            color: rgba(146, 94, 0, 0.95);
+            border-color: rgba(217, 154, 0, 0.35);
+            background: rgba(217, 154, 0, 0.10);
+        }
+
+        :root[data-theme="light"] .statusPill.danger {
+            color: rgba(150, 20, 20, 0.95);
+            border-color: rgba(220, 38, 38, 0.28);
+            background: rgba(220, 38, 38, 0.10);
+        }
+
+        :root[data-theme="light"] .statusPill.ok {
+            color: rgba(20, 110, 70, 0.95);
+            border-color: rgba(16, 185, 129, 0.25);
+            background: rgba(16, 185, 129, 0.10);
+        }
+
+    /* Typography & density tweaks (light mode only) */
+    :root[data-theme="light"] table {
+        font-size: 0.94rem;
+    }
+
+    :root[data-theme="light"] label {
+        font-weight: 560;
+    }
+
+    :root[data-theme="light"] .muted {
+        color: rgba(15,23,42,0.58);
+    }
+
+    /* Inputs/controls: look like UI, not paper form */
+    :root[data-theme="light"] input,
+    :root[data-theme="light"] select,
+    :root[data-theme="light"] textarea {
+        background: rgba(255,255,255,0.88);
+        border-color: rgba(15,23,42,0.14);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.60) inset;
+    }
+
+        /* ✅ FIX: focus uses your accent tokens (no random blue) */
+        :root[data-theme="light"] input:focus,
+        :root[data-theme="light"] select:focus,
+        :root[data-theme="light"] textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow), 0 1px 0 rgba(255,255,255,0.60) inset;
+            outline: none;
+        }
+
+
+
+
+/* === History: produkcja → podgląd zużytych części per maszyna === */
+.badge.subtle{
+    opacity: 0.75;
+    border-color: var(--border);
+}
+.buildMachineTable tr.buildMachineDetailRow td{
+    padding: 0 !important;
+    background: transparent !important;
+    border-bottom: none;
+}
+.buildMachineTable tr.buildMachineDetailRow:hover td{
+    background: transparent !important;
+}
+
+.buildPartsDetails{
+    margin: 12px 12px 16px;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid rgba(124,92,255,0.30);
+    box-shadow: 0 0 0 6px rgba(124,92,255,0.08);
+    background: var(--section-bg);
+}
+
+:root[data-theme="light"] .buildPartsDetails{
+    border-color: rgba(109,92,255,0.26);
+    box-shadow: 0 0 0 6px rgba(109,92,255,0.06);
+}
+
+.buildPartsHeader{
+    display:flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.buildPartsMeta{
+    display:flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 14px;
+    text-align: right;
+}
+
+.buildPartsWrap{
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 12px;
+}
+
+.buildPartsWrap table tr:hover td{
+    background: transparent !important;
 }
