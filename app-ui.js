@@ -926,7 +926,7 @@ function refreshCatalogsUI() {
     // 3. SELECTS for machines
     renderSelectOptions(els.machineSelect, state.machineCatalog.map(m => m.code), c => {
         const m = state.machineCatalog.find(x => x.code === c);
-        return `${m.name} (${c})`;
+        return `${c} (${m.name})`;
     });
 
     // 4. SUPPLIER PICKER FOR NEW PART (multi-combobox, instead of inline checkboxes)
