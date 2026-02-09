@@ -1,80 +1,160 @@
+/* =========================================================
+   Magazyn PRO - Enterprise CSS
+   Clean, consolidated design system with clear tokens
+   ========================================================= */
+
+/* ---------- 0) Design Tokens (Single Source of Truth) ---------- */
 :root {
+    /* Core Colors - Dark Mode (Default) */
     --bg: #0b0f19;
-    --card-bg: rgba(20, 22, 28, 0.75);
-    --border: rgba(255, 255, 255, 0.12);
+    --card-bg: rgba(20, 22, 28, 0.85);
+    --border: rgba(255, 255, 255, 0.10);
     --text: rgba(255, 255, 255, 0.92);
-    --muted: rgba(255, 255, 255, 0.6);
+    --muted: rgba(255, 255, 255, 0.58);
+    --label: rgba(255, 255, 255, 0.78);
+    
+    /* Accent Colors */
     --accent: #7c5cff;
-    --accent-glow: rgba(124, 92, 255, 0.25);
+    --accent-glow: rgba(124, 92, 255, 0.22);
     --success: #21caa2;
     --danger: #ff6b6b;
     --warning: #ffc107;
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    --radius: 12px;
-    --font-ui: system-ui, -apple-system, sans-serif;
-    /* Animations */
-    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-    --trans-fast: 0.15s var(--ease);
-    --trans-med: 0.25s var(--ease);
-    --bg-grad-1: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.15), transparent 60%);
-    --bg-grad-2: radial-gradient(900px 500px at 90% 20%, rgba(33,202,162,0.12), transparent 55%);
-    --field-bg: rgba(0,0,0,0.20);
-    --table-bg: rgba(0,0,0,0.20);
-    --thead-bg: rgba(255,255,255,0.03);
-    --stickyhead-bg: #1a1d24;
-    --label: rgba(255,255,255,0.80);
-    --toast-bg: #1a1d24;
-    --modal-bg: #1a1d24;
-    --sideTitle: rgba(255,255,255,0.65);
-    /* Surfaces & interactive (theme-aware) */
+    
+    /* Surfaces */
     --surface-1: rgba(20, 22, 28, 0.96);
-    --surface-2: rgba(0,0,0,0.20);
-    --surface-3: rgba(0,0,0,0.30);
-    --row-hover: rgba(255,255,255,0.02);
-    --secondary-bg: rgba(255,255,255,0.05);
-    --secondary-hover: rgba(255,255,255,0.10);
-    --badge-bg: rgba(255,255,255,0.10);
-    --badge-border: rgba(255,255,255,0.14);
-    --section-bg: rgba(255,255,255,0.02);
+    --surface-2: rgba(0, 0, 0, 0.22);
+    --surface-3: rgba(0, 0, 0, 0.32);
+    --field-bg: rgba(0, 0, 0, 0.25);
+    --table-bg: rgba(0, 0, 0, 0.18);
+    --thead-bg: rgba(255, 255, 255, 0.03);
+    --stickyhead-bg: rgba(26, 29, 36, 0.98);
+    --section-bg: rgba(255, 255, 255, 0.02);
+    --row-hover: rgba(255, 255, 255, 0.025);
+    --row-zebra: rgba(255, 255, 255, 0.015);
+    --secondary-bg: rgba(255, 255, 255, 0.05);
+    --secondary-hover: rgba(255, 255, 255, 0.10);
+    --badge-bg: rgba(255, 255, 255, 0.08);
+    --badge-border: rgba(255, 255, 255, 0.12);
+    
+    /* Effects */
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.25);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-lg: 14px;
+    
+    /* Typography */
+    --font-ui: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    
+    /* Spacing System */
+    --space-1: 6px;
+    --space-2: 10px;
+    --space-3: 16px;
+    --space-4: 22px;
+    --cell-y: 10px;
+    --cell-x: 14px;
+    
+    /* Transitions */
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --trans-fast: 0.12s var(--ease);
+    --trans-med: 0.2s var(--ease);
+    
+    /* Focus Ring */
+    --focus-ring: 0 0 0 3px var(--accent-glow);
+    
+    /* Background Gradients */
+    --bg-grad-1: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.12), transparent 60%);
+    --bg-grad-2: radial-gradient(900px 500px at 90% 20%, rgba(33,202,162,0.08), transparent 55%);
 }
 
-/* --- Global Reset & Body --- */
+/* ---------- Light Mode ---------- */
+:root[data-theme="light"] {
+    --bg: #f1f4f9;
+    --card-bg: rgba(255, 255, 255, 0.92);
+    --border: rgba(15, 23, 42, 0.09);
+    --text: rgba(15, 23, 42, 0.90);
+    --muted: rgba(15, 23, 42, 0.55);
+    --label: rgba(15, 23, 42, 0.70);
+    
+    --accent: #5e4fd6;
+    --accent-glow: rgba(94, 79, 214, 0.18);
+    --success: #0d9f7c;
+    --danger: #dc2626;
+    --warning: #d97706;
+    
+    --surface-1: rgba(255, 255, 255, 0.98);
+    --surface-2: rgba(15, 23, 42, 0.04);
+    --surface-3: rgba(15, 23, 42, 0.06);
+    --field-bg: rgba(15, 23, 42, 0.04);
+    --table-bg: rgba(15, 23, 42, 0.025);
+    --thead-bg: rgba(15, 23, 42, 0.04);
+    --stickyhead-bg: rgba(255, 255, 255, 0.98);
+    --section-bg: rgba(15, 23, 42, 0.025);
+    --row-hover: rgba(15, 23, 42, 0.035);
+    --row-zebra: rgba(15, 23, 42, 0.02);
+    --secondary-bg: rgba(15, 23, 42, 0.05);
+    --secondary-hover: rgba(15, 23, 42, 0.09);
+    --badge-bg: rgba(94, 79, 214, 0.08);
+    --badge-border: rgba(94, 79, 214, 0.15);
+    
+    --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+    
+    --bg-grad-1: radial-gradient(1200px 600px at 10% 10%, rgba(94,79,214,0.06), transparent 60%);
+    --bg-grad-2: radial-gradient(900px 500px at 90% 20%, rgba(13,159,124,0.05), transparent 55%);
+}
+
+/* ---------- 1) Reset & Base ---------- */
 * {
     box-sizing: border-box;
 }
 
+html {
+    font-size: 16px;
+}
+
 body {
     margin: 0;
-    padding: 18px;
+    padding: var(--space-3);
     font-family: var(--font-ui);
     background: var(--bg-grad-1), var(--bg-grad-2), var(--bg);
     color: var(--text);
     min-height: 100vh;
-    color: var(--text);
-    color-scheme: dark; /* Wymusza ciemne paski przewijania i inputy */
+    line-height: 1.5;
+    color-scheme: dark;
 }
 
-/* --- Typography --- */
-h1, h2, h3 {
+:root[data-theme="light"] body {
+    color-scheme: light;
+}
+
+/* ---------- 2) Typography ---------- */
+h1, h2, h3, h4 {
     margin: 0;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
 }
 
 h1 {
-    font-size: 1.75rem;
-    margin-bottom: 6px;
+    font-size: 1.6rem;
+    margin-bottom: var(--space-2);
 }
 
 h2 {
-    font-size: 1.25rem;
-    margin-bottom: 12px;
+    font-size: 1.2rem;
+    margin-bottom: var(--space-2);
+}
+
+h3 {
+    font-size: 1rem;
+    margin-bottom: var(--space-2);
 }
 
 .subhead {
-    font-size: 1rem;
+    font-size: 0.92rem;
     color: var(--muted);
-    margin: 18px 0 10px;
+    margin: var(--space-3) 0 var(--space-2);
     font-weight: 600;
 }
 
@@ -90,18 +170,18 @@ h2 {
     color: var(--accent);
 }
 
-.text-right {
+.right {
     text-align: right;
 }
 
-/* --- Layout --- */
+/* ---------- 3) Layout ---------- */
 .appShell {
     max-width: 1520px;
     margin: 0 auto;
     padding-bottom: 40px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 420px);
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 380px);
+    gap: var(--space-3);
     align-items: start;
 }
 
@@ -115,13 +195,12 @@ h2 {
 
 .stickySide {
     position: sticky;
-    top: 18px;
+    top: var(--space-3);
 }
 
 @media (min-width: 1101px) {
-    /* Align right-side panel with the tabs line (not the big title block) */
     .globalSide {
-        padding-top: 92px;
+        padding-top: 88px;
     }
 }
 
@@ -129,7 +208,6 @@ h2 {
     .appShell {
         grid-template-columns: 1fr;
     }
-
     .stickySide {
         position: static;
     }
@@ -138,7 +216,7 @@ h2 {
 .grid2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: var(--space-3);
     align-items: start;
 }
 
@@ -151,7 +229,7 @@ h2 {
 .partsSplit {
     display: grid;
     grid-template-columns: 1fr 1.2fr;
-    gap: 16px;
+    gap: var(--space-3);
     align-items: start;
 }
 
@@ -161,51 +239,63 @@ h2 {
     }
 }
 
-/* --- Components: Card --- */
+/* Single column when one panel hidden */
+#partsSplit[data-view="compact"],
+#partsSplit[data-view="batches"] {
+    grid-template-columns: 1fr;
+}
+
+#partsSplit[data-view="compact"] .splitCol--batches,
+#partsSplit[data-view="batches"] .splitCol--compact {
+    display: none;
+}
+
+/* ---------- 4) Card Component ---------- */
 .card {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 20px;
+    padding: var(--space-4);
     box-shadow: var(--shadow);
-    backdrop-filter: blur(12px);
-    margin-bottom: 20px;
-    transition: transform var(--trans-med);
+    backdrop-filter: blur(10px);
+    margin-bottom: var(--space-3);
 }
 
 .cardHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: var(--space-3);
+    gap: var(--space-2);
 }
 
-/* --- Components: Forms --- */
+.cardHeader h2 {
+    margin-bottom: 0;
+}
+
+/* ---------- 5) Forms & Inputs ---------- */
 .row {
     display: grid;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
-    .row.items-end {
-        align-items: end;
-    }
-/* Grid dla formularzy - responsywny */
-.row {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+.row.items-end {
+    align-items: end;
 }
 
 label {
     display: grid;
-    gap: 6px;
-    font-size: 0.9rem;
+    gap: var(--space-1);
+    font-size: 0.88rem;
     font-weight: 500;
     color: var(--label);
 }
 
 input, select, button {
     font: inherit;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     outline: none;
 }
 
@@ -214,275 +304,273 @@ input, select {
     border: 1px solid var(--border);
     color: var(--text);
     padding: 10px 12px;
-    transition: border-color var(--trans-fast), box-shadow var(--trans-fast);
+    transition: border-color var(--trans-fast), box-shadow var(--trans-fast), background-color var(--trans-fast);
     width: 100%;
 }
 
-/* =========================================================
-   Combobox (single-select) + Native select hiding
-   ========================================================= */
-
-.comboNativeHidden{
-    position: absolute !important;
-    left: -10000px !important;
-    top: auto !important;
-    width: 1px !important;
-    height: 1px !important;
-    overflow: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-}
-
-.comboWrap{
-    position: relative;
-    width: 100%;
-}
-
-.comboCtl{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    background: var(--field-bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 12px;
-    border-radius: 8px;
-    min-height: 42px;
-    cursor: pointer;
-    user-select: none;
-    transition: border-color var(--trans-fast), box-shadow var(--trans-fast);
-}
-
-.comboCtl:focus-visible{
+input:focus-visible, select:focus-visible {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-    outline: none;
+    box-shadow: var(--focus-ring);
 }
 
-.comboCtl.isOpen{
-    border-color: var(--accent);
-}
-
-.comboCtl.isDisabled{
-    opacity: 0.65;
+input[readonly] {
+    opacity: 0.7;
     cursor: not-allowed;
 }
 
-.comboValue{
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* Invalid state */
+input:invalid, input[data-invalid="true"] {
+    border-color: var(--danger);
+    background: rgba(255, 107, 107, 0.05);
 }
 
-.comboPlaceholder{
-    color: var(--muted);
+input:invalid:focus-visible, input[data-invalid="true"]:focus-visible {
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
 }
 
-.comboCaret{
-    color: var(--muted);
-    font-size: 0.9rem;
+/* Date input styling */
+input[type="date"] {
+    font-family: inherit;
 }
 
-.comboMenu{
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 8px);
-    z-index: 999;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: var(--surface-1);
-    box-shadow: 0 14px 40px rgba(0,0,0,0.35);
-    overflow: hidden;
+/* Number input - hide spinner in Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
 }
 
-:root[data-theme="light"] .comboMenu{
-    box-shadow: 0 14px 40px rgba(15,23,42,0.14);
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
-.comboSearchWrap{
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-}
-
-.comboSearch{
-    width: 100%;
-}
-
-.comboOptions{
-    max-height: 240px;
-    overflow: auto;
-    padding: 6px;
-}
-
-.comboOpt{
-    padding: 8px 10px;
-    border-radius: 10px;
-    cursor: pointer;
-}
-
-.comboOpt:hover{
-    background: rgba(255,255,255,0.04);
-}
-
-:root[data-theme="light"] .comboOpt:hover{
-    background: rgba(15,23,42,0.04);
-}
-
-.comboEmpty{
-    padding: 10px 12px;
-    color: var(--muted);
-    font-size: 0.9rem;
-}
-
-    input:focus, select:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-
-/* --- Components: Buttons --- */
+/* ---------- 6) Buttons ---------- */
 button {
     cursor: pointer;
     font-weight: 600;
     border: 1px solid transparent;
     padding: 10px 16px;
-    transition: all var(--trans-fast);
+    transition: background-color var(--trans-fast), border-color var(--trans-fast), 
+                box-shadow var(--trans-fast), transform 100ms var(--ease), opacity var(--trans-fast);
+    position: relative;
+    overflow: hidden;
 }
 
-    button:active {
-        transform: translateY(1px);
-    }
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
 
-    button.primary {
-        background: linear-gradient(135deg, var(--accent), #5e42d6);
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(124,92,255,0.4);
-    }
+button:not(:disabled):active {
+    transform: translateY(1px);
+}
 
-        button.primary:hover:not(:disabled) {
-            filter: brightness(1.1);
-            transform: translateY(-1px);
-        }
+button:focus-visible {
+    box-shadow: var(--focus-ring);
+}
 
-        button.primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
+/* Loading state for buttons */
+button[data-busy="1"] {
+    pointer-events: none;
+    opacity: 0.7;
+}
 
-    button.secondary {
-        background: var(--secondary-bg);
-        border-color: var(--border);
-        color: var(--text);
-    }
+button[data-busy="1"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 1s infinite;
+}
 
-        button.secondary:hover {
-            background: var(--secondary-hover);
-        }
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
 
-    button.compact {
-        padding: 6px 12px;
-        font-size: 0.85rem;
-    }
+button.primary {
+    background: linear-gradient(135deg, var(--accent), #5e42d6);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(124, 92, 255, 0.35);
+}
 
-    button.success {
-        background: rgba(33,202,162,0.15);
-        color: #21caa2;
-        border-color: rgba(33,202,162,0.3);
-    }
+button.primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
 
-        button.success:hover {
-            background: rgba(33,202,162,0.25);
-        }
+button.primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
 
-    button.iconBtn {
-        padding: 4px 8px;
-        font-size: 0.8rem;
-        background: transparent;
-        color: var(--muted);
-        border: 1px solid var(--border);
-    }
+button.secondary {
+    background: var(--secondary-bg);
+    border-color: var(--border);
+    color: var(--text);
+}
 
-        button.iconBtn:hover {
-            color: var(--danger);
-            border-color: var(--danger);
-            background: rgba(255,107,107,0.1);
-        }
+button.secondary:hover:not(:disabled) {
+    background: var(--secondary-hover);
+}
 
-/* --- Components: Tables --- */
+button.success {
+    background: rgba(33, 202, 162, 0.12);
+    color: var(--success);
+    border-color: rgba(33, 202, 162, 0.40);
+}
+
+button.success:hover:not(:disabled) {
+    background: rgba(33, 202, 162, 0.20);
+    border-color: rgba(33, 202, 162, 0.55);
+}
+
+:root[data-theme="light"] button.success {
+    background: rgba(13, 159, 124, 0.10);
+    border-color: rgba(13, 159, 124, 0.35);
+}
+
+button.compact {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+button.iconBtn {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+button.iconBtn:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(255, 107, 107, 0.08);
+}
+
+/* ---------- 7) Tables ---------- */
 .tableWrap {
     overflow-x: auto;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--table-bg);
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 500px;
-    font-size: 0.95rem;
+    min-width: 480px;
+    font-size: 0.94rem;
 }
 
 th, td {
-    padding: 10px 14px;
+    padding: var(--cell-y) var(--cell-x);
     text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid var(--border);
 }
 
 th {
     background: var(--thead-bg);
     font-weight: 600;
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.right {
-    text-align: right;
+    letter-spacing: 0.06em;
 }
 
 tr:last-child td {
     border-bottom: none;
 }
 
-tr:hover td {
-    background: var(--row-hover);
+/* Zebra striping - subtle */
+table tbody tr:nth-child(even) td {
+    background: var(--row-zebra);
 }
 
+/* Hover - must override zebra */
+tr:hover td {
+    background: var(--row-hover) !important;
+}
+
+/* Sticky headers */
 .stickyHeader th {
     position: sticky;
     top: 0;
     z-index: 2;
     background: var(--stickyhead-bg);
+    backdrop-filter: blur(6px);
 }
 
-/* Status Rows */
-.stock-warn td {
-    background: rgba(255, 193, 7, 0.1) !important;
-    color: #ffca2c;
-}
-
-.stock-danger td {
-    background: rgba(255, 107, 107, 0.1) !important;
-    color: #ff8787;
-}
-
-/* Dodatek: wąskie tabele (dla małej liczby kolumn) */
+/* Tight tables */
 table.tightTable {
     min-width: auto;
 }
 
-/* --- Components: Tabs --- */
+/* Tabular numbers for alignment */
+.right, .metricValue, .historyMoney, td.right {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 8) Status Rows (Stock Levels) ---------- */
+.stock-warn td:first-child,
+.stock-danger td:first-child {
+    position: relative;
+}
+
+.stock-warn td:first-child::before,
+.stock-danger td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.stock-warn td:first-child::before {
+    background: var(--warning);
+}
+
+.stock-danger td:first-child::before {
+    background: var(--danger);
+}
+
+.stock-warn td {
+    background: rgba(255, 193, 7, 0.05) !important;
+}
+
+.stock-danger td {
+    background: rgba(255, 107, 107, 0.05) !important;
+}
+
+:root[data-theme="light"] .stock-warn td {
+    background: rgba(217, 119, 6, 0.04) !important;
+}
+
+:root[data-theme="light"] .stock-danger td {
+    background: rgba(220, 38, 38, 0.04) !important;
+}
+
+.stock-warn .badge,
+.stock-danger .badge {
+    border: 1px solid var(--border);
+}
+
+/* Status indicators in tables */
+.stock-warn:hover td,
+.stock-danger:hover td {
+    filter: brightness(1.05);
+}
+
+/* ---------- 9) Tabs ---------- */
 .tabsBar {
     display: flex;
-    gap: 8px;
-    margin: 20px 0;
-    padding-bottom: 8px;
+    gap: var(--space-2);
+    margin: var(--space-3) 0;
+    padding-bottom: var(--space-2);
     overflow-x: auto;
     border-bottom: 1px solid var(--border);
 }
@@ -491,53 +579,65 @@ table.tightTable {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    padding: 4px 6px;
+    border-radius: var(--radius);
 }
 
 .tabGroupLabel {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     color: var(--muted);
     padding-left: 8px;
+    letter-spacing: 0.05em;
 }
 
 .tabGroupButtons {
     display: flex;
-    gap: 8px;
+    gap: 6px;
 }
 
 .tabDivider {
     width: 1px;
     background: var(--border);
     margin: 0 8px;
+    opacity: 0.7;
 }
 
 .tabBtn {
     background: transparent;
     border: 1px solid transparent;
     color: var(--muted);
-    border-radius: 20px;
-    padding: 8px 16px;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
 }
 
-    .tabBtn:hover {
-        color: #fff;
-        background: var(--secondary-bg);
-    }
+.tabBtn:hover:not(.active) {
+    color: var(--text);
+    background: var(--secondary-bg);
+}
 
-    .tabBtn.active {
-        background: var(--accent);
-        color: #fff;
-        box-shadow: 0 4px 15px var(--accent-glow);
-    }
+.tabBtn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--accent-glow);
+}
 
-/* --- Components: Badges & Chips --- */
+/* Active group highlight */
+.tabGroup:has(.tabBtn.active) {
+    background: var(--section-bg);
+    border: 1px solid var(--border);
+}
+
+/* ---------- 10) Badges & Chips ---------- */
 .badge {
     display: inline-block;
     padding: 2px 8px;
-    border-radius: 4px;
-    background: var(--secondary-hover);
+    border-radius: var(--radius-sm);
+    background: var(--badge-bg);
+    border: 1px solid var(--badge-border);
     font-size: 0.8rem;
-    font-family: monospace;
+    font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
 .supplierChips {
@@ -548,37 +648,45 @@ table.tightTable {
 }
 
 .supplierChip {
-    background: rgba(33,202,162,0.15);
-    border: 1px solid rgba(33,202,162,0.3);
-    color: #21caa2;
+    background: rgba(33, 202, 162, 0.12);
+    border: 1px solid rgba(33, 202, 162, 0.30);
+    color: var(--success);
     padding: 4px 10px;
-    border-radius: 20px;
+    border-radius: 999px;
     font-size: 0.8rem;
     cursor: pointer;
 }
 
-    .supplierChip:hover {
-        background: rgba(255,107,107,0.15);
-        color: var(--danger);
-        border-color: var(--danger);
-    }
+.supplierChip:hover {
+    background: rgba(255, 107, 107, 0.12);
+    color: var(--danger);
+    border-color: var(--danger);
+}
 
-/* --- Components: UI Sections (Grouping) --- */
+/* ---------- 11) UI Sections ---------- */
 .uiSection {
     background: var(--section-bg);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 16px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.uiSection.listSection {
+    background: var(--surface-2);
+}
+
+.uiSection.listSection .tableWrap {
+    background: var(--table-bg);
 }
 
 .uiSectionHead {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-2);
     border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
+    padding-bottom: var(--space-2);
 }
 
 .uiHint {
@@ -586,102 +694,186 @@ table.tightTable {
     color: var(--muted);
 }
 
-/* --- Components: Custom Dropdowns (Picker) --- */
-.supplierPicker {
-    position: relative;
-}
-
-.supplierDropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: var(--stickyhead-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 100;
-    box-shadow: var(--shadow);
-    padding: 4px;
-    margin-top: 4px;
-}
-
-.supplierOption {
-    padding: 8px;
-    width: 100%;
-    text-align: left;
-    background: transparent;
-    border: none;
-    color: var(--text);
+/* ---------- 12) Toolbar & Segmented Controls ---------- */
+.toolbar {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: center;
-    border-radius: 4px;
+    margin: var(--space-2) 0 var(--space-3);
+    flex-wrap: wrap;
 }
 
-    .supplierOption:hover {
-        background: var(--secondary-bg);
-    }
+.toolbar input {
+    flex: 1 1 auto;
+    min-width: 200px;
+    max-width: 400px;
+}
 
-    .supplierOption .tick {
-        width: 16px;
-        color: var(--success);
-        font-weight: bold;
-    }
+.toolbarRight {
+    display: flex;
+    gap: var(--space-2);
+}
 
-/* --- Components: Editor Panel (Inline) --- */
+.segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    background: var(--secondary-bg);
+    border-radius: 999px;
+    padding: 2px;
+    gap: 2px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.segmented > button {
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 6px 14px;
+}
+
+.segmented > button.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 14px var(--accent-glow);
+}
+
+/* ---------- 13) Thresholds Panel ---------- */
+.thresholds.slidePanel {
+    overflow: hidden;
+    max-height: 300px;
+    transition: max-height 0.3s var(--ease), opacity 0.3s var(--ease), padding 0.3s var(--ease);
+    margin-bottom: var(--space-2);
+    opacity: 1;
+}
+
+.thresholds.slidePanel.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.thresholds.slidePanel.collapsed * {
+    pointer-events: none;
+}
+
+.thresholdRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+}
+
+.thresholdRow label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 220px;
+    font-weight: 500;
+}
+
+.thresholdRow input[type="range"] {
+    flex: 1;
+    max-width: 300px;
+    cursor: pointer;
+}
+
+.thresholdRow .value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    text-align: right;
+    color: var(--accent);
+}
+
+/* ---------- 14) Delivery & Build Actions ---------- */
+.deliveryActions {
+    margin-top: var(--space-3);
+    background: var(--surface-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.deliveryActions .summary {
+    margin-bottom: var(--space-2);
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.05rem;
+}
+
+.summaryRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2);
+    background: var(--thead-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.missingBox {
+    background: rgba(255, 107, 107, 0.08);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    margin-top: var(--space-2);
+}
+
+.missingBox ul {
+    margin: var(--space-2) 0 0;
+    padding-left: 20px;
+}
+
+.missingBox li {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+:root[data-theme="light"] .missingBox {
+    background: rgba(220, 38, 38, 0.05);
+    border-color: rgba(220, 38, 38, 0.25);
+}
+
+.infoBox {
+    background: rgba(124, 92, 255, 0.08);
+    border-color: rgba(124, 92, 255, 0.25);
+    color: var(--text);
+}
+
+/* ---------- 15) Editor Panels ---------- */
 .editorPanel {
     border-color: var(--accent);
-    background: rgba(124,92,255,0.03);
-    animation: slideDown 0.2s ease;
+    background: rgba(124, 92, 255, 0.03);
+}
+
+.editorPanel {
+    animation: slideDown 0.25s var(--ease);
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
+    from { 
+        opacity: 0; 
+        transform: translateY(-12px);
+        max-height: 0;
     }
-
-    to {
-        opacity: 1;
+    to { 
+        opacity: 1; 
         transform: translateY(0);
+        max-height: 2000px;
     }
 }
 
 .editorActions {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-top: 14px;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
 }
 
-/* --- Summary & Totals --- */
-.summaryRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
-    background: var(--thead-bg);
-    border-bottom: 1px solid var(--border);
-}
-
-.deliveryActions {
-    margin-top: 16px;
-    background: var(--surface-3);
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-}
-
-    .deliveryActions .summary {
-        margin-bottom: 12px;
-        display: flex;
-        justify-content: space-between;
-        font-size: 1.1rem;
-    }
-
-/* --- Notifications & Modal --- */
+/* ---------- 16) Notifications (Toast) ---------- */
 .toastHost {
     position: fixed;
     bottom: 20px;
@@ -690,36 +882,62 @@ table.tightTable {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    max-width: 400px;
 }
 
 .toast {
     background: var(--stickyhead-bg);
     border-left: 4px solid var(--success);
-    color: #fff;
-    padding: 12px 16px;
-    border-radius: 4px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-    min-width: 250px;
-    transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    color: var(--text);
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+    min-width: 280px;
+    max-width: 400px;
+    transform: translateX(120%);
+    transition: transform 0.3s var(--ease), opacity 0.3s var(--ease);
+    backdrop-filter: blur(8px);
 }
 
-    .toast.show {
-        transform: translateX(0);
-    }
+.toast.show {
+    transform: translateX(0);
+}
 
-    .toast.warn {
-        border-color: var(--warning);
-    }
+.toast.warn {
+    border-color: var(--warning);
+    background: rgba(255, 193, 7, 0.08);
+}
 
-    .toast.bad {
-        border-color: var(--danger);
-    }
+:root[data-theme="light"] .toast.warn {
+    background: rgba(255, 193, 7, 0.05);
+}
 
+.toast.bad {
+    border-color: var(--danger);
+    background: rgba(255, 107, 107, 0.08);
+}
+
+:root[data-theme="light"] .toast.bad {
+    background: rgba(220, 38, 38, 0.05);
+}
+
+/* Toast content */
+.toast > div:first-child {
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+}
+
+.toast > div:last-child {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    line-height: 1.4;
+}
+
+/* ---------- 17) Modal ---------- */
 .modalBackdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(4px);
     z-index: 10000;
     display: flex;
@@ -730,19 +948,19 @@ table.tightTable {
     transition: opacity 0.2s;
 }
 
-    .modalBackdrop.show {
-        opacity: 1;
-        pointer-events: auto;
-    }
+.modalBackdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
 
 .modal {
     background: var(--stickyhead-bg);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px;
+    border-radius: var(--radius);
+    padding: var(--space-4);
     max-width: 450px;
     width: 90%;
-    transform: scale(0.95);
+    transform: scale(0.96);
     transition: transform 0.2s;
     box-shadow: var(--shadow);
 }
@@ -754,136 +972,240 @@ table.tightTable {
 .modalActions {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
 }
 
-/* --- Helper Classes --- */
-.divider {
-    border: 0;
-    height: 1px;
-    background: var(--border);
-    margin: 20px 0;
+/* ---------- 18) Side Panel ---------- */
+.globalSide .card.stickySide {
+    padding: var(--space-3);
 }
 
-.missingBox {
-    background: rgba(255, 107, 107, 0.1);
-    border: 1px solid rgba(255, 107, 107, 0.3);
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 12px;
-    color: #ffadad;
+.globalSide .cardHeader {
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
 }
 
-.infoBox {
-    background: rgba(124, 92, 255, 0.1);
-    border-color: rgba(124, 92, 255, 0.3);
-    color: var(--text);
+.globalSide .cardHeader h2 {
+    font-size: 1.05rem;
 }
 
-.manualConsumeGrid {
+.sideSection {
     display: grid;
-    gap: 12px;
-    margin-top: 10px;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
 }
 
-.consumePart {
-    background: var(--surface-3);
-    padding: 10px;
-    border-radius: 8px;
+.sideSection + .sideSection {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
 }
 
-.lotRow {
-    display: flex;
-    justify-content: space-between;
+.sideTitle {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 650;
+}
+
+/* Status Block */
+.sideStatus {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.sideStatusTop {
+    display: grid;
+    grid-template-columns: auto 1fr;
     align-items: center;
-    margin-top: 6px;
+    gap: var(--space-2);
+}
+
+.sideCounters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+}
+
+.sideCounter {
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.sideCounterValue {
+    font-size: 1.4rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Metric Tile */
+.sideMetric {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 6px 10px;
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.metricLabel {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.metricValue {
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+/* Status Pills */
+.statusPill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.statusPill.ok {
+    color: var(--success);
+    border-color: rgba(33, 202, 162, 0.35);
+    background: rgba(33, 202, 162, 0.08);
+}
+
+.statusPill.warn {
+    color: var(--warning);
+    border-color: rgba(255, 193, 7, 0.35);
+    background: rgba(255, 193, 7, 0.08);
+}
+
+.statusPill.danger {
+    color: var(--danger);
+    border-color: rgba(255, 107, 107, 0.35);
+    background: rgba(255, 107, 107, 0.08);
+}
+
+/* Signal Rows */
+.sideSignals {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.sideSignalRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+}
+
+.sideSignalRow:hover {
+    background: var(--row-hover);
+    border-color: var(--accent);
+}
+
+.sigMain {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.sigSku {
+    flex-shrink: 0;
+}
+
+.sigName {
+    color: var(--muted);
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sigMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.sigQty {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+    text-align: right;
+}
+
+/* Recent Actions List */
+.sideList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--space-1);
+}
+
+.sideList li {
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.sideActionRow {
+    display: grid;
+    gap: 4px;
+}
+
+.sideActionTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.sideActionMeta {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.sideDate {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
     font-size: 0.85rem;
 }
 
-    .lotRow input {
-        width: 70px;
-        text-align: right;
-        padding: 4px;
-    }
-
-
-/* Readonly inputs look intentionally disabled but still consistent */
-input[readonly] {
-    opacity: 0.75;
-    cursor: not-allowed;
+/* ---------- 19) History ---------- */
+.historyToolbar {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
 }
 
-
-.iconBtn.primary:hover {
-    filter: brightness(1.05);
+.historyToolbar input {
+    min-width: 180px;
 }
 
-
-/* === Globalny panel boczny === */
-.sideSection {
-    display: grid;
-    gap: 10px;
-    padding-top: 8px;
-}
-
-    .sideSection + .sideSection {
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid var(--border);
-    }
-
-.sideTitle {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--sideTitle);
-}
-
-.sideBtn {
-    width: 100%;
-    justify-content: center;
-}
-
-
-/* === LIGHT MODE — calm, enterprise, long-use === */
-:root[data-theme="light"] {
-    --bg: #f3f5fb;
-    --card-bg: #f9faff;
-    --border: rgba(15, 23, 42, 0.10);
-    --text: rgba(15, 23, 42, 0.92);
-    --muted: rgba(15, 23, 42, 0.60);
-    --label: rgba(15, 23, 42, 0.75);
-    --accent: #6d5cff;
-    --accent-glow: rgba(109, 92, 255, 0.18);
-    /* zero ciężkich cieni */
-    --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-    --bg-grad-1: radial-gradient( 1200px 600px at 12% 10%, rgba(109,92,255,0.08), transparent 65% );
-    --bg-grad-2: radial-gradient( 900px 500px at 88% 20%, rgba(33,202,162,0.06), transparent 60% );
-    --field-bg: rgba(15,23,42,0.035);
-    --table-bg: rgba(15,23,42,0.03);
-    --thead-bg: rgba(15,23,42,0.045);
-    --stickyhead-bg: rgba(249,250,255,0.98);
-    --surface-1: rgba(249,250,255,0.98);
-    --surface-2: rgba(15,23,42,0.03);
-    --surface-3: rgba(15,23,42,0.05);
-    --row-hover: rgba(15,23,42,0.03);
-    --secondary-bg: rgba(15,23,42,0.04);
-    --secondary-hover: rgba(15,23,42,0.07);
-    --badge-bg: rgba(109,92,255,0.10);
-    --badge-border: rgba(109,92,255,0.18);
-    --section-bg: rgba(15,23,42,0.02);
-    --toast-bg: rgba(249,250,255,0.98);
-    --modal-bg: rgba(249,250,255,0.98);
-    --sideTitle: rgba(15,23,42,0.55);
-}
-
-    :root[data-theme="light"] body {
-        color-scheme: light;
-    }
-
-
-/* --- History (Ostatnie akcje) --- */
 .historyType {
     display: inline-flex;
     align-items: center;
@@ -899,58 +1221,55 @@ input[readonly] {
     border-radius: 999px;
     border: 1px solid var(--border);
     background: var(--secondary-bg);
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: var(--text);
     white-space: nowrap;
 }
 
-    .historyPill.delivery {
-        border-color: rgba(33,202,162,0.35);
-        background: rgba(33,202,162,0.10);
-        color: var(--success);
-    }
+.historyPill.delivery {
+    border-color: rgba(33, 202, 162, 0.35);
+    background: rgba(33, 202, 162, 0.10);
+    color: var(--success);
+}
 
-    .historyPill.build {
-        border-color: rgba(124,92,255,0.35);
-        background: rgba(124,92,255,0.10);
-        color: var(--accent);
-    }
+.historyPill.build {
+    border-color: rgba(124, 92, 255, 0.35);
+    background: rgba(124, 92, 255, 0.10);
+    color: var(--accent);
+}
 
 .historyPreviewBtn {
-    min-width: 96px;
+    min-width: 90px;
 }
 
-tr.historyDetailRow td {
-    padding: 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+/* History Detail Rows */
+.historyDetailRow td {
+    padding: 0 !important;
+    background: transparent !important;
 }
 
-:root[data-theme="light"] tr.historyDetailRow td {
-    border-bottom: 1px solid rgba(15,23,42,0.08);
+.historyDetailRow:hover td {
+    background: transparent !important;
 }
 
 .historyDetails {
     background: var(--section-bg);
-    border-top: 1px solid var(--border);
-    padding: 14px 14px 16px;
+    border: 2px solid rgba(124, 92, 255, 0.30);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 5px rgba(124, 92, 255, 0.08);
+    padding: var(--space-3);
+    margin: var(--space-2);
     animation: historyDrop 0.18s var(--ease);
 }
 
 @keyframes historyDrop {
-    from {
-        opacity: 0;
-        transform: translateY(-6px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .historyGrid {
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
 }
 
 .historyMeta {
@@ -960,749 +1279,454 @@ tr.historyDetailRow td {
     align-items: center;
 }
 
-    .historyMeta .muted {
-        margin: 0;
-    }
-
 .historyList {
     margin: 0;
     padding-left: 18px;
 }
 
-    .historyList li {
-        margin: 6px 0;
-    }
-
-.historyMoney {
-    font-variant-numeric: tabular-nums;
+.historyList li {
+    margin: 6px 0;
 }
 
+/* Fix zebra for history table (pairs: main + detail) */
+#historyTable tbody tr[data-hid]:nth-child(4n + 3) td {
+    background: var(--row-zebra);
+}
 
-/* === History preview v3: mniej ciasno, brak hover, ramka jak panele === */
+#historyTable tbody tr.historyDetailRow td {
+    background: transparent !important;
+}
 
-/* większy "panel" */
-tr.historyDetailRow td {
+/* Build parts in history */
+.buildMachineRow {
+    background: transparent;
+}
+
+.buildMachineDetailRow td {
     padding: 0 !important;
-    background: transparent !important;
 }
 
-tr.historyDetailRow:hover td {
-    background: transparent !important;
+.buildPartsDetails {
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
 }
 
-/* sam kontener podglądu */
-.historyDetails {
-    padding: 24px 24px 26px !important;
-    margin: 16px 16px 18px !important;
-    border-radius: 14px !important;
-    /* ramka + ring jak w innych wysuwanych panelach */
-    border: 2px solid rgba(124,92,255,0.38) !important;
-    box-shadow: 0 0 0 6px rgba(124,92,255,0.10) !important;
-}
-
-:root[data-theme="light"] .historyDetails {
-    border-color: rgba(109,92,255,0.32) !important;
-    box-shadow: 0 0 0 6px rgba(109,92,255,0.08) !important;
-}
-
-/* Więcej oddechu w sekcjach i tabelach w środku */
-.historyDetails .uiSection {
-    padding: 18px !important;
-    border-radius: 12px !important;
-}
-
-.historyDetails .tableWrap {
-    margin: 0 !important;
-    padding: 10px !important;
-    border-radius: 12px !important;
-}
-
-/* większe paddingi w tabelach szczegółów */
-.historyDetails table.tightTable th,
-.historyDetails table.tightTable td {
-    padding: 14px 16px !important;
-}
-
-/* === Najważniejsze: wyłącz hover highlight w podglądzie (różne selektory, różna specyficzność) === */
-.historyDetails table tr:hover td,
-.historyDetails table tbody tr:hover td,
-.historyDetails table.tightTable tr:hover td,
-.historyDetails table.tightTable tbody tr:hover td,
-.historyDetails .tableWrap tr:hover td {
-    background: transparent !important;
-}
-
-/* jeśli ktoś ma globalne podświetlanie całego wiersza */
-.historyDetails table tr:hover {
-    background: transparent !important;
-}
-
-/* === Thresholds toggle (Magazyn Części) === */
-/* Minimal: only hide/show with smooth height, no layout refactor */
-.thresholds.slidePanel {
-    overflow: hidden;
-    max-height: 280px;
-    transition: max-height var(--trans-med), opacity var(--trans-med);
-}
-
-    .thresholds.slidePanel.collapsed {
-        max-height: 0;
-        opacity: 0;
-    }
-
-        /* avoid accidental focus outline gaps when collapsed */
-        .thresholds.slidePanel.collapsed * {
-            pointer-events: none;
-        }
-
-/* =========================================================
-   UI/UX Selected Improvements Patch
-   Implements: #3, #6, #7, #8, #9, #10, #12
-   Paste at END of style.css
-   ========================================================= */
-
-/* === #3 Typography hierarchy polish (H2 screen, H3 section, .subhead context) === */
-h2 {
-    font-size: 1.3rem;
-    line-height: 1.2;
-    margin-bottom: 10px;
-}
-
-h3 {
-    font-size: 1.05rem;
-    line-height: 1.25;
-}
-
-.subhead {
-    font-size: 0.95rem;
-    line-height: 1.25;
-    margin: 16px 0 10px;
-    font-weight: 650;
-}
-
-/* Prevent double spacing when H2 sits inside cardHeader */
-.cardHeader h2 {
-    margin-bottom: 0;
-}
-
-/* UI section headers should feel like “section”, not “page title” */
-.uiSectionHead h3 {
-    font-size: 1rem;
-}
-
-
-/* === #6 Form vs List separation (calm, no new layout) === */
-.uiSection {
-    background: var(--section-bg);
-}
-
-    .uiSection.listSection {
-        background: var(--surface-2);
-    }
-
-        .uiSection.listSection .tableWrap {
-            background: var(--table-bg);
-        }
-
-
-/* === #7 Button clarity: secondary vs success === */
-button.secondary {
-    background: var(--secondary-bg);
-    border-color: var(--border);
-    color: var(--text);
-}
-
-    button.secondary:hover:not(:disabled) {
-        background: var(--secondary-hover);
-    }
-
-/* Success: more clearly affirmative, still enterprise-calm */
-button.success {
-    background: rgba(33,202,162,0.12);
-    color: var(--success);
-    border-color: rgba(33,202,162,0.45);
-    box-shadow: 0 0 0 0 rgba(33,202,162,0);
-}
-
-    button.success:hover:not(:disabled) {
-        background: rgba(33,202,162,0.20);
-        border-color: rgba(33,202,162,0.60);
-    }
-
-:root[data-theme="light"] button.success {
-    background: rgba(33,202,162,0.10);
-    border-color: rgba(33,202,162,0.38);
-}
-
-
-/* === #8 Tabs: stronger grouping with minimal styling === */
-.tabGroup {
-    padding: 4px 6px;
-    border-radius: 12px;
-}
-
-.tabGroupButtons {
-    padding: 2px;
-    border-radius: 999px;
-}
-
-/* Modern Chrome supports :has(); if not, this simply won't apply (safe fallback) */
-.tabGroup:has(.tabBtn.active) {
-    background: var(--section-bg);
-    border: 1px solid var(--border);
-}
-
-.tabDivider {
-    opacity: 0.8;
-}
-
-
-/* === #9 Side panel: clearer hierarchy, still calm === */
-.globalSide .cardHeader {
-    padding-bottom: 10px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-}
-
-    .globalSide .cardHeader h2 {
-        font-size: 1.1rem;
-    }
-
-.sideTitle {
-    color: var(--sideTitle);
-    font-weight: 650;
-}
-
-.sideSection {
-    gap: 10px;
-}
-
-
-/* === #10 Spacing rhythm: more predictable vertical flow === */
-.cardHeader {
-    margin-bottom: 16px;
-}
-
-.toolbar {
-    margin: 12px 0 16px;
-}
-
-.row {
-    margin-bottom: 16px;
-}
-
-.uiSection {
-    margin-bottom: 18px;
-}
-
-.partsSplit {
-    gap: 18px;
-}
-
-.deliveryActions {
-    margin-top: 18px;
-}
-
-
-/* === #12 Empty states for tables (CSS-only, no JS) === */
-.tableWrap {
-    position: relative;
-}
-
-    /* When tbody is empty, show a subtle message */
-    .tableWrap:has(tbody:empty) {
-        min-height: 120px;
-    }
-
-        /* Overlay message */
-        .tableWrap:has(tbody:empty)::after {
-            content: "Brak danych do wyświetlenia";
-            position: absolute;
-            inset: 0;
-            display: grid;
-            place-items: center;
-            padding: 14px;
-            color: var(--muted);
-            font-size: 0.9rem;
-            pointer-events: none;
-        }
-
-        /* Keep header visible; avoid harsh contrast with overlay */
-        .tableWrap:has(tbody:empty) table {
-            opacity: 0.98;
-        }
-
-/* --- Parts view toggle (Podsumowanie / Szczegóły) --- */
-.partsToolbar {
+.buildPartsHeader {
     display: flex;
-    gap: 12px;
+    justify-content: space-between;
     align-items: center;
+    margin-bottom: var(--space-2);
+    flex-wrap: wrap;
+    gap: var(--space-2);
 }
 
-    .partsToolbar input {
-        flex: 1 1 auto;
-        min-width: 220px;
-    }
+.buildPartsMeta {
+    text-align: right;
+}
 
-/* segmented control */
-.segmented {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    background: var(--secondary-bg);
-    border-radius: 999px;
-    padding: 2px;
+.buildPartsWrap {
+    margin-top: var(--space-2);
+}
+
+.buildPartsSummary {
+    margin-bottom: var(--space-2);
+}
+
+/* ---------- 20) Batch Groups (Parts View) ---------- */
+.batchGroupRow {
+    font-weight: 500;
+}
+
+.batchMain {
+    display: grid;
     gap: 2px;
-    flex: 0 0 auto;
 }
 
-    .segmented > button {
-        border-radius: 999px;
-        border: 1px solid transparent;
-        background: transparent;
-    }
-
-        .segmented > button.active {
-            background: var(--accent);
-            color: #fff;
-            box-shadow: 0 4px 14px var(--accent-glow);
-        }
-
-/* Only one table visible at a time */
-#partsSplit[data-view="compact"] .splitCol--batches {
-    display: none;
+.batchTop {
+    display: flex;
+    gap: var(--space-1);
+    align-items: baseline;
 }
 
-#partsSplit[data-view="batches"] .splitCol--compact {
-    display: none;
-}
-
-.batchGroupRow .batchMeta {
+.batchMeta {
     margin-top: 2px;
 }
 
-.batchGroupRow .batchTop {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-}
-
-.batchDetailRow .batchDetailIndent {
-    padding-left: 18px;
-}
-
-.batchDetailRow td {
-    opacity: 0.95;
-}
-
-.batchDetailRow .badge {
-    transform: scale(0.95);
-    transform-origin: left center;
-}
-
-/* === FIX: Parts split should become single-column when one panel is hidden === */
-#partsSplit[data-view="compact"],
-#partsSplit[data-view="batches"] {
-    grid-template-columns: 1fr !important;
-}
-
-/* (opcjonalnie) większy “oddech” tabel w magazynie */
-#partsSplit .tableWrap {
-    width: 100%;
-}
-
-/* ===== Sidebar polish ===== */
-.globalSide .card.stickySide {
-    padding: 14px;
-}
-
-.globalSide .sideSection {
-    padding: 12px 0;
-}
-
-    .globalSide .sideSection + .sideSection {
-        border-top: 1px solid rgba(255,255,255,0.08);
-    }
-
-.globalSide .sideTitle {
-    font-size: 0.78rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 10px;
-}
-
-/* KPI tile */
-.sideMetric {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: end;
-    gap: 6px 10px;
-    padding: 10px 10px;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.06);
-}
-
-    .sideMetric .metricLabel {
-        font-size: 0.82rem;
-        color: var(--muted);
-    }
-
-    .sideMetric .metricValue {
-        font-size: 1.3rem;
-        font-weight: 800;
-        font-variant-numeric: tabular-nums;
-    }
-
-/* Top 5 table */
-.sideTableWrap {
-    margin-top: 10px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02);
-}
-
-.sideTable {
-    width: 100%;
-    border-collapse: collapse;
+.batchDetailRow {
     font-size: 0.9rem;
 }
 
-    .sideTable thead th {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-        padding: 10px 10px;
-        background: rgba(0,0,0,0.2);
-    }
+.batchDetailRow td {
+    opacity: 0.92;
+}
 
-    .sideTable tbody td {
-        padding: 10px 10px;
-        border-top: 1px solid rgba(255,255,255,0.06);
-        vertical-align: middle;
-    }
+.batchDetailIndent {
+    padding-left: 18px;
+}
 
-    .sideTable .right {
-        text-align: right;
-    }
-
-.sidePartCell {
+/* ---------- 21) Manual Consume (Production) ---------- */
+.manualConsumeGrid {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 6px 8px;
-    align-items: baseline;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
 }
 
-.sidePartSku {
-    font-variant-numeric: tabular-nums;
+.consumePart {
+    background: var(--surface-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
 }
 
-.sidePartName {
-    color: var(--muted);
-    font-size: 0.86rem;
+.consumePart > div:first-child {
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
 }
 
-.sideQty {
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Status pills */
-.statusPill {
-    display: inline-flex;
+.lotRow {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    border: 1px solid rgba(255,255,255,0.10);
-    background: rgba(255,255,255,0.04);
+    margin-top: 8px;
+    font-size: 0.85rem;
+    gap: var(--space-2);
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
 }
 
-    .statusPill.ok {
-        color: rgba(190,255,210,0.95);
-    }
-
-    .statusPill.warn {
-        color: rgba(255,230,160,0.95);
-    }
-
-    .statusPill.danger {
-        color: rgba(255,170,170,0.95);
-    }
-
-/* subtle hover */
-.sideTable tbody tr:hover td {
-    background: rgba(255,255,255,0.03);
+.lotRow:hover {
+    background: var(--row-hover);
 }
 
-/* Recent actions list */
-.sideList {
-    list-style: none;
-    padding: 0;
-    margin: 10px 0 0;
-    display: grid;
-    gap: 8px;
+.lotRow input {
+    width: 90px;
+    text-align: right;
+    padding: 8px 10px;
+    font-variant-numeric: tabular-nums;
 }
 
-    .sideList li {
-        padding: 10px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.06);
-        background: rgba(255,255,255,0.02);
-    }
-
-.sideActionRow {
-    display: grid;
-    gap: 6px;
+.lotRow input:focus {
+    background: var(--surface-1);
 }
 
-.sideActionTop {
+/* ---------- 22) Combobox (Single Select) ---------- */
+.comboNativeHidden {
+    position: absolute !important;
+    left: -10000px !important;
+    top: auto !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.comboWrap {
+    position: relative;
+    width: 100%;
+}
+
+.comboCtl {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    min-height: 42px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color var(--trans-fast), box-shadow var(--trans-fast), background-color var(--trans-fast);
 }
 
-.sideActionMeta {
+.comboCtl:hover:not(.isDisabled) {
+    border-color: var(--accent);
+    background: var(--surface-2);
+}
+
+.comboCtl:focus-visible {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.comboCtl.isOpen {
+    border-color: var(--accent);
+    background: var(--surface-2);
+}
+
+.comboCtl.isDisabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--field-bg);
+}
+
+.comboCtl.isDisabled .comboCaret {
+    opacity: 0.3;
+}
+
+.comboValue {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comboPlaceholder {
+    color: var(--muted);
+}
+
+.comboCaret {
     color: var(--muted);
     font-size: 0.85rem;
 }
 
-.sideDate {
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
+.comboMenu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 999;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-1);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    animation: comboMenuIn 0.15s var(--ease);
+    transform-origin: top;
+}
+
+@keyframes comboMenuIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+:root[data-theme="light"] .comboMenu {
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+}
+
+.comboSearchWrap {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.comboSearch {
+    width: 100%;
+}
+
+.comboOptions {
+    max-height: 240px;
+    overflow: auto;
+    padding: 6px;
+}
+
+.comboOpt {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color var(--trans-fast), color var(--trans-fast);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.comboOpt:hover {
+    background: var(--row-hover);
+}
+
+.comboOpt[data-selected="1"] {
+    background: rgba(124, 92, 255, 0.12);
+    color: var(--accent);
+}
+
+:root[data-theme="light"] .comboOpt[data-selected="1"] {
+    background: rgba(94, 79, 214, 0.10);
+}
+
+.comboOpt .tick {
+    font-weight: 700;
     font-size: 0.9rem;
 }
 
-/* shrink pills slightly in sidebar */
-.globalSide .historyPill {
-    font-size: 0.72rem;
-    padding: 3px 8px;
+.comboEmpty {
+    padding: 16px 12px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    font-style: italic;
 }
 
+/* ---------- 23) Multi-Combobox ---------- */
+.comboMulti {
+    position: relative;
+    margin-bottom: var(--space-2);
+}
 
+.comboMulti .comboCtl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 42px;
+    padding: 8px 10px;
+}
 
+.comboMulti .comboLeft {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+}
 
+.comboChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--badge-bg);
+    border: 1px solid var(--badge-border);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    max-width: 100%;
+    transition: background-color var(--trans-fast), border-color var(--trans-fast);
+}
 
+.comboChip:hover {
+    background: var(--secondary-hover);
+    border-color: var(--danger);
+}
 
+.comboChip .x {
+    opacity: 0.6;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity var(--trans-fast), color var(--trans-fast);
+    padding: 0 2px;
+}
 
-/* === Supplier prices under checklists (Baza Części) === */
-.supplierPricePanel{
-    margin-top: 10px;
+.comboChip .x:hover {
+    opacity: 1;
+    color: var(--danger);
+}
+
+.comboMulti .comboOpt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.comboMulti .comboOpt .tick {
+    color: var(--accent);
+    font-weight: 800;
+    opacity: 0;
+    transition: opacity var(--trans-fast);
+}
+
+.comboMulti .comboOpt[data-selected="1"] .tick {
+    opacity: 1;
+}
+
+/* ---------- 24) Supplier Prices Panel ---------- */
+.supplierPricePanel {
+    margin-top: var(--space-2);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface-2);
     overflow: hidden;
 }
-.supplierPriceHead{
-    display:flex;
+
+.supplierPriceHead {
+    display: flex;
     justify-content: space-between;
-    align-items:center;
+    align-items: center;
     padding: 10px 12px;
     background: var(--thead-bg);
     border-bottom: 1px solid var(--border);
 }
-.supplierPriceBody{
-    display:grid;
-    gap: 8px;
+
+.supplierPriceBody {
+    display: grid;
+    gap: var(--space-1);
     padding: 10px 12px 12px;
 }
-.supplierPriceRow{
-    display:grid;
+
+.supplierPriceRow {
+    display: grid;
     grid-template-columns: 1fr 120px;
     gap: 10px;
-    align-items:center;
+    align-items: center;
     padding: 8px 10px;
     border-radius: 10px;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: var(--section-bg);
+    border: 1px solid var(--border);
 }
-:root[data-theme="light"] .supplierPriceRow{
-    background: rgba(15,23,42,0.02);
-    border-color: rgba(15,23,42,0.08);
-}
-.supplierPriceRow .supplierName{
-    display:flex;
+
+.supplierPriceRow .supplierName {
+    display: flex;
     gap: 8px;
     align-items: baseline;
     min-width: 0;
 }
-.supplierPriceRow .supplierName .supplierLabel{
+
+.supplierLabel {
     font-weight: 650;
 }
-.supplierPriceRow .supplierName .supplierMeta{
+
+.supplierMeta {
     color: var(--muted);
     font-size: 0.82rem;
     white-space: nowrap;
-    overflow:hidden;
+    overflow: hidden;
     text-overflow: ellipsis;
 }
-.supplierPriceRow input{
+
+.supplierPriceRow input {
     width: 100%;
     text-align: right;
     font-variant-numeric: tabular-nums;
     padding: 8px 10px;
 }
-.supplierPriceHint{
+
+.supplierPriceHint {
     padding: 10px 12px;
     color: var(--muted);
     font-size: 0.85rem;
 }
 
-/* === Multi-combobox (Supplier picker) === */
-.comboMulti{ position: relative; margin-bottom: 15px; }
-.comboMulti .comboCtl{
-    display:flex;
-    align-items:center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    cursor: pointer;
-}
-.comboMulti .comboCtl:focus-visible{ outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
-.comboMulti .comboLeft{ display:flex; flex-wrap:wrap; gap: 6px; align-items:center; min-width:0; }
-.comboMulti .comboPlaceholder{ color: var(--muted); font-size: 0.9rem; }
-.comboMulti .comboChip{
-    display:inline-flex;
-    align-items:center;
-    gap: 6px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.09);
-    font-size: 0.85rem;
-    white-space: nowrap;
-    max-width: 100%;
-}
-:root[data-theme="light"] .comboMulti .comboChip{
-    background: rgba(15,23,42,0.04);
-    border-color: rgba(15,23,42,0.10);
-}
-.comboMulti .comboChip .x{ opacity: 0.75; font-weight: 700; }
-.comboMulti .comboCaret{ color: var(--muted); }
-.comboMulti .comboMenu{
-    position:absolute;
-    left:0;
-    right:0;
-    top: calc(100% + 8px);
-    z-index: 50;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: var(--surface-1);
-    box-shadow: 0 14px 40px rgba(0,0,0,0.35);
-    overflow: hidden;
-}
-:root[data-theme="light"] .comboMulti .comboMenu{
-    box-shadow: 0 14px 40px rgba(15,23,42,0.14);
-}
-.comboMulti .comboSearchWrap{ padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.comboMulti .comboSearch{ width: 100%; }
-.comboMulti .comboOptions{ max-height: 240px; overflow:auto; padding: 6px; }
-.comboMulti .comboOpt{
-    display:flex;
-    align-items:center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    cursor:pointer;
-}
-.comboMulti .comboOpt[hidden]{ display:none !important; }
-.comboMulti .comboEmpty[hidden]{ display:none !important; }
-.comboMulti .comboOpt:hover{ background: rgba(255,255,255,0.04); }
-:root[data-theme="light"] .comboMulti .comboOpt:hover{ background: rgba(15,23,42,0.04); }
-.comboMulti .comboOpt .tick{ color: var(--accent); font-weight: 800; opacity: 0; }
-.comboMulti .comboOpt[data-selected="1"] .tick{ opacity: 1; }
-.comboMulti .comboEmpty{ padding: 10px 12px; color: var(--muted); font-size: 0.9rem; }
-
-/* =========================================================
-   ENTERPRISE POLISH PACK (append at END of style.css)
-   Goal: calm, readable, “expensive”, low-fatigue data UI
-   No framework, no redesign, incremental-only
-   ========================================================= */
-
-/* ---------- 0) Spacing system + typography rhythm ---------- */
-:root {
-    /* spacing steps (predictable vertical rhythm) */
-    --space-1: 6px;
-    --space-2: 12px;
-    --space-3: 18px;
-    --space-4: 24px;
-    /* density knobs */
-    --cell-y: 10px;
-    --cell-x: 14px;
-    /* focus ring */
-    --focus-ring: 0 0 0 3px var(--accent-glow);
-    /* zebra rows (subtle, not loud) */
-    --row-zebra: rgba(255,255,255,0.015);
+/* ---------- 25) Utilities ---------- */
+.divider {
+    border: 0;
+    height: 1px;
+    background: var(--border);
+    margin: var(--space-3) 0;
 }
 
-    :root[data-theme="light"] {
-        --row-zebra: rgba(15,23,42,0.02);
+/* ---------- 26) Accessibility ---------- */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
     }
-
-/* Consistent vertical rhythm */
-.card {
-    padding: var(--space-4);
 }
 
-.cardHeader {
-    margin-bottom: var(--space-3);
-}
-
-.toolbar {
-    margin: var(--space-2) 0 var(--space-3);
-}
-
-.uiSection {
-    padding: calc(var(--space-3) - 2px);
-    margin-bottom: var(--space-4);
-}
-
-.uiSectionHead {
-    padding-bottom: var(--space-2);
-    margin-bottom: var(--space-2);
-}
-
-.row {
-    gap: var(--space-2);
-    margin-bottom: var(--space-3);
-}
-
-.subhead {
-    margin: var(--space-3) 0 var(--space-2);
-}
-
-/* Tighter typography rhythm (scan-first) */
-h1 {
-    line-height: 1.15;
-}
-
-h2 {
-    line-height: 1.2;
-    margin-bottom: 10px;
-}
-
-h3 {
-    line-height: 1.25;
-}
-
-/* Prevent “double bottom margins” in headers */
-.cardHeader h2 {
-    margin-bottom: 0;
-}
-
-/* ---------- 1) Focus: visible only when it matters ---------- */
-/* Don’t show ugly rings on mouse click, show on keyboard navigation */
+/* Focus visible only for keyboard */
 :focus {
     outline: none;
 }
@@ -1712,633 +1736,44 @@ h3 {
     border-color: var(--accent);
 }
 
-/* Buttons: keep focus ring clean */
-button:focus-visible {
-    box-shadow: var(--focus-ring);
-}
-
-/* Inputs/selects: keep your existing focus, but ensure keyboard focus works */
-input:focus-visible, select:focus-visible {
-    border-color: var(--accent);
-    box-shadow: var(--focus-ring);
-}
-
-/* ---------- 2) Micro-interactions: calm, not circus ---------- */
-button, .tabBtn, .toast, .historyDetails {
-    transition: background-color var(--trans-fast), border-color var(--trans-fast), box-shadow var(--trans-fast), transform 120ms var(--ease), opacity var(--trans-fast);
-}
-
-    /* Hover should “hint”, not “celebrate” */
-    button.secondary:hover:not(:disabled),
-    .tabBtn:hover:not(.active) {
-        filter: none; /* avoid brightness pumping */
-    }
-
-/* Reduce motion for long sessions or accessibility */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation: none !important;
-        transition: none !important;
-        scroll-behavior: auto !important;
-    }
-}
-
-/* ---------- 3) Tables: scanability upgrades ---------- */
-/* Use tabular numbers so columns visually align */
-.right,
-.metricValue,
-.sideQty,
-.historyMoney,
-td.right {
-    font-variant-numeric: tabular-nums;
-}
-
-/* Table spacing driven by variables */
-th, td {
-    padding: var(--cell-y) var(--cell-x);
-}
-
-/* Zebra striping: subtle, helps eye track long tables */
-table tbody tr:nth-child(even) td {
-    background: var(--row-zebra);
-}
-
-/* Hover stays subtle (you already do; make it consistent across themes) */
-tr:hover td {
-    background: var(--row-hover);
-}
-
-/* Sticky headers: ensure background is solid enough */
-.stickyHeader th {
-    backdrop-filter: blur(6px);
-}
-
-/* ---------- 4) Stock status: signal without painting everything ---------- */
-/* Instead of flooding the whole row with color, add a left “status rail”.
-   Keep your existing .stock-warn/.stock-danger backgrounds, but make the rail primary.
-*/
-.stock-warn td:first-child {
-    box-shadow: inset 4px 0 0 rgba(255,193,7,0.85);
-}
-
-.stock-danger td:first-child {
-    box-shadow: inset 4px 0 0 rgba(255,107,107,0.85);
-}
-
-/* Optional: tone down full-row background a bit (less fatigue). */
-.stock-warn td {
-    background: rgba(255, 193, 7, 0.08) !important;
-    color: inherit; /* keep text readable */
-}
-
-.stock-danger td {
-    background: rgba(255, 107, 107, 0.08) !important;
-    color: inherit;
-}
-
-/* Keep badges readable on status rows */
-.stock-warn .badge,
-.stock-danger .badge {
-    border: 1px solid var(--border);
-}
-
-/* ---------- 5) “Expensive” alignment patterns (small, but you feel it) ---------- */
-/* Make headers feel like “labels”, not content */
-th {
-    letter-spacing: 0.06em;
-}
-
-/* Monospace badges: consistent density and alignment */
-.badge {
-    background: var(--badge-bg, var(--secondary-hover));
-    border: 1px solid var(--badge-border, var(--border));
-}
-
-/* Align action buttons in tables: reduce visual noise */
-table td:last-child button.compact,
-table td:last-child button.iconBtn {
-    margin-left: 6px;
-}
-
-/* ---------- 6) Segmented controls: stronger “selected” affordance ---------- */
-.segmented {
-    border: 1px solid var(--border);
-    background: var(--secondary-bg);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-
-    .segmented > button {
-        padding: 6px 12px;
-    }
-
-        .segmented > button.active {
-            background: var(--accent);
-            color: #fff;
-            box-shadow: 0 4px 14px var(--accent-glow);
-        }
-
-/* ---------- 7) Table containers: calmer frame + empty state ---------- */
-.tableWrap {
-    border-radius: 10px;
-}
-
-    /* Empty state (CSS-only; Chrome supports :has; safe no-op elsewhere) */
-    .tableWrap:has(tbody:empty) {
-        min-height: 120px;
-        position: relative;
-    }
-
-        .tableWrap:has(tbody:empty)::after {
-            content: "Brak danych do wyświetlenia";
-            position: absolute;
-            inset: 0;
-            display: grid;
-            place-items: center;
-            padding: 14px;
-            color: var(--muted);
-            font-size: 0.9rem;
-            pointer-events: none;
-        }
-
-/* ---------- 8) Side panel: “internal tool” density & hierarchy ---------- */
-.globalSide .card.stickySide {
-    padding: 14px;
-}
-
-.sideMetric {
-    border-radius: 14px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-}
-
-:root[data-theme="light"] .sideMetric {
-    background: rgba(15,23,42,0.02);
-    border-color: rgba(15,23,42,0.08);
-}
-
-.sideTableWrap,
-.sideList li {
-    border-radius: 14px;
-}
-
-.sideTable thead th {
-    background: var(--surface-3);
-}
-
-.sideList li:hover {
-    background: rgba(255,255,255,0.03);
-}
-
-:root[data-theme="light"] .sideList li:hover {
-    background: rgba(15,23,42,0.03);
-}
-
-/* ---------- 9) Perceived performance: gentle skeleton hint for slow paints ----------
-   (Optional, purely visual; apply class .is-loading on body if you ever want.)
-*/
-body.is-loading .card {
-    opacity: 0.92;
-}
-
-body.is-loading .tableWrap {
+/* ---------- 27) Empty States ---------- */
+.tableWrap:has(tbody:empty) {
+    min-height: 120px;
     position: relative;
-    overflow: hidden;
 }
 
-    body.is-loading .tableWrap::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient( 90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100% );
-        transform: translateX(-60%);
-        animation: shimmer 1.2s linear infinite;
-        pointer-events: none;
-    }
-
-:root[data-theme="light"] body.is-loading .tableWrap::before {
-    background: linear-gradient( 90deg, transparent 0%, rgba(15,23,42,0.05) 50%, transparent 100% );
-}
-
-@keyframes shimmer {
-    to {
-        transform: translateX(60%);
-    }
-}
-
-/* === Zebra fix for History table (pairs: main row + hidden detail row) === */
-/* Pattern repeats every 4 rows:
-   1: main, 2: detail, 3: main, 4: detail ...
-   So we stripe main rows by targeting 4n+1 and 4n+3.
-*/
-#historyTable tbody tr[data-hid]:nth-child(4n + 1) td {
-    background: transparent;
-}
-
-#historyTable tbody tr[data-hid]:nth-child(4n + 3) td {
-    background: var(--row-zebra);
-}
-
-/* Keep detail rows clean regardless of zebra */
-#historyTable tbody tr.historyDetailRow td {
-    background: transparent !important;
-}
-
-
-/* =========================
-   Sidebar: monitor-style panel (lighter, signal-first)
-   ========================= */
-
-.globalSide .card.stickySide{
-    padding: 12px;
-    box-shadow: none;
-}
-
-.globalSide .sideSection{
-    padding: 10px 2px;
-    gap: 8px;
-}
-
-.globalSide .sideSection + .sideSection{
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255,255,255,0.07);
-}
-
-.globalSide .sideTitle{
-    font-size: 0.72rem;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
+.tableWrap:has(tbody:empty)::after {
+    content: "Brak danych do wyświetlenia";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--space-3);
     color: var(--muted);
-    margin-bottom: 6px;
-}
-
-/* Status block */
-.sideStatus{
-    display: grid;
-    gap: 10px;
-}
-
-.sideStatusTop{
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 10px;
-}
-
-.sideCounters{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.sideCounter{
-    padding: 10px 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02);
-}
-
-.sideCounterValue{
-    font-size: 1.15rem;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-    margin-top: 4px;
-}
-
-/* Signals list (replaces table) */
-.sideSignals{
-    margin-top: 10px;
-    display: grid;
-    gap: 8px;
-}
-
-.sideEmpty{
-    padding: 10px 10px;
-    border-radius: 12px;
-    border: 1px dashed rgba(255,255,255,0.10);
-    background: rgba(255,255,255,0.015);
-}
-
-.sideSignalRow{
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02);
-    text-align: left;
-    cursor: pointer;
-}
-
-.sideSignalRow:hover{
-    background: rgba(255,255,255,0.035);
-    border-color: rgba(255,255,255,0.10);
-}
-
-.sideSignalRow:active{
-    transform: translateY(1px);
-}
-
-.sideSignalRow:focus-visible{
-    outline: 2px solid rgba(255,255,255,0.22);
-    outline-offset: 2px;
-}
-
-.sigMain{
-    min-width: 0;
-    display: grid;
-    gap: 4px;
-}
-
-.sigSku{
-    justify-self: start;
-}
-
-.sigName{
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: rgba(255,255,255,0.82);
     font-size: 0.9rem;
+    pointer-events: none;
 }
 
-.sigMeta{
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+/* ---------- 28) Footer ---------- */
+.foot {
+    text-align: center;
+    padding: var(--space-3) 0;
+    margin-top: var(--space-2);
+}
+/* UI Polish: Consistent card headers across all tabs */
+.cardHeader + .toolbar,
+.cardHeader + .grid2,
+.cardHeader + .uiSection {
+    margin-top: var(--space-2);
 }
 
-.sigQty{
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
+/* Ensure consistent spacing in delivery/build sections */
+.cardHeader p.small {
+    margin: 4px 0 0;
 }
 
-/* Utilities section should be quiet */
-.sideUtilities .sideBtn{
-    width: 100%;
-}
-
-/* Light theme parity */
-:root[data-theme="light"] .globalSide .sideSection + .sideSection{
-    border-top-color: rgba(15,23,42,0.08);
-}
-:root[data-theme="light"] .sideCounter,
-:root[data-theme="light"] .sideSignalRow{
-    border-color: rgba(15,23,42,0.10);
-    background: rgba(15,23,42,0.02);
-}
-:root[data-theme="light"] .sideSignalRow:hover{
-    background: rgba(15,23,42,0.04);
-    border-color: rgba(15,23,42,0.14);
-}
-:root[data-theme="light"] .sigName{
-    color: rgba(15,23,42,0.78);
-}
-:root[data-theme="light"] .sideEmpty{
-    border-color: rgba(15,23,42,0.18);
-    background: rgba(15,23,42,0.015);
-}
-
-/* ========================================================================
-   LIGHT MODE UPGRADE (clean final)
-   - fixes: stickyHeader selector (matches your CSS)
-   - focus uses --accent / --accent-glow (no random blue)
-   - sidebar "glass" toned down (more enterprise, less demo)
-   - removed: light-only appShell gap tweak
-   - removed: globalSide divider line (::before)
-   Paste at END of style.css
-   ======================================================================== */
-
-:root[data-theme="light"] {
-    /* Base */
-    --bg: #f2f4f8;
-    --text: rgba(15,23,42,0.92);
-    --muted: rgba(15,23,42,0.62);
-    --label: rgba(15,23,42,0.78);
-    /* Planes (clear layers) */
-    --card-bg: #fbfcff;
-    --section-bg: rgba(15,23,42,0.028);
-    --surface-2: rgba(15,23,42,0.040);
-    --surface-3: rgba(15,23,42,0.060);
-    /* Lines */
-    --border: rgba(15,23,42,0.12);
-    --border-strong: rgba(15,23,42,0.18);
-    /* Tables */
-    --table-bg: rgba(15,23,42,0.032);
-    --thead-bg: rgba(15,23,42,0.060);
-    --row-hover: rgba(15,23,42,0.040);
-    /* Sticky header surface */
-    --stickyhead-bg: rgba(251,252,255,0.96);
-    /* Shadows: tiny, controlled */
-    --shadow: 0 10px 22px rgba(15,23,42,0.05);
-    --lift-ring: 0 1px 0 rgba(255,255,255,0.70), 0 0 0 1px rgba(15,23,42,0.06);
-    /* If you use these vars (you do in the polish pack) */
-    --cell-y: 9px;
-    --cell-x: 14px;
-}
-
-    /* Depth without heavy shadows */
-    :root[data-theme="light"] .card {
-        background: var(--card-bg);
-        border-color: var(--border);
-        box-shadow: var(--shadow), var(--lift-ring);
-    }
-
-    :root[data-theme="light"] .uiSection {
-        border-color: var(--border);
-        background: linear-gradient(to bottom, rgba(255,255,255,0.75), rgba(255,255,255,0.00)), var(--section-bg);
-    }
-
-    :root[data-theme="light"] .tableWrap {
-        border-color: var(--border-strong);
-        background: var(--table-bg);
-    }
-
-    /* Table header + hover readability */
-    :root[data-theme="light"] thead th {
-        background: var(--thead-bg);
-        color: rgba(15,23,42,0.62);
-        border-bottom: 1px solid rgba(15,23,42,0.10);
-    }
-
-    :root[data-theme="light"] tbody tr:hover td {
-        background: var(--row-hover) !important;
-    }
-
-    /* ✅ FIX: Your sticky header is .stickyHeader th (not .stickyHead / .tableStickyHead) */
-    :root[data-theme="light"] .stickyHeader th {
-        background: var(--stickyhead-bg);
-        backdrop-filter: blur(8px);
-        border-bottom: 1px solid rgba(15,23,42,0.10);
-    }
-
-    /* Panel vs main separation: peripheral, instrument-like (toned down glass) */
-    :root[data-theme="light"] .globalSide .card.stickySide {
-        background: rgba(255,255,255,0.88);
-        border-color: rgba(15,23,42,0.14);
-        box-shadow: 0 6px 16px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.05);
-        backdrop-filter: blur(6px);
-    }
-
-    /* Status signaling (noticeable, controlled) */
-    :root[data-theme="light"] .stock-warn td:first-child {
-        box-shadow: inset 4px 0 0 rgba(217, 154, 0, 0.85);
-    }
-
-    :root[data-theme="light"] .stock-danger td:first-child {
-        box-shadow: inset 4px 0 0 rgba(220, 38, 38, 0.70);
-    }
-
-    /* Reduce full-row tint in light mode */
-    :root[data-theme="light"] .stock-warn td {
-        background: rgba(217, 154, 0, 0.06) !important;
-    }
-
-    :root[data-theme="light"] .stock-danger td {
-        background: rgba(220, 38, 38, 0.05) !important;
-    }
-
-    /* Pills: bordered, calm fills */
-    :root[data-theme="light"] .statusPill {
-        border-color: rgba(15,23,42,0.14);
-        background: rgba(255,255,255,0.65);
-    }
-
-        :root[data-theme="light"] .statusPill.warn {
-            color: rgba(146, 94, 0, 0.95);
-            border-color: rgba(217, 154, 0, 0.35);
-            background: rgba(217, 154, 0, 0.10);
-        }
-
-        :root[data-theme="light"] .statusPill.danger {
-            color: rgba(150, 20, 20, 0.95);
-            border-color: rgba(220, 38, 38, 0.28);
-            background: rgba(220, 38, 38, 0.10);
-        }
-
-        :root[data-theme="light"] .statusPill.ok {
-            color: rgba(20, 110, 70, 0.95);
-            border-color: rgba(16, 185, 129, 0.25);
-            background: rgba(16, 185, 129, 0.10);
-        }
-
-    /* Typography & density tweaks (light mode only) */
-    :root[data-theme="light"] table {
-        font-size: 0.94rem;
-    }
-
-    :root[data-theme="light"] label {
-        font-weight: 560;
-    }
-
-    :root[data-theme="light"] .muted {
-        color: rgba(15,23,42,0.58);
-    }
-
-    /* Inputs/controls: look like UI, not paper form */
-    :root[data-theme="light"] input,
-    :root[data-theme="light"] select,
-    :root[data-theme="light"] textarea {
-        background: rgba(255,255,255,0.88);
-        border-color: rgba(15,23,42,0.14);
-        box-shadow: 0 1px 0 rgba(255,255,255,0.60) inset;
-    }
-
-        /* ✅ FIX: focus uses your accent tokens (no random blue) */
-        :root[data-theme="light"] input:focus,
-        :root[data-theme="light"] select:focus,
-        :root[data-theme="light"] textarea:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow), 0 1px 0 rgba(255,255,255,0.60) inset;
-            outline: none;
-        }
-
-
-
-
-/* === History: produkcja → podgląd zużytych części per maszyna === */
-.badge.subtle{
-    opacity: 0.75;
-    border-color: var(--border);
-}
-.buildMachineTable tr.buildMachineDetailRow td{
-    padding: 0 !important;
-    background: transparent !important;
-    border-bottom: none;
-}
-.buildMachineTable tr.buildMachineDetailRow:hover td{
-    background: transparent !important;
-}
-
-.buildPartsDetails{
-    margin: 12px 12px 16px;
-    padding: 16px;
-    border-radius: 12px;
-    border: 2px solid rgba(124,92,255,0.30);
-    box-shadow: 0 0 0 6px rgba(124,92,255,0.08);
-    background: var(--section-bg);
-}
-
-:root[data-theme="light"] .buildPartsDetails{
-    border-color: rgba(109,92,255,0.26);
-    box-shadow: 0 0 0 6px rgba(109,92,255,0.06);
-}
-
-.buildPartsHeader{
-    display:flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
-}
-
-.buildPartsMeta{
-    display:flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 10px 14px;
-    text-align: right;
-}
-
-.buildPartsWrap{
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 12px;
-}
-
-.buildPartsWrap table tr:hover td{
-    background: transparent !important;
-}
-
-
-/* === History: split + filters (search + date range) === */
-.historyToolbar {
-  gap: 10px;
-  align-items: center;
-}
-
-.historyToolbar .dateRangeInput {
-  max-width: 220px;
-}
-
-@media (max-width: 900px) {
-  .historyToolbar {
-    flex-wrap: wrap;
-  }
-  .historyToolbar .dateRangeInput {
-    max-width: none;
-    flex: 1 1 200px;
-  }
-}
-
-.historyMeta .historyMoney {
-  font-variant-numeric: tabular-nums;
+/* Force native hidden attribute to actually hide elements (author CSS can override UA) */
+[hidden] {
+    display: none !important;
 }
 
