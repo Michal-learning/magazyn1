@@ -59,8 +59,9 @@ function renderSideMissingTop5() {
   }
 
   els.sideMissingSignals.innerHTML = rows.map(r => {
-    const cls = r.qty <= LOW_DANGER ? "danger" : r.qty <= LOW_WARN ? "warning" : "success";
-    const status = r.qty <= LOW_DANGER ? "Krytyczne" : r.qty <= LOW_WARN ? "Niskie" : "OK";
+    const statusMeta = getPartStockStatus(r.sku, r.qty);
+    const cls = statusMeta.level;
+    const status = statusMeta.label;
 
     return `
       <button class="signal-row" type="button" data-sku="${escapeHtml(String(r.sku))}" 
@@ -93,12 +94,14 @@ function renderSideRecentActions5() {
   }
 
   els.sideRecentActions.innerHTML = rows.map(ev => {
-    const typeLabel = ev.type === "delivery" ? "Dostawa" : "Produkcja";
-    const pillClass = ev.type === "delivery" ? "success" : "accent";
+    const typeLabel = ev.type === "delivery" ? "Dostawa" : ev.type === "build" ? "Produkcja" : "Korekta";
+    const pillClass = ev.type === "delivery" ? "success" : ev.type === "build" ? "accent" : "warning";
 
     const meta = ev.type === "delivery"
       ? `${(ev.items || []).length} poz. • ${ev.supplier || "—"}`
-      : `${(ev.items || []).length} poz.`;
+      : ev.type === "build"
+        ? `${(ev.items || []).length} poz.`
+        : `${(ev.items || []).length} części • inwentaryzacja`;
 
     return `
       <li style="padding:var(--space-3);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-md)">
@@ -188,12 +191,19 @@ function openPartDetailsModal(sku) {
     } else {
       variantsEl.innerHTML = sortedGroups.map(group => {
         const batchCount = group.lots.length;
+        const correctionLots = group.lots.filter(lot => normalize(lot?.supplier) === "Korekta stanu").length;
         return `
           <tr>
-            <td><strong>${fmtPLN.format(group.price)}</strong></td>
+            <td>
+              <strong>${fmtPLN.format(group.price)}</strong>
+              ${correctionLots > 0 ? `<div class="lot-origin-note">W tym korekty: ${correctionLots}</div>` : ``}
+            </td>
             <td class="text-right">${group.totalQty}</td>
             <td class="text-right">${fmtPLN.format(group.totalValue)}</td>
-            <td class="text-right"><span class="badge">${batchCount}</span></td>
+            <td class="text-right">
+              <span class="badge">${batchCount}</span>
+              ${correctionLots > 0 ? `<span class="lot-origin-badge">korekta</span>` : ``}
+            </td>
             <td class="text-right">
               <button class="btn btn-secondary btn-sm" type="button"
                 data-action="openBatchPreviewByPrice"
@@ -263,9 +273,13 @@ function openBatchPreviewByPrice(sku, price) {
 
   // Build supplier sections
   const supplierSections = Array.from(supplierGroups.values()).map(supGroup => {
+    const isAdjustmentSource = normalize(supGroup.supplier) === "Korekta stanu";
     const rows = supGroup.lots.map(lot => `
       <tr>
-        <td style="white-space:nowrap">Partia #${lot.id ?? "—"}</td>
+        <td style="white-space:nowrap">
+          Partia #${lot.id ?? "—"}
+          ${normalize(lot?.supplier) === "Korekta stanu" ? `<span class="lot-origin-badge">korekta</span>` : ``}
+        </td>
         <td>${escapeHtml(fmtDateISO(lot.dateIn) || "—")}</td>
         <td class="text-right">${safeQtyInt(lot.qty)}</td>
         <td class="text-right">${fmtPLN.format(safeQtyInt(lot.qty) * price)}</td>
@@ -275,7 +289,7 @@ function openBatchPreviewByPrice(sku, price) {
     return `
       <div class="batch-supplier-section" style="margin-bottom:var(--space-4)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--surface-2);border-radius:var(--radius-md)">
-          <span class="badge badge-success">${escapeHtml(supGroup.supplier)}</span>
+          <span class="badge ${isAdjustmentSource ? 'badge-warning' : 'badge-success'}">${escapeHtml(supGroup.supplier)}</span>
           <span class="text-secondary" style="font-size:var(--text-sm)">${supGroup.totalQty} szt. • ${fmtPLN.format(supGroup.totalValue)}</span>
         </div>
         <div class="table-container" style="margin:0">
@@ -300,7 +314,7 @@ function openBatchPreviewByPrice(sku, price) {
             <span>${fmtPLN.format(price)} / szt.</span>
           </div>
           <h3 class="batch-preview-title">${escapeHtml(part.sku)}</h3>
-          <p class="batch-preview-subtitle">${escapeHtml(part.name)} • Podział na dostawców</p>
+          <p class="batch-preview-subtitle">${escapeHtml(part.name)} • Podział na dostawców i partie korekcyjne</p>
         </div>
       </div>
 
@@ -356,17 +370,20 @@ function renderWarehouse() {
 
   const searchInput = document.getElementById("searchParts");
   const q = normalize(searchInput?.value).toLowerCase();
+  const stockEditToggleBtn = document.getElementById("stockEditToggleBtn");
+  const stockEditActions = document.getElementById("stockEditActions");
+  const stockEditBanner = document.getElementById("stockEditBanner");
+  const isEditMode = !!state.ui?.stockEditMode;
+  const pendingMap = state.ui?.pendingStockAdjustments || {};
   
   const summary = new Map();
   let grandTotal = 0;
 
-  // Filter and group lots
   (state.lots || []).forEach(lot => {
     if (!lot) return;
     const key = skuKey(lot.sku);
     if (!key) return;
     
-    // Apply search filter
     if (q && 
         !String(lot.sku || "").toLowerCase().includes(q) &&
         !String(lot.name || "").toLowerCase().includes(q)) {
@@ -381,31 +398,97 @@ function renderWarehouse() {
     item.value += safeQtyInt(lot.qty) * safeFloat(lot.unitPrice || 0);
   });
 
+  if (isEditMode) {
+    for (const [key, part] of state.partsCatalog.entries()) {
+      const sku = String(part?.sku || "");
+      const name = String(part?.name || "");
+      if (q && !sku.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue;
+      if (!summary.has(key)) {
+        summary.set(key, { sku, name, qty: 0, value: 0 });
+      }
+    }
+  }
+
   summary.forEach(item => { grandTotal += item.value; });
   const totalFormatted = fmtPLN.format(grandTotal);
 
   if (els.sideWarehouseTotal) els.sideWarehouseTotal.textContent = totalFormatted;
   if (els.whTotal) els.whTotal.textContent = totalFormatted;
 
-  // Summary table with "Szczegóły" button
+  if (stockEditToggleBtn) stockEditToggleBtn.classList.toggle("hidden", isEditMode);
+  if (stockEditActions) stockEditActions.classList.toggle("hidden", !isEditMode);
+  if (stockEditBanner) {
+    if (isEditMode) {
+      stockEditBanner.classList.remove("hidden");
+      const changedCount = getPendingStockAdjustmentsCount();
+      stockEditBanner.innerHTML = `
+        <div>
+          <strong>Tryb korekty stanów aktywny</strong>
+          <div class="history-adjustment-note">Wpisujesz stan docelowy dla części. Zmiany zapiszą się dopiero po zbiorczym zatwierdzeniu.</div>
+        </div>
+        <div class="badge badge-accent">Zmodyfikowane: ${changedCount}</div>
+      `;
+    } else {
+      stockEditBanner.classList.add("hidden");
+      stockEditBanner.innerHTML = "";
+    }
+  }
+
   els.summaryTable.innerHTML = Array.from(summary.values())
     .slice()
     .sort((a, b) => (safeQtyInt(a.qty) - safeQtyInt(b.qty)) || String(a.sku).localeCompare(String(b.sku), 'pl'))
-    .map(item => `
-      <tr class="${item.qty <= LOW_DANGER ? "stock-row-danger" : item.qty <= LOW_WARN ? "stock-row-warning" : ""}">
-        <td><span class="badge">${escapeHtml(item.sku)}</span></td>
-        <td>${escapeHtml(item.name || "")}</td>
-        <td class="text-right">${item.qty}</td>
-        <td class="text-right">${fmtPLN.format(item.value)}</td>
-        <td class="text-right">
-          <button class="btn btn-secondary btn-sm" type="button"
-            data-action="openPartDetails"
-            data-sku="${escapeHtml(item.sku)}">
-            Szczegóły
-          </button>
-        </td>
-      </tr>
-    `).join("");
+    .map(item => {
+      const pending = pendingMap[skuKey(item.sku)];
+      const isInvalid = !!pending?.invalid;
+      const diff = isInvalid ? null : Number.isFinite(pending?.diff) ? pending.diff : 0;
+      const effectiveQty = isInvalid ? item.qty : Number.isFinite(pending?.newQty) ? safeQtyInt(pending.newQty) : item.qty;
+      const statusMeta = getPartStockStatus(item.sku, effectiveQty);
+      const rowClass = [
+        statusMeta.level === "danger" ? "stock-row-danger" : statusMeta.level === "warning" ? "stock-row-warning" : "",
+        pending && !isInvalid && diff !== 0 ? "stock-edit-row-changed" : "",
+        isInvalid ? "stock-edit-row-invalid" : ""
+      ].filter(Boolean).join(" ");
+
+      const stockCell = !isEditMode
+        ? `${item.qty}`
+        : `
+          <div class="stock-edit-stack">
+            <input
+              type="number"
+              class="stock-edit-input ${isInvalid ? "input-invalid" : ""}"
+              min="0"
+              step="1"
+              inputmode="numeric"
+              data-action="stockEditInput"
+              data-sku="${escapeHtml(item.sku)}"
+              value="${escapeHtml(pending?.rawValue ?? String(item.qty))}"
+              aria-label="Docelowy stan dla części ${escapeHtml(item.sku)}"
+            />
+            <div class="stock-edit-meta">
+              <span class="text-muted">Było: ${item.qty}</span>
+              <span class="adjustment-diff ${isInvalid ? "adjustment-diff-invalid" : diff > 0 ? "adjustment-diff-plus" : diff < 0 ? "adjustment-diff-minus" : "adjustment-diff-zero"}">
+                ${isInvalid ? "Błąd" : diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : "0"}
+              </span>
+            </div>
+          </div>
+        `;
+
+      return `
+        <tr class="${rowClass}">
+          <td><span class="badge">${escapeHtml(item.sku)}</span></td>
+          <td>${escapeHtml(item.name || "")}</td>
+          <td class="text-right stock-edit-cell">${stockCell}</td>
+          <td class="text-right">${fmtPLN.format(item.value)}</td>
+          <td class="text-right">
+            <button class="btn btn-secondary btn-sm" type="button"
+              data-action="openPartDetails"
+              data-sku="${escapeHtml(item.sku)}">
+              Szczegóły
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
 
   renderSidePanel();
 }
@@ -585,7 +668,7 @@ function renderMachinesStock() {
 
 function getHistoryView() {
   const v = localStorage.getItem("magazyn_history_view_v3");
-  return (v === "builds") ? "builds" : "deliveries";
+  return (v === "builds" || v === "adjustments") ? v : "deliveries";
 }
 
 function parsePLDateToISO(dmy) {
@@ -620,6 +703,7 @@ function historyMatchesFilters(ev, view, qNorm, fromISO, toISO) {
   if (!ev) return false;
   if (view === "deliveries" && ev.type !== "delivery") return false;
   if (view === "builds" && ev.type !== "build") return false;
+  if (view === "adjustments" && ev.type !== "adjustment") return false;
 
   const d = ev.dateISO || "";
   if (fromISO && d && d < fromISO) return false;
@@ -642,7 +726,7 @@ function historyMatchesFilters(ev, view, qNorm, fromISO, toISO) {
 
   const items = Array.isArray(ev.items) ? ev.items : [];
   for (const it of items) {
-    const code = normalize(it?.code || "").toLowerCase();
+    const code = normalize(it?.code || it?.sku || "").toLowerCase();
     const name = normalize(it?.name || "").toLowerCase();
     if ((code && code.includes(qNorm)) || (name && name.includes(qNorm))) return true;
   }
@@ -668,7 +752,9 @@ function renderHistory() {
   if (!rows.length) {
     const msg = (view === "deliveries")
       ? "Brak dostaw w historii dla wybranych filtrów."
-      : "Brak produkcji w historii dla wybranych filtrów.";
+      : (view === "builds")
+        ? "Brak produkcji w historii dla wybranych filtrów."
+        : "Brak korekt w historii dla wybranych filtrów.";
     tbody.innerHTML = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:var(--space-6)">${msg}</td></tr>`;
     return;
   }
@@ -687,7 +773,7 @@ function renderHistory() {
           <span class="text-muted" style="font-size:var(--text-sm)">Suma: <strong>${fmtPLN.format(total)}</strong></span>
         </div>
       `;
-    } else {
+    } else if (ev.type === "build") {
       const n = (ev.items || []).length;
       const totalQty = (ev.items || []).reduce((s, i) => s + safeInt(i.qty), 0);
       const totalConsumptionValue = (ev.items || []).reduce((sum, it) => {
@@ -714,6 +800,19 @@ function renderHistory() {
             : ``}
         </div>
       `;
+    } else {
+      const adjustmentItems = Array.isArray(ev.items)
+        ? ev.items
+        : (Array.isArray(ev?.details?.changes) ? ev.details.changes : []);
+      const n = safeQtyInt(ev.partsChanged ?? adjustmentItems.length);
+      const netDiff = adjustmentItems.reduce((sum, i) => sum + Number(i?.diff || 0), 0);
+      summary = `
+        <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap">
+          <span class="badge badge-warning">Korekta stanów</span>
+          <span class="text-muted" style="font-size:var(--text-sm)">Części: <strong>${n}</strong></span>
+          <span class="text-muted" style="font-size:var(--text-sm)">Bilans: <strong>${netDiff > 0 ? `+${netDiff}` : netDiff}</strong></span>
+        </div>
+      `;
     }
 
     return `
@@ -735,9 +834,122 @@ function buildHistoryDetails(ev) {
   if (!ev) return "";
 
   const isDelivery = ev.type === "delivery";
-  const typeLabel = isDelivery ? "Dostawa" : "Produkcja";
-  const badgeClass = isDelivery ? "badge-success" : "badge-accent";
-  const items = Array.isArray(ev.items) ? ev.items : [];
+  const isBuild = ev.type === "build";
+  const isAdjustment = ev.type === "adjustment";
+  const typeLabel = isDelivery ? "Dostawa" : isBuild ? "Produkcja" : "Korekta";
+  const badgeClass = isDelivery ? "badge-success" : isBuild ? "badge-accent" : "badge-warning";
+  const items = Array.isArray(ev.items)
+    ? ev.items
+    : (Array.isArray(ev?.details?.changes) ? ev.details.changes : []);
+
+  if (isAdjustment) {
+    const positiveCount = items.filter(i => Number(i?.diff || 0) > 0).length;
+    const negativeCount = items.filter(i => Number(i?.diff || 0) < 0).length;
+    const netDiff = items.reduce((sum, i) => sum + Number(i?.diff || 0), 0);
+    const changeCount = safeQtyInt(ev.partsChanged ?? items.length);
+
+    const cards = items.map(i => {
+      const diff = Number(i?.diff || 0);
+      const diffClass = diff > 0 ? "adjustment-diff-plus" : diff < 0 ? "adjustment-diff-minus" : "adjustment-diff-zero";
+      const diffLabel = diff > 0 ? `+${diff}` : `${diff}`;
+      const previousQty = safeQtyInt(i?.previousQty);
+      const newQty = safeQtyInt(i?.newQty);
+      const lots = Array.isArray(i?.affectedLots) ? i.affectedLots : [];
+      const createdLot = i?.createdLot || null;
+      const settlementLabel = diff > 0 ? "Nowa partia korekcyjna" : diff < 0 ? "Rozchód z partii FIFO" : "Brak zmiany";
+
+      let settlementHtml = `<div class="adjustment-lots-list"><div class="adjustment-lot-item"><div>${escapeHtml(settlementLabel)}</div></div></div>`;
+
+      if (diff > 0 && createdLot) {
+        settlementHtml = `
+          <div class="adjustment-lots-list">
+            <div class="adjustment-lot-item">
+              <div>
+                <strong>Utworzono partię korekcyjną #${escapeHtml(createdLot.lotId || "—")}</strong>
+                <span class="lot-origin-badge">korekta</span>
+                <div class="text-muted">Źródło: ${escapeHtml(createdLot.supplier || "Korekta stanu")} • Data: ${escapeHtml(fmtDateISO(createdLot.dateIn) || "—")}</div>
+              </div>
+              <div>
+                Dodano <strong>${safeQtyInt(createdLot.qty)}</strong> • Cena ref. <strong>${fmtPLN.format(safeFloat(i.referenceUnitPrice ?? createdLot.unitPrice ?? 0))}</strong>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (diff < 0 && lots.length) {
+        settlementHtml = `
+          <div class="adjustment-lots-list">
+            ${lots.map(lot => `
+              <div class="adjustment-lot-item">
+                <div>
+                  <strong>Partia #${escapeHtml(lot.lotId || "—")}</strong>
+                  <div class="text-muted">${escapeHtml(lot.supplier || "-")} • ${escapeHtml(fmtDateISO(lot.dateIn) || "—")}</div>
+                </div>
+                <div>
+                  Zdjęto <strong>${safeQtyInt(lot.removedQty)}</strong>
+                  ${safeQtyInt(lot.remainingAfter) > 0 ? `• Pozostało ${safeQtyInt(lot.remainingAfter)}` : `• Wyzerowana`}
+                  • Cena ${fmtPLN.format(safeFloat(lot.unitPrice || 0))}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      return `
+        <article class="adjustment-history-row">
+          <div class="adjustment-history-head">
+            <div>
+              <div class="history-table-maincell">
+                <span class="badge">${escapeHtml(i?.sku || "—")}</span>
+                <span>${escapeHtml(i?.name || "")}</span>
+              </div>
+              <p>Stan przed <strong>${previousQty}</strong> • stan po <strong>${newQty}</strong> • rozliczenie: <strong>${escapeHtml(settlementLabel)}</strong>.</p>
+            </div>
+            <div class="adjustment-history-meta">
+              <span class="adjustment-diff ${diffClass}">${diffLabel}</span>
+              ${diff > 0 ? `<span class="badge badge-success">Plus</span>` : diff < 0 ? `<span class="badge badge-warning">Minus / FIFO</span>` : `<span class="badge">0</span>`}
+            </div>
+          </div>
+          ${settlementHtml}
+        </article>
+      `;
+    }).join("");
+
+    return `
+      <div class="history-modal-head">
+        <div>
+          <div class="history-modal-kicker"><span class="badge ${badgeClass}">${typeLabel}</span><span>${fmtDateISO(ev.dateISO)}</span></div>
+          <h3 class="history-modal-title">Podgląd korekty stanów</h3>
+          <p class="history-modal-subtitle">Zbiorcza sesja korekt z czytelnym rozpisaniem stanu przed, po i sposobu rozliczenia.</p>
+        </div>
+      </div>
+
+      <div class="history-modal-stats history-modal-stats-3">
+        <div class="history-stat-card">
+          <span class="history-stat-label">Data korekty</span>
+          <strong class="history-stat-value">${fmtDateISO(ev.dateISO)}</strong>
+        </div>
+        <div class="history-stat-card">
+          <span class="history-stat-label">Zmienione części</span>
+          <strong class="history-stat-value">${changeCount}</strong>
+        </div>
+        <div class="history-stat-card">
+          <span class="history-stat-label">Bilans / + / -</span>
+          <strong class="history-stat-value">${netDiff > 0 ? `+${netDiff}` : netDiff} • ${positiveCount}/${negativeCount}</strong>
+        </div>
+      </div>
+
+      <div class="history-modal-section">
+        <div class="history-modal-section-head">
+          <div>
+            <h4>Pozycje korekty</h4>
+            <p>Każda pozycja pokazuje stan przed, stan po, różnicę i faktyczny sposób rozliczenia.</p>
+          </div>
+        </div>
+        <div class="adjustment-history-list">${cards || `<div class="history-empty-state"><span class="text-muted">Brak pozycji korekty.</span></div>`}</div>
+      </div>
+    `;
+  }
 
   if (isDelivery) {
     const total = items.reduce((s, i) => s + (safeFloat(i.price) * safeInt(i.qty)), 0);
@@ -950,8 +1162,10 @@ function refreshCatalogsUI() {
   const els = getEls();
   if (!els.partsCatalog || !els.machinesCatalog) return;
 
-  // Parts catalog
   const parts = Array.from(state.partsCatalog.values());
+  const allSups = Array.from(state.suppliers.keys()).sort();
+
+  // Parts catalog
   els.partsCatalog.innerHTML = parts.map(p => {
     const suppliers = Array.from(state.suppliers.entries())
       .filter(([_, data]) => data.prices.has(skuKey(p.sku)))
@@ -991,99 +1205,423 @@ function refreshCatalogsUI() {
     return `${c} (${m?.name || ""})`;
   });
 
-  // Supplier picker for new part
+  const bomSkuSelect = document.getElementById('bomSkuSelect');
+  if (bomSkuSelect) {
+    renderSelectOptions(bomSkuSelect, parts.map(p => p.sku), sku => {
+      const part = state.partsCatalog.get(skuKey(sku));
+      return `${sku} (${part?.name || ""})`;
+    });
+    refreshComboFromSelect(bomSkuSelect, { placeholder: 'Wybierz część...' });
+  }
+
+  const supplierEditorPartSelect = document.getElementById('supplierEditorPartSelect');
+  if (supplierEditorPartSelect) {
+    renderSelectOptions(supplierEditorPartSelect, parts.map(p => p.sku), sku => {
+      const part = state.partsCatalog.get(skuKey(sku));
+      return `${sku} (${part?.name || ""})`;
+    });
+    refreshComboFromSelect(supplierEditorPartSelect, { placeholder: 'Wybierz część...' });
+  }
+
   const supBox = byId("partNewSuppliersChecklist");
-  const allSups = Array.from(state.suppliers.keys()).sort();
-  if (!supBox) return;
-  
-  comboMultiRender(supBox, {
-    options: allSups,
-    selected: comboMultiGetSelected(supBox),
-    placeholder: allSups.length ? "Wybierz dostawców..." : "Brak zdefiniowanych dostawców."
-  });
+  if (supBox) {
+    comboMultiRender(supBox, {
+      options: allSups,
+      selected: comboMultiGetSelected(supBox),
+      placeholder: allSups.length ? "Wybierz dostawców..." : "Brak zdefiniowanych dostawców."
+    });
+  }
+
+  const editBox = byId('editPartSuppliersChecklist');
+  if (editBox) {
+    comboMultiRender(editBox, {
+      options: allSups,
+      selected: comboMultiGetSelected(editBox),
+      placeholder: allSups.length ? 'Wybierz dostawców...' : 'Brak zdefiniowanych dostawców.'
+    });
+  }
+
+  if (typeof syncNewPartSupplierPricesUI === 'function') syncNewPartSupplierPricesUI();
+  if (typeof syncEditPartSupplierPricesUI === 'function') syncEditPartSupplierPricesUI();
 }
 
 
-// === Multi-combobox ===
+// === Shared comboboxes ===
 const _comboRegistry = new WeakMap();
+const _singleComboRegistry = new WeakMap();
+let _openComboApi = null;
+
+function getComboValueFromSelect(selectEl) {
+  if (!selectEl) return "";
+  const data = _singleComboRegistry.get(selectEl);
+  return normalize(data?.currentValue ?? selectEl.value ?? "");
+}
+
+function closeOpenCombobox(exceptApi = null) {
+  if (_openComboApi && _openComboApi !== exceptApi) {
+    _openComboApi.close();
+  }
+}
+
+function createComboShell(hostEl, placeholder = "Wybierz...", extraClass = "") {
+  hostEl.innerHTML = `
+    <button type="button" class="combobox-trigger ${extraClass}" aria-expanded="false">
+      <span class="combobox-trigger-label">${escapeHtml(placeholder)}</span>
+    </button>
+    <div class="combobox-menu hidden">
+      <div class="combobox-search">
+        <input type="text" class="combobox-search-input" placeholder="Szukaj..." autocomplete="off" />
+      </div>
+      <div class="combobox-options" role="listbox"></div>
+    </div>
+  `;
+
+  return {
+    trigger: hostEl.querySelector('.combobox-trigger'),
+    label: hostEl.querySelector('.combobox-trigger-label'),
+    menu: hostEl.querySelector('.combobox-menu'),
+    search: hostEl.querySelector('.combobox-search-input'),
+    optionsBox: hostEl.querySelector('.combobox-options')
+  };
+}
+
+function attachComboBehavior(hostEl, refs, api) {
+  const { trigger, menu, search } = refs;
+
+  api.open = () => {
+    closeOpenCombobox(api);
+    hostEl.classList.add('open');
+    menu.classList.remove('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    _openComboApi = api;
+    api.refresh?.();
+    requestAnimationFrame(() => {
+      search?.focus();
+      search?.select?.();
+    });
+  };
+
+  api.close = () => {
+    hostEl.classList.remove('open');
+    menu.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (_openComboApi === api) _openComboApi = null;
+    if (search) search.value = '';
+    api.activeIndex = -1;
+    api.refresh?.();
+  };
+
+  api.toggle = () => {
+    if (hostEl.classList.contains('open')) api.close();
+    else api.open();
+  };
+
+  trigger.addEventListener('click', (e) => {
+    e.preventDefault();
+    api.toggle();
+  });
+
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      api.open();
+    } else if (e.key === 'Escape') {
+      api.close();
+    }
+  });
+
+  search?.addEventListener('input', () => {
+    api.activeIndex = 0;
+    api.refresh?.();
+  });
+
+  search?.addEventListener('keydown', (e) => {
+    const items = Array.from(refs.optionsBox.querySelectorAll('.combobox-option:not(.is-empty):not(.is-disabled)'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!items.length) return;
+      api.activeIndex = Math.min(items.length - 1, api.activeIndex + 1);
+      api.refresh?.();
+      items[api.activeIndex]?.scrollIntoView?.({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!items.length) return;
+      api.activeIndex = Math.max(0, api.activeIndex - 1);
+      api.refresh?.();
+      items[api.activeIndex]?.scrollIntoView?.({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      const target = items[Math.max(0, api.activeIndex)] || items[0];
+      if (target) {
+        e.preventDefault();
+        target.click();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      api.close();
+      trigger.focus();
+      return;
+    }
+    if (e.key === 'Tab') {
+      api.close();
+    }
+  });
+}
 
 function comboMultiGetSelected(hostEl) {
   if (!hostEl) return [];
-  return _comboRegistry.get(hostEl)?.selected || [];
+  return [...(_comboRegistry.get(hostEl)?.selected || [])];
 }
 
 function comboMultiClear(hostEl) {
   if (!hostEl) return;
   const data = _comboRegistry.get(hostEl);
-  if (data) {
-    data.selected = [];
-    comboMultiRender(hostEl, { options: data.options, selected: [], placeholder: data.placeholder });
+  if (!data) return;
+  comboMultiRender(hostEl, { options: data.options, selected: [], placeholder: data.placeholder });
+}
+
+function comboMultiSetSelected(hostEl, selected = []) {
+  if (!hostEl) return;
+  const data = _comboRegistry.get(hostEl);
+  if (!data) {
+    comboMultiRender(hostEl, { selected });
+    return;
   }
+  comboMultiRender(hostEl, {
+    options: data.options,
+    selected,
+    placeholder: data.placeholder
+  });
 }
 
 function comboMultiRender(hostEl, opts) {
   if (!hostEl) return;
-  const { options = [], selected = [], placeholder = "Wybierz..." } = opts;
-  
-  _comboRegistry.set(hostEl, { options, selected: [...selected], placeholder });
-  
-  if (!options.length) {
-    hostEl.innerHTML = `<span class="text-muted" style="font-size:var(--text-sm)">${placeholder}</span>`;
-    return;
+
+  const options = Array.isArray(opts?.options) ? [...opts.options] : [];
+  const placeholder = opts?.placeholder || 'Wybierz...';
+  const selected = Array.from(new Set(Array.isArray(opts?.selected) ? opts.selected.filter(v => options.includes(v)) : []));
+
+  let data = _comboRegistry.get(hostEl);
+  if (!data) {
+    hostEl.classList.add('combo-tags-host');
+    const refs = createComboShell(hostEl, placeholder);
+    const selectedList = document.createElement('div');
+    selectedList.className = 'combobox-selected-list';
+    hostEl.appendChild(selectedList);
+
+    data = {
+      hostEl,
+      refs,
+      selectedList,
+      options: [],
+      selected: [],
+      placeholder,
+      activeIndex: -1,
+      refresh: null,
+      open: null,
+      close: null,
+      toggle: null
+    };
+
+    attachComboBehavior(hostEl, refs, data);
+    _comboRegistry.set(hostEl, data);
   }
-  
-  const selectedSet = new Set(selected);
-  hostEl.innerHTML = `
-    <div class="combobox-multi" style="display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-2);background:var(--field-bg);border:1px solid var(--border);border-radius:var(--radius-md)">
-      ${options.map(opt => `
-        <label style="display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-sm)">
-          <input type="checkbox" value="${escapeHtml(opt)}" ${selectedSet.has(opt) ? 'checked' : ''} 
-            onchange="comboMultiToggle(this, '${escapeHtml(opt)}')" style="cursor:pointer">
+
+  data.options = options;
+  data.selected = selected;
+  data.placeholder = placeholder;
+  data.refs.search.placeholder = options.length ? 'Szukaj i dodaj...' : 'Brak opcji';
+
+  data.refresh = () => {
+    const { label, optionsBox, search } = data.refs;
+    const query = String(search?.value || '').trim().toLowerCase();
+    const available = data.options.filter(opt => !data.selected.includes(opt));
+    const filtered = available.filter(opt => !query || opt.toLowerCase().includes(query));
+
+    label.textContent = data.selected.length ? `Dodaj kolejny (${data.selected.length})` : data.placeholder;
+
+    if (!filtered.length) {
+      optionsBox.innerHTML = `<div class="combobox-option is-empty">${available.length ? 'Brak wyników' : 'Brak dostępnych opcji'}</div>`;
+    } else {
+      if (data.activeIndex >= filtered.length) data.activeIndex = filtered.length - 1;
+      if (data.activeIndex < 0) data.activeIndex = 0;
+      optionsBox.innerHTML = filtered.map((opt, idx) => `
+        <button type="button" class="combobox-option ${idx === data.activeIndex ? 'active' : ''}" data-value="${escapeHtml(opt)}">
           <span>${escapeHtml(opt)}</span>
-        </label>
-      `).join('')}
-    </div>
-  `;
+        </button>
+      `).join('');
+
+      optionsBox.querySelectorAll('.combobox-option[data-value]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const value = btn.getAttribute('data-value') || '';
+          if (!value || data.selected.includes(value)) return;
+          data.selected.push(value);
+          if (data.refs.search) data.refs.search.value = '';
+          data.activeIndex = 0;
+          data.refresh();
+          hostEl.dispatchEvent(new Event('change', { bubbles: true }));
+          requestAnimationFrame(() => data.refs.search?.focus());
+        });
+      });
+    }
+
+    if (!data.selected.length) {
+      data.selectedList.innerHTML = `<div class="combobox-selected-empty text-muted">Nic jeszcze nie wybrano.</div>`;
+    } else {
+      data.selectedList.innerHTML = data.selected.map(value => `
+        <div class="combobox-chip">
+          <span class="combobox-chip-label">${escapeHtml(value)}</span>
+          <button type="button" class="combobox-chip-remove" data-remove="${escapeHtml(value)}" aria-label="Usuń ${escapeHtml(value)}">×</button>
+        </div>
+      `).join('');
+
+      data.selectedList.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const value = btn.getAttribute('data-remove') || '';
+          data.selected = data.selected.filter(v => v !== value);
+          data.refresh();
+          hostEl.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      });
+    }
+  };
+
+  data.refresh();
 }
 
-function comboMultiToggle(checkbox, value) {
-  const hostEl = checkbox.closest('[data-combo]');
-  if (!hostEl) return;
-  
-  const data = _comboRegistry.get(hostEl);
-  if (!data) return;
-  
-  if (checkbox.checked) {
-    if (!data.selected.includes(value)) data.selected.push(value);
-  } else {
-    data.selected = data.selected.filter(v => v !== value);
-  }
-  
-  // Trigger change event for price sync
-  hostEl.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
-// === Select helpers ===
 function renderSelectOptions(selectEl, options, labelFn = null) {
   if (!selectEl) return;
+  const currentValue = selectEl.value;
   selectEl.innerHTML = '<option value="">-- Wybierz --</option>' + 
     options.map(opt => {
       const label = labelFn ? labelFn(opt) : opt;
       return `<option value="${escapeHtml(opt)}">${escapeHtml(label)}</option>`;
     }).join('');
+  if (options.includes(currentValue)) selectEl.value = currentValue;
+  refreshComboFromSelect(selectEl);
 }
 
-// === Combobox from select (for enhanced selects) ===
 function initComboFromSelect(selectEl, opts = {}) {
-  if (!selectEl) return;
-  // Keep original select, just ensure it has proper styling
-  selectEl.classList.add('form-select');
+  if (!selectEl) return null;
+
+  let data = _singleComboRegistry.get(selectEl);
+  if (!data) {
+    selectEl.classList.add('combo-native-hidden');
+
+    const hostEl = document.createElement('div');
+    hostEl.className = 'combobox combo-select-host';
+    selectEl.insertAdjacentElement('afterend', hostEl);
+
+    const refs = createComboShell(hostEl, opts.placeholder || 'Wybierz...');
+    data = {
+      selectEl,
+      hostEl,
+      refs,
+      placeholder: opts.placeholder || 'Wybierz...',
+      activeIndex: -1,
+      currentValue: normalize(selectEl.value || ''),
+      refresh: null,
+      open: null,
+      close: null,
+      toggle: null
+    };
+
+    attachComboBehavior(hostEl, refs, data);
+
+    selectEl.addEventListener('change', () => refreshComboFromSelect(selectEl));
+    _singleComboRegistry.set(selectEl, data);
+  }
+
+  if (opts.placeholder) data.placeholder = opts.placeholder;
+  refreshComboFromSelect(selectEl, opts);
+  return data;
 }
 
 function refreshComboFromSelect(selectEl, opts = {}) {
-  if (!selectEl) return;
-  // Re-initialize if needed
+  if (!selectEl) return null;
+  const data = _singleComboRegistry.get(selectEl) || initComboFromSelect(selectEl, opts);
+  if (!data) return null;
+
+  if (opts.placeholder) data.placeholder = opts.placeholder;
+  const { refs, hostEl } = data;
+  const options = Array.from(selectEl.options || []).map(opt => ({
+    value: opt.value,
+    label: opt.textContent || '',
+    selected: opt.selected,
+    disabled: !!opt.disabled
+  })).filter(opt => opt.value !== '');
+
+  refs.search.placeholder = options.length ? 'Szukaj...' : 'Brak opcji';
+  refs.trigger.disabled = !!selectEl.disabled;
+  hostEl.classList.toggle('is-disabled', !!selectEl.disabled);
+
+  if (!options.some(opt => opt.value === selectEl.value)) {
+    selectEl.value = '';
+  }
+  data.currentValue = normalize(selectEl.value || '');
+
+  data.refresh = () => {
+    const query = String(refs.search?.value || '').trim().toLowerCase();
+    const filtered = options.filter(opt => !query || opt.label.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query));
+    const selectedOpt = options.find(opt => opt.value === selectEl.value);
+
+    refs.label.textContent = selectedOpt?.label || data.placeholder;
+
+    if (!filtered.length) {
+      refs.optionsBox.innerHTML = '<div class="combobox-option is-empty">Brak wyników</div>';
+    } else {
+      if (data.activeIndex >= filtered.length) data.activeIndex = filtered.length - 1;
+      if (data.activeIndex < 0) data.activeIndex = Math.max(0, filtered.findIndex(opt => opt.value === selectEl.value));
+      if (data.activeIndex < 0) data.activeIndex = 0;
+
+      refs.optionsBox.innerHTML = filtered.map((opt, idx) => `
+        <button type="button" class="combobox-option ${opt.value === selectEl.value ? 'selected' : ''} ${idx === data.activeIndex ? 'active' : ''} ${opt.disabled ? 'is-disabled' : ''}" data-value="${escapeHtml(opt.value)}" ${opt.disabled ? 'disabled' : ''}>
+          <span>${escapeHtml(opt.label)}</span>
+        </button>
+      `).join('');
+
+      refs.optionsBox.querySelectorAll('.combobox-option[data-value]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const value = btn.getAttribute('data-value') || '';
+          if (selectEl.value === value) {
+            data.currentValue = normalize(value);
+            data.close();
+            return;
+          }
+          selectEl.value = value;
+          data.currentValue = normalize(value);
+          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+          data.close();
+          refs.trigger.focus();
+        });
+      });
+    }
+  };
+
+  data.refresh();
+  return data;
 }
+
+const _comboGlobalBound = (() => {
+  if (window.__comboGlobalBound) return true;
+  window.__comboGlobalBound = true;
+
+  document.addEventListener('click', (e) => {
+    if (_openComboApi?.hostEl?.contains?.(e.target)) return;
+    closeOpenCombobox();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeOpenCombobox();
+  });
+
+  return true;
+})();
 
 // === Supplier Prices UI ===
 function bindSupplierPricesUI() {

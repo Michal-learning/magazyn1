@@ -20,7 +20,11 @@ const state = {
   machineCatalog: [],
   currentDelivery: { supplier: null, dateISO: "", items: [] },
   currentBuild: { dateISO: "", items: [] },
-  history: []
+  history: [],
+  ui: {
+    stockEditMode: false,
+    pendingStockAdjustments: {}
+  }
 };
 
 let _idCounter = 1;
@@ -59,6 +63,12 @@ function syncIdCounter() {
 }
 
 // === SERIALIZATION ===
+function ensureUiState() {
+  if (!state.ui || typeof state.ui !== "object") state.ui = {};
+  if (typeof state.ui.stockEditMode !== "boolean") state.ui.stockEditMode = false;
+  if (!state.ui.pendingStockAdjustments || typeof state.ui.pendingStockAdjustments !== "object") state.ui.pendingStockAdjustments = {};
+}
+
 function serializeState() {
   return {
     lots: state.lots,
@@ -69,7 +79,12 @@ function serializeState() {
     history: state.history,
     LOW_WARN,
     LOW_DANGER,
-    partsCatalog: Array.from(state.partsCatalog.entries()),
+    partsCatalog: Array.from(state.partsCatalog.entries()).map(([key, part]) => ([key, {
+      sku: normalize(part?.sku),
+      name: normalize(part?.name),
+      yellowThreshold: normalizeThresholdValue(part?.yellowThreshold),
+      redThreshold: normalizeThresholdValue(part?.redThreshold)
+    }])),
     suppliers: Array.from(state.suppliers.entries()).map(([name, data]) => ({
       name,
       prices: Array.from(data.prices.entries())
@@ -78,6 +93,7 @@ function serializeState() {
 }
 
 function restoreState(data) {
+  ensureUiState();
   if (!data) return;
 
   const asArr = (x) => Array.isArray(x) ? x : [];
@@ -143,7 +159,12 @@ function restoreState(data) {
     const sku = normalize(v.sku ?? rawKey);
     const name = normalize(v.name);
     if (!k || !sku || !name) continue;
-    state.partsCatalog.set(k, { sku, name });
+    state.partsCatalog.set(k, {
+      sku,
+      name,
+      yellowThreshold: normalizeThresholdValue(v?.yellowThreshold),
+      redThreshold: normalizeThresholdValue(v?.redThreshold)
+    });
   }
 
   state.suppliers = new Map();
@@ -169,6 +190,9 @@ function restoreState(data) {
     state.suppliers.set(name, { prices });
   }
 
+  state.ui.stockEditMode = false;
+  state.ui.pendingStockAdjustments = {};
+
   syncIdCounter();
 }
 
@@ -182,6 +206,7 @@ function save() {
 }
 
 function load() {
+  ensureUiState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) restoreState(JSON.parse(raw));
@@ -238,6 +263,59 @@ const safeQtyInt = (val) => {
   return (n === null) ? 0 : n;
 };
 
+
+function normalizeThresholdValue(val) {
+  const n = strictNonNegInt(val);
+  return n === null ? null : n;
+}
+
+function validatePartThresholds(yellowThreshold, redThreshold) {
+  const hasYellow = yellowThreshold !== null;
+  const hasRed = redThreshold !== null;
+
+  if (!hasYellow && !hasRed) {
+    return { success: true, yellowThreshold: null, redThreshold: null };
+  }
+
+  if (hasYellow !== hasRed) {
+    return { success: false, msg: "Uzupełnij oba progi albo zostaw oba pola puste." };
+  }
+
+  if (redThreshold > yellowThreshold) {
+    return { success: false, msg: "Próg czerwony nie może być większy niż próg żółty." };
+  }
+
+  return { success: true, yellowThreshold, redThreshold };
+}
+
+function resolvePartThresholdConfig(partOrSku) {
+  const part = typeof partOrSku === "string"
+    ? state.partsCatalog.get(skuKey(partOrSku))
+    : partOrSku;
+
+  const yellow = normalizeThresholdValue(part?.yellowThreshold);
+  const red = normalizeThresholdValue(part?.redThreshold);
+
+  return {
+    yellowThreshold: yellow ?? LOW_WARN,
+    redThreshold: red ?? LOW_DANGER,
+    usesCustomThresholds: yellow !== null && red !== null
+  };
+}
+
+function getPartStockStatus(partOrSku, qty) {
+  const thresholds = resolvePartThresholdConfig(partOrSku);
+  const safeQty = safeQtyInt(qty);
+
+  if (safeQty <= thresholds.redThreshold) {
+    return { level: "danger", label: "Krytyczne", ...thresholds };
+  }
+  if (safeQty <= thresholds.yellowThreshold) {
+    return { level: "warning", label: "Niskie", ...thresholds };
+  }
+  return { level: "success", label: "OK", ...thresholds };
+}
+
 // DOM helpers
 const byId = (id) => document.getElementById(id);
 
@@ -286,7 +364,7 @@ function validateDateISO(isoDate, options = {}) {
 }
 
 // === PARTS CATALOG ===
-function upsertPart(sku, name, selectedSuppliers = []) {
+function upsertPart(sku, name, selectedSuppliers = [], thresholds = {}) {
   const s = normalize(sku);
   const n = normalize(name);
   if (!s || !n) return { success: false, msg: "Podaj Nazwę (ID) i Typ." };
@@ -298,8 +376,18 @@ function upsertPart(sku, name, selectedSuppliers = []) {
   if (s.length > 50) return { success: false, msg: "ID nie może być dłuższe niż 50 znaków." };
   if (n.length > 200) return { success: false, msg: "Typ nie może być dłuższy niż 200 znaków." };
   
+  const yellowThreshold = normalizeThresholdValue(thresholds?.yellowThreshold);
+  const redThreshold = normalizeThresholdValue(thresholds?.redThreshold);
+  const thresholdValidation = validatePartThresholds(yellowThreshold, redThreshold);
+  if (!thresholdValidation.success) return thresholdValidation;
+
   const k = skuKey(s);
-  state.partsCatalog.set(k, { sku: s, name: n });
+  state.partsCatalog.set(k, {
+    sku: s,
+    name: n,
+    yellowThreshold: thresholdValidation.yellowThreshold,
+    redThreshold: thresholdValidation.redThreshold
+  });
 
   selectedSuppliers.forEach(supName => {
     const sup = state.suppliers.get(supName);
@@ -739,6 +827,233 @@ function fmtDateISO(iso) {
   } catch {
     return iso;
   }
+}
+
+function getTodayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getPartTotalQty(skuRaw) {
+  const k = skuKey(skuRaw);
+  return (state.lots || [])
+    .filter(l => skuKey(l.sku) === k)
+    .reduce((sum, l) => sum + safeQtyInt(l.qty), 0);
+}
+
+function getLastKnownUnitPrice(skuRaw) {
+  const k = skuKey(skuRaw);
+  const lots = (state.lots || [])
+    .filter(l => skuKey(l.sku) === k)
+    .slice()
+    .sort((a, b) => (safeInt(a.id) - safeInt(b.id)));
+  if (!lots.length) return 0;
+  const last = lots[lots.length - 1];
+  return safeFloat(last?.unitPrice || 0);
+}
+
+function getPendingStockAdjustmentsCount() {
+  ensureUiState();
+  return Object.values(state.ui.pendingStockAdjustments || {}).filter(item => item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty)).length;
+}
+
+function beginStockEditMode() {
+  ensureUiState();
+  state.ui.stockEditMode = true;
+  state.ui.pendingStockAdjustments = {};
+  renderWarehouse();
+}
+
+function cancelStockEditMode() {
+  ensureUiState();
+  state.ui.stockEditMode = false;
+  state.ui.pendingStockAdjustments = {};
+  renderWarehouse();
+}
+
+function updatePendingStockAdjustment(skuRaw, rawValue) {
+  ensureUiState();
+  const k = skuKey(skuRaw);
+  const part = state.partsCatalog.get(k) || {};
+  const previousQty = getPartTotalQty(skuRaw);
+  const raw = String(rawValue ?? "").trim();
+
+  if (raw === String(previousQty)) {
+    delete state.ui.pendingStockAdjustments[k];
+    renderWarehouse();
+    return;
+  }
+
+  if (raw === "") {
+    state.ui.pendingStockAdjustments[k] = {
+      sku: part.sku || normalize(skuRaw),
+      name: part.name || normalize(part.name),
+      previousQty,
+      newQty: previousQty,
+      diff: 0,
+      rawValue: "",
+      invalid: true
+    };
+    renderWarehouse();
+    return;
+  }
+
+  const parsed = strictNonNegInt(raw);
+  if (parsed === null) {
+    state.ui.pendingStockAdjustments[k] = {
+      sku: part.sku || normalize(skuRaw),
+      name: part.name || normalize(part.name),
+      previousQty,
+      newQty: previousQty,
+      diff: 0,
+      rawValue: raw,
+      invalid: true
+    };
+    renderWarehouse();
+    return;
+  }
+
+  if (parsed === previousQty) {
+    delete state.ui.pendingStockAdjustments[k];
+    renderWarehouse();
+    return;
+  }
+
+  state.ui.pendingStockAdjustments[k] = {
+    sku: part.sku || normalize(skuRaw),
+    name: part.name || normalize(part.name),
+    previousQty,
+    newQty: parsed,
+    diff: parsed - previousQty,
+    rawValue: String(parsed),
+    invalid: false
+  };
+  renderWarehouse();
+}
+
+function commitStockAdjustments() {
+  ensureUiState();
+  const pending = Object.values(state.ui.pendingStockAdjustments || {});
+  const invalid = pending.find(item => item && item.invalid);
+  if (invalid) {
+    toast("Błędne dane", `Popraw wartość dla części ${invalid.sku || "—"}.`, "warning");
+    return;
+  }
+
+  const changes = pending
+    .filter(Boolean)
+    .map(item => ({
+      sku: normalize(item.sku),
+      name: normalize(item.name),
+      previousQty: safeQtyInt(item.previousQty),
+      newQty: safeQtyInt(item.newQty),
+      diff: safeQtyInt(item.newQty) - safeQtyInt(item.previousQty)
+    }))
+    .filter(item => item.newQty !== item.previousQty);
+
+  if (!changes.length) {
+    state.ui.stockEditMode = false;
+    state.ui.pendingStockAdjustments = {};
+    renderWarehouse();
+    toast("Brak zmian", "Nie wykryto realnych korekt do zapisania.", "warning");
+    return;
+  }
+
+  const lotsClone = JSON.parse(JSON.stringify(state.lots || []));
+  const dateISO = getTodayISO();
+  const historyItems = [];
+
+  for (const change of changes) {
+    const k = skuKey(change.sku);
+    if (change.diff > 0) {
+      const referenceUnitPrice = getLastKnownUnitPrice(change.sku);
+      const newLot = {
+        id: nextId(),
+        sku: change.sku,
+        name: change.name,
+        supplier: "Korekta stanu",
+        unitPrice: safeFloat(referenceUnitPrice),
+        qty: safeQtyInt(change.diff),
+        dateIn: dateISO
+      };
+      lotsClone.push(newLot);
+      historyItems.push({
+        sku: change.sku,
+        name: change.name,
+        previousQty: change.previousQty,
+        newQty: change.newQty,
+        diff: change.diff,
+        direction: "plus",
+        referenceUnitPrice: safeFloat(referenceUnitPrice),
+        createdLot: {
+          lotId: String(newLot.id),
+          qty: safeQtyInt(newLot.qty),
+          supplier: newLot.supplier,
+          dateIn: newLot.dateIn,
+          unitPrice: safeFloat(newLot.unitPrice)
+        },
+        affectedLots: []
+      });
+      continue;
+    }
+
+    let remainingToRemove = Math.abs(change.diff);
+    const affectedLots = [];
+    const relevantLots = lotsClone
+      .filter(l => skuKey(l.sku) === k && safeQtyInt(l.qty) > 0)
+      .sort((a, b) => safeInt(a.id) - safeInt(b.id));
+
+    for (const lot of relevantLots) {
+      if (remainingToRemove <= 0) break;
+      const available = safeQtyInt(lot.qty);
+      if (available <= 0) continue;
+      const taken = Math.min(available, remainingToRemove);
+      lot.qty = available - taken;
+      remainingToRemove -= taken;
+      affectedLots.push({
+        lotId: String(lot.id),
+        removedQty: safeQtyInt(taken),
+        supplier: lot.supplier || "-",
+        dateIn: lot.dateIn || null,
+        unitPrice: safeFloat(lot.unitPrice || 0),
+        remainingAfter: safeQtyInt(lot.qty)
+      });
+    }
+
+    if (remainingToRemove > 0) {
+      toast("Błąd korekty", `Nie udało się odjąć pełnej ilości dla części ${change.sku}.`, "error");
+      return;
+    }
+
+    historyItems.push({
+      sku: change.sku,
+      name: change.name,
+      previousQty: change.previousQty,
+      newQty: change.newQty,
+      diff: change.diff,
+      direction: "minus",
+      referenceUnitPrice: 0,
+      affectedLots
+    });
+  }
+
+  state.lots = lotsClone.filter(l => safeQtyInt(l.qty) > 0);
+
+  addHistoryEvent({
+    id: nextId(),
+    ts: Date.now(),
+    type: "adjustment",
+    dateISO,
+    partsChanged: historyItems.length,
+    items: historyItems
+  });
+
+  state.ui.stockEditMode = false;
+  state.ui.pendingStockAdjustments = {};
+
+  save();
+  renderWarehouse();
+  renderHistory();
+  toast("Korekty zapisane", `Zapisano korekty dla ${historyItems.length} ${historyItems.length === 1 ? "części" : "części"}.`, "success");
 }
 
 // === DEBOUNCE UTILITY ===

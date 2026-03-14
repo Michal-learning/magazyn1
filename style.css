@@ -900,6 +900,18 @@ body.history-preview-open {
   border-top: 1px solid var(--border);
 }
 
+
+.part-threshold-row input {
+  font-variant-numeric: tabular-nums;
+}
+
+.part-threshold-hint {
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
 .supplier-editor-header {
   padding-right: 52px;
   align-items: flex-start;
@@ -1656,8 +1668,17 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ---------- 16) Custom Select / Combobox ---------- */
+.combo-native-hidden {
+  display: none !important;
+}
+
 .combobox {
   position: relative;
+}
+
+.combo-select-host,
+.combo-tags-host {
+  width: 100%;
 }
 
 .combobox-trigger {
@@ -1666,6 +1687,7 @@ input[type="range"]::-moz-range-thumb {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
+  min-height: 46px;
   padding: var(--space-3) var(--space-4);
   background: var(--field-bg);
   border: 1px solid var(--border);
@@ -1681,10 +1703,25 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--border-strong);
 }
 
-.combobox-trigger:focus {
+.combobox-trigger:focus,
+.combobox-trigger:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.combobox.is-disabled .combobox-trigger,
+.combobox-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.combobox-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .combobox-trigger::after {
@@ -1695,6 +1732,7 @@ input[type="range"]::-moz-range-thumb {
   border-right: 5px solid transparent;
   border-top: 5px solid var(--text-tertiary);
   transition: transform var(--trans-fast);
+  flex: 0 0 auto;
 }
 
 .combobox.open .combobox-trigger::after {
@@ -1710,7 +1748,7 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: 140;
   overflow: hidden;
   animation: combobox-in 0.15s var(--ease-out);
 }
@@ -1731,7 +1769,8 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--border);
 }
 
-.combobox-search input {
+.combobox-search input,
+.combobox-search-input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   background: var(--surface-1);
@@ -1741,25 +1780,100 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .combobox-options {
-  max-height: 240px;
+  max-height: 260px;
   overflow-y: auto;
+  padding: var(--space-1);
 }
 
 .combobox-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--trans-fast);
+  transition: background var(--trans-fast), color var(--trans-fast), border-color var(--trans-fast);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
 }
 
-.combobox-option:hover {
+.combobox-option:hover,
+.combobox-option.active {
   background: var(--surface-2);
 }
 
 .combobox-option.selected {
   background: var(--accent-glow);
+  border-color: rgba(139, 92, 246, 0.35);
   color: var(--accent-light);
+}
+
+.combobox-option.is-empty {
+  color: var(--text-muted);
+  cursor: default;
+  justify-content: center;
+}
+
+.combobox-option.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.combobox-selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.combobox-selected-empty {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  font-size: var(--text-sm);
+}
+
+.combobox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.combobox-chip-label {
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.combobox-chip-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.combobox-chip-remove:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
 }
 
 /* ---------- 17) Toolbar ---------- */
@@ -2107,6 +2221,10 @@ body.part-details-open {
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
 
+.stock-row-warning td:first-child {
+  position: relative;
+}
+
 .stock-row-warning td:first-child::before {
   content: '';
   position: absolute;
@@ -2182,4 +2300,207 @@ body.part-details-open {
 .lot-row input {
   width: 100px;
   text-align: right;
+}
+
+
+/* ---------- 31) Stock Adjustments ---------- */
+.warehouse-header-actions {
+  justify-content: flex-end;
+}
+
+.warehouse-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.warehouse-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+}
+
+.warehouse-edit-banner strong {
+  color: var(--info-light);
+}
+
+.stock-edit-cell {
+  min-width: 146px;
+}
+
+.stock-edit-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.stock-edit-input {
+  width: 96px;
+  min-width: 96px;
+  padding: 8px 10px;
+  text-align: right;
+}
+
+.stock-edit-input.input-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+.stock-edit-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.adjustment-diff {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+
+.adjustment-diff-plus {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+.adjustment-diff-minus {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.adjustment-diff-zero {
+  color: var(--text-tertiary);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.adjustment-diff-invalid {
+  color: var(--danger-light);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.stock-edit-row-changed {
+  background: rgba(139, 92, 246, 0.06) !important;
+}
+
+.stock-edit-row-invalid {
+  background: rgba(239, 68, 68, 0.06) !important;
+}
+
+.history-adjustment-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.adjustment-history-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.adjustment-history-row {
+  padding: var(--space-4);
+  background: linear-gradient(180deg, var(--surface-2), rgba(255,255,255,0.015));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.adjustment-history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.adjustment-history-head p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
+.adjustment-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.adjustment-lots-list {
+  margin-top: var(--space-2);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.adjustment-lot-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 760px) {
+  .warehouse-edit-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .warehouse-edit-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .stock-edit-input {
+    width: 84px;
+    min-width: 84px;
+  }
+
+  .adjustment-history-head,
+  .adjustment-lot-item {
+    flex-direction: column;
+  }
+}
+
+.lot-origin-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  line-height: 1.4;
+  color: var(--warning-light);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  vertical-align: middle;
+}
+
+.lot-origin-note {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }

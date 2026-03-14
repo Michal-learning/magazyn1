@@ -14,10 +14,11 @@ function strictParseQtyInt(raw) {
 const HISTORY_VIEW_KEY = "magazyn_history_view_v3";
 
 function setHistoryView(view) {
-  const v = (view === "builds") ? "builds" : "deliveries";
+  const v = (view === "builds" || view === "adjustments") ? view : "deliveries";
 
   const bDel = document.getElementById("historyViewDeliveriesBtn");
   const bBuild = document.getElementById("historyViewBuildsBtn");
+  const bAdj = document.getElementById("historyViewAdjustmentsBtn");
 
   if (bDel) {
     bDel.classList.toggle("active", v === "deliveries");
@@ -27,12 +28,18 @@ function setHistoryView(view) {
     bBuild.classList.toggle("active", v === "builds");
     bBuild.setAttribute("aria-selected", v === "builds" ? "true" : "false");
   }
+  if (bAdj) {
+    bAdj.classList.toggle("active", v === "adjustments");
+    bAdj.setAttribute("aria-selected", v === "adjustments" ? "true" : "false");
+  }
 
   const search = document.getElementById("historySearch");
   if (search) {
     search.placeholder = (v === "deliveries")
       ? "Szukaj po Dostawcy lub Nazwie/Typie części..."
-      : "Szukaj po Nazwie/Typie maszyny...";
+      : (v === "builds")
+        ? "Szukaj po Nazwie/Typie maszyny..."
+        : "Szukaj po Nazwie (ID) lub Typie części...";
   }
 
   localStorage.setItem(HISTORY_VIEW_KEY, v);
@@ -42,13 +49,15 @@ function setHistoryView(view) {
 function initHistoryViewToggle() {
   const bDel = document.getElementById("historyViewDeliveriesBtn");
   const bBuild = document.getElementById("historyViewBuildsBtn");
-  if (!bDel || !bBuild) return;
+  const bAdj = document.getElementById("historyViewAdjustmentsBtn");
+  if (!bDel || !bBuild || !bAdj) return;
 
   const saved = localStorage.getItem(HISTORY_VIEW_KEY);
-  setHistoryView(saved === "builds" ? "builds" : "deliveries");
+  setHistoryView(saved === "builds" || saved === "adjustments" ? saved : "deliveries");
 
   bDel.addEventListener("click", () => setHistoryView("deliveries"));
   bBuild.addEventListener("click", () => setHistoryView("builds"));
+  bAdj.addEventListener("click", () => setHistoryView("adjustments"));
 }
 
 function initHistoryFilters() {
@@ -82,6 +91,37 @@ function initSidePanelSignals() {
     const partsPanel = document.querySelector('[data-tab-panel="parts"]');
     if (partsPanel?.scrollIntoView) {
       partsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+}
+
+function initStockEditMode() {
+  document.getElementById("stockEditToggleBtn")?.addEventListener("click", () => {
+    beginStockEditMode();
+  });
+
+  document.getElementById("stockEditCancelBtn")?.addEventListener("click", () => {
+    cancelStockEditMode();
+  });
+
+  document.getElementById("stockEditSaveBtn")?.addEventListener("click", () => {
+    commitStockAdjustments();
+  });
+
+  document.addEventListener("change", (e) => {
+    const input = e.target?.closest?.(".stock-edit-input");
+    if (!input) return;
+    const sku = input.getAttribute("data-sku");
+    if (!sku) return;
+    updatePendingStockAdjustment(sku, input.value);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const input = e.target?.closest?.(".stock-edit-input");
+    if (!input) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
     }
   });
 }
@@ -170,6 +210,7 @@ function openNewPartPanel() {
   const nameEl = document.getElementById("partNameInput");
   if (skuEl) skuEl.value = "";
   if (nameEl) nameEl.value = "";
+  fillPartThresholdForm(null);
 
   const box = document.getElementById("partNewSuppliersChecklist");
   if (typeof comboMultiClear === "function") comboMultiClear(box);
@@ -192,6 +233,7 @@ function closeNewPartPanel(opts = {}) {
     const nameEl = document.getElementById("partNameInput");
     if (skuEl) skuEl.value = "";
     if (nameEl) nameEl.value = "";
+    fillPartThresholdForm(null);
 
     const box = document.getElementById("partNewSuppliersChecklist");
     if (typeof comboMultiClear === "function") comboMultiClear(box);
@@ -201,6 +243,37 @@ function closeNewPartPanel(opts = {}) {
   }
 
   closePartEditorModal();
+}
+
+
+function getPartThresholdInputs() {
+  return {
+    yellowInput: document.getElementById("partYellowThresholdInput"),
+    redInput: document.getElementById("partRedThresholdInput")
+  };
+}
+
+function readPartThresholdForm() {
+  const { yellowInput, redInput } = getPartThresholdInputs();
+  const yellowRaw = String(yellowInput?.value ?? "").trim();
+  const redRaw = String(redInput?.value ?? "").trim();
+  const yellowThreshold = normalizeThresholdValue(yellowRaw || null);
+  const redThreshold = normalizeThresholdValue(redRaw || null);
+
+  if (yellowRaw && yellowThreshold === null) {
+    return { success: false, msg: "Próg żółty musi być liczbą całkowitą większą lub równą 0." };
+  }
+  if (redRaw && redThreshold === null) {
+    return { success: false, msg: "Próg czerwony musi być liczbą całkowitą większą lub równą 0." };
+  }
+
+  return validatePartThresholds(yellowThreshold, redThreshold);
+}
+
+function fillPartThresholdForm(part = null) {
+  const { yellowInput, redInput } = getPartThresholdInputs();
+  if (yellowInput) yellowInput.value = part?.yellowThreshold ?? "";
+  if (redInput) redInput.value = part?.redThreshold ?? "";
 }
 
 function initNewPartToggle() {
@@ -217,6 +290,7 @@ function initNewPartToggle() {
 function init() {
   initThresholdsToggle();
   initNewPartToggle();
+  initStockEditMode();
   
   if (!document.querySelector(".toast-host")) {
     const h = document.createElement("div");
@@ -554,8 +628,13 @@ document.getElementById("addPartBtn")?.addEventListener("click", () => {
 
   const box = document.getElementById("partNewSuppliersChecklist");
   const selectedSups = (typeof comboMultiGetSelected === "function") ? comboMultiGetSelected(box) : [];
+  const thresholds = readPartThresholdForm();
+  if (!thresholds.success) {
+    toast("Błąd walidacji", thresholds.msg, "warning");
+    return;
+  }
 
-  const res = upsertPart(sku, name, selectedSups);
+  const res = upsertPart(sku, name, selectedSups, thresholds);
   toast(res.success ? "Zapisano" : "Błąd walidacji", res.msg, res.success ? "success" : "warning");
 
   if (res.success) {
@@ -603,7 +682,51 @@ window.askDeleteSupplier = (n) => {
 // === EDITORS ===
 let editingSup = null;
 let editingMachine = null;
+let editingMachineOriginalCode = null;
 let editingMachineIsNew = false;
+
+function cloneBomItems(items) {
+  return Array.isArray(items)
+    ? items.filter(Boolean).map(item => ({ sku: normalize(item?.sku), qty: safeInt(item?.qty) })).filter(item => item.sku)
+    : [];
+}
+
+function ensureEditingMachineDraft() {
+  if (!editingMachine || typeof editingMachine !== 'object') {
+    editingMachine = { code: '', name: '', bom: [] };
+  }
+  if (!Array.isArray(editingMachine.bom)) editingMachine.bom = [];
+  return editingMachine;
+}
+
+function getBomEditorSelection() {
+  const selectEl = document.getElementById('bomSkuSelect');
+  const comboValue = (typeof getComboValueFromSelect === 'function')
+    ? normalize(getComboValueFromSelect(selectEl))
+    : '';
+  const selectValue = normalize(selectEl?.value ?? '');
+  const rawValue = comboValue || selectValue;
+  const part = rawValue ? state.partsCatalog.get(skuKey(rawValue)) : null;
+  return {
+    selectEl,
+    rawValue,
+    part,
+    sku: part?.sku || rawValue
+  };
+}
+
+function resetBomEditorInputs() {
+  const qtyInput = document.getElementById('bomQtyInput');
+  const selectEl = document.getElementById('bomSkuSelect');
+
+  if (qtyInput) qtyInput.value = '1';
+  if (selectEl) {
+    selectEl.value = '';
+    if (typeof refreshComboFromSelect === 'function') {
+      try { refreshComboFromSelect(selectEl, { placeholder: 'Wybierz część...' }); } catch {}
+    }
+  }
+}
 
 function syncMachineEditorHeader() {
   const codeInput = document.getElementById("machineCodeInput");
@@ -650,6 +773,7 @@ function closeMachineEditorModal() {
 
 function startNewMachineFlow() {
   editingMachineIsNew = true;
+  editingMachineOriginalCode = null;
   editingMachine = { code: "", name: "", bom: [] };
   unsavedChanges.clear("machineEditor");
 
@@ -764,8 +888,14 @@ document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", ()
 
 window.openMachineEditor = (code) => {
   editingMachineIsNew = false;
-  editingMachine = state.machineCatalog.find(m => m.code === code);
-  if (!editingMachine) return;
+  const machine = state.machineCatalog.find(m => m.code === code);
+  if (!machine) return;
+  editingMachineOriginalCode = machine.code;
+  editingMachine = {
+    code: machine.code,
+    name: machine.name,
+    bom: cloneBomItems(machine.bom)
+  };
 
   const codeInput = document.getElementById("machineCodeInput");
   const nameInput = document.getElementById("machineNameInput");
@@ -795,25 +925,36 @@ window.openMachineEditor = (code) => {
 
 function renderBomTable() {
   const tbody = document.querySelector("#bomTable tbody");
-  if (!tbody || !editingMachine || !Array.isArray(editingMachine.bom)) return;
-  
-  tbody.innerHTML = editingMachine.bom.map((b, idx) => {
-    const p = state.partsCatalog.get(skuKey(b.sku));
-    return `<tr>
-      <td><span class="badge">${escapeHtml(b.sku)}</span></td>
-      <td>${p ? p.name : "???"}</td>
-      <td class="text-right">${b.qty}</td>
-      <td class="text-right">
-        <button class="btn btn-danger btn-sm btn-icon" onclick="removeBomItem(${idx})" aria-label="Usuń">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </td>
-    </tr>`;
-  }).join("");
-
   const saveBtn = document.getElementById("machineEditorSaveBtn");
+  const draft = ensureEditingMachineDraft();
+  if (!tbody) {
+    if (saveBtn) {
+      saveBtn.disabled = !draft.bom.length;
+      saveBtn.textContent = editingMachineIsNew ? "Utwórz" : "Zapisz zmiany";
+    }
+    return;
+  }
+
+  if (!draft.bom.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:var(--space-4)">BOM jest pusty. Dodaj przynajmniej jedną część.</td></tr>`;
+  } else {
+    tbody.innerHTML = draft.bom.map((b, idx) => {
+      const p = state.partsCatalog.get(skuKey(b.sku));
+      return `<tr>
+        <td><span class="badge">${escapeHtml(b.sku)}</span></td>
+        <td>${p ? p.name : "???"}</td>
+        <td class="text-right">${safeInt(b.qty)}</td>
+        <td class="text-right">
+          <button class="btn btn-danger btn-sm btn-icon" onclick="removeBomItem(${idx})" aria-label="Usuń">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
   if (saveBtn) {
-    saveBtn.disabled = !editingMachine.bom.length;
+    saveBtn.disabled = !draft.bom.length;
     saveBtn.textContent = editingMachineIsNew ? "Utwórz" : "Zapisz zmiany";
   }
 }
@@ -833,39 +974,63 @@ document.getElementById("machineNameInput")?.addEventListener("input", (e) => {
 });
 
 document.getElementById("addBomItemBtn")?.addEventListener("click", () => {
-  const sku = document.getElementById("bomSkuSelect")?.value;
+  const draft = ensureEditingMachineDraft();
+  const { selectEl, part, sku } = getBomEditorSelection();
+  const qtyInput = document.getElementById("bomQtyInput");
+  const qtyRaw = qtyInput?.value ?? "";
+  const qty = strictParseQtyInt(qtyRaw);
+
   if (!sku) {
     toast("Brak części", "Wybierz część do składu.", "warning");
     return;
   }
-  const qty = safeInt(document.getElementById("bomQtyInput")?.value);
-  
-  const existing = editingMachine?.bom?.find(b => skuKey(b.sku) === skuKey(sku));
+  if (!part) {
+    toast("Nieaktualna część", "Wybrana część nie istnieje już w katalogu. Odśwież wybór i spróbuj ponownie.", "warning");
+    refreshCatalogsUI();
+    return;
+  }
+  if (qty === null) {
+    toast("Nieprawidłowa ilość", "Ilość musi być liczbą całkowitą większą lub równą 1.", "warning");
+    qtyInput?.focus?.();
+    return;
+  }
+
+  if (selectEl) {
+    selectEl.value = sku;
+    if (typeof refreshComboFromSelect === "function") {
+      try { refreshComboFromSelect(selectEl, { placeholder: "Wybierz część..." }); } catch {}
+    }
+  }
+
+  const existing = draft.bom.find(b => skuKey(b.sku) === skuKey(sku));
   if (existing) {
     existing.qty = qty;
     toast("Zaktualizowano", `Ilość części ${sku} w BOM została zmieniona na ${qty}.`, "success");
   } else {
-    editingMachine.bom.push({ sku, qty });
+    draft.bom.push({ sku, qty });
     toast("Dodano do BOM", `Część ${sku} została dodana do składu maszyny.`, "success");
   }
-  
+
+  resetBomEditorInputs();
   unsavedChanges.mark("machineEditor");
   renderBomTable();
 });
 
 window.removeBomItem = (idx) => {
-  editingMachine?.bom?.splice(idx, 1);
+  const draft = ensureEditingMachineDraft();
+  if (idx < 0 || idx >= draft.bom.length) return;
+  draft.bom.splice(idx, 1);
   unsavedChanges.mark("machineEditor");
   renderBomTable();
 };
 
 document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () => {
-  if (!editingMachine) return;
+  const draft = ensureEditingMachineDraft();
 
   const codeInput = document.getElementById("machineCodeInput");
   const nameInput = document.getElementById("machineNameInput");
-  const code = normalize(codeInput?.value ?? editingMachine.code ?? "");
-  const name = normalize(nameInput?.value ?? editingMachine.name ?? "");
+  const code = normalize(codeInput?.value ?? draft.code ?? "");
+  const name = normalize(nameInput?.value ?? draft.name ?? "");
 
   if (!code || !name) {
     toast("Brak danych", "Podaj kod i nazwę maszyny.", "warning");
@@ -879,7 +1044,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
     return;
   }
 
-  if (!Array.isArray(editingMachine.bom) || editingMachine.bom.length === 0) {
+  if (!Array.isArray(draft.bom) || draft.bom.length === 0) {
     toast("Pusty BOM", "Nie można zapisać maszyny bez składników. Dodaj przynajmniej jedną część.", "warning");
     return;
   }
@@ -890,24 +1055,24 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
     return;
   }
 
-  editingMachine.code = code;
-  editingMachine.name = name;
+  draft.code = code;
+  draft.name = name;
 
   if (editingMachineIsNew) {
     state.machineCatalog.push({
       code,
       name,
-      bom: editingMachine.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
+      bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
     });
     editingMachineIsNew = false;
     toast("Dodano maszynę", `"${name}" została dodana do katalogu.`, "success");
   } else {
-    const idx = state.machineCatalog.findIndex(m => m.code === code);
+    const idx = state.machineCatalog.findIndex(m => m.code === (editingMachineOriginalCode || code));
     if (idx >= 0) {
       state.machineCatalog[idx] = {
         code,
         name,
-        bom: editingMachine.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
+        bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
       };
     }
     toast("Zapisano zmiany", `BOM maszyny "${name}" został zaktualizowany.`, "success");
@@ -917,6 +1082,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
   save();
   closeMachineEditorModal();
   editingMachine = null;
+  editingMachineOriginalCode = null;
   refreshCatalogsUI();
 });
 
@@ -932,12 +1098,14 @@ document.getElementById("machineEditorCancelBtn")?.addEventListener("click", () 
   if (editingMachineIsNew) {
     editingMachineIsNew = false;
     editingMachine = null;
+    editingMachineOriginalCode = null;
     unsavedChanges.clear("machineEditor");
     return;
   }
   
   load();
   editingMachine = null;
+  editingMachineOriginalCode = null;
   unsavedChanges.clear("machineEditor");
   refreshCatalogsUI();
 });
@@ -1044,6 +1212,7 @@ window.startEditPart = (sku) => {
   if (skuInput) skuInput.value = part.sku;
   if (nameInput) nameInput.value = part.name;
   if (editSkuInput) editSkuInput.value = part.sku;
+  fillPartThresholdForm(part);
 
   // Get suppliers for this part
   const supsForPart = Array.from(state.suppliers.entries())
@@ -1072,27 +1241,36 @@ function saveEditPart() {
   const sku = normalize(skuInput?.value ?? "");
   const name = normalize(nameInput?.value ?? "");
   const originalSku = normalize(editSkuInput?.value ?? "");
+  const thresholds = readPartThresholdForm();
 
   if (!sku || !name) {
     toast("Brak danych", "Podaj nazwę (ID) i typ części.", "warning");
     return;
   }
 
+  if (!thresholds.success) {
+    toast("Błąd walidacji", thresholds.msg, "warning");
+    return;
+  }
+
   const k = skuKey(sku);
   const originalK = skuKey(originalSku);
+  const skuChanged = k !== originalK;
 
-  // Check if SKU changed and new SKU already exists
-  if (k !== originalK && state.partsCatalog.has(k)) {
+  if (skuChanged && state.partsCatalog.has(k)) {
     toast("ID zajęte", `Część o ID "${sku}" już istnieje w bazie.`, "warning");
     skuInput?.focus();
     return;
   }
 
-  // Update part catalog
   state.partsCatalog.delete(originalK);
-  state.partsCatalog.set(k, { sku, name });
+  state.partsCatalog.set(k, {
+    sku,
+    name,
+    yellowThreshold: thresholds.yellowThreshold,
+    redThreshold: thresholds.redThreshold
+  });
 
-  // Update lots with new SKU/name
   state.lots.forEach(lot => {
     if (skuKey(lot.sku) === originalK) {
       lot.sku = sku;
@@ -1100,28 +1278,48 @@ function saveEditPart() {
     }
   });
 
-  // Update supplier prices
+  state.currentDelivery.items.forEach(item => {
+    if (skuKey(item.sku) === originalK) {
+      item.sku = sku;
+      item.name = name;
+    }
+  });
+
+  state.machineCatalog.forEach(machine => {
+    if (!Array.isArray(machine?.bom)) return;
+    machine.bom.forEach(item => {
+      if (skuKey(item?.sku) === originalK) {
+        item.sku = sku;
+      }
+    });
+  });
+
   const editChecklist = document.getElementById("editPartSuppliersChecklist");
-  const selectedSups = comboMultiGetSelected(editChecklist);
-  
-  // Remove old prices
+  const selectedSups = (typeof comboMultiGetSelected === "function") ? comboMultiGetSelected(editChecklist) : [];
+
   for (const sup of state.suppliers.values()) {
     sup.prices.delete(originalK);
   }
 
-  // Add new prices
   const panel = document.getElementById("editPartSupplierPrices");
   const inputs = panel?.querySelectorAll('input[data-sup]') || [];
   inputs.forEach(inp => {
     const sup = inp.getAttribute("data-sup");
     if (sup && selectedSups.includes(sup)) {
-      updateSupplierPrice(sup, sku, inp.value);
+      const supData = state.suppliers.get(sup);
+      if (supData) supData.prices.set(k, safeFloat(inp.value));
     }
   });
+
+  currentEditPartKey = k;
+  if (editSkuInput) editSkuInput.value = sku;
 
   save();
   refreshCatalogsUI();
   renderWarehouse();
+  renderDelivery();
+  renderBuild();
+  renderMachinesStock();
   closePartEditorModal();
   toast("Zapisano zmiany", `Część "${sku}" została zaktualizowana.`, "success");
 }
@@ -1133,6 +1331,7 @@ function cancelEditPart() {
     }
   }
   closePartEditorModal();
+  fillPartThresholdForm(null);
   unsavedChanges.clear("partEditor");
 }
 
