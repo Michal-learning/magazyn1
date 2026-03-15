@@ -257,12 +257,23 @@ window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
     throw new Error("Brak nazwy Edge Function dla ręcznego tworzenia pracownika. Skonfiguruj createWorkerFunctionName.");
   }
 
+  const { data: sessionData, error: sessionError } = await window.sb.auth.getSession();
+  if (sessionError) throw sessionError;
+
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Brak aktywnej sesji użytkownika. Zaloguj się ponownie.");
+  }
+
   const { data, error } = await window.sb.functions.invoke(functionName, {
     body: {
       email,
       password,
       companyId,
       role
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`
     }
   });
 
