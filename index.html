@@ -11,22 +11,23 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="auth-shell hidden" id="authShell" aria-hidden="true">
-    <div class="auth-card">
-      <div class="auth-card-head">
-        <span class="badge badge-accent">Supabase Auth</span>
-        <h2>Logowanie do Magazyn PRO</h2>
-        <p>Zaloguj się kontem firmowym, żeby wejść do systemu.</p>
-      </div>
-      <form id="authLoginForm" class="auth-form" autocomplete="on">
-        <label>Adres e-mail<input type="email" id="authEmailInput" placeholder="twoj@firma.pl" autocomplete="email" required /></label>
-        <label>Hasło<input type="password" id="authPasswordInput" placeholder="••••••••" autocomplete="current-password" required /></label>
-        <button type="submit" class="btn btn-primary" id="authLoginBtn">Zaloguj</button>
-      </form>
-      <div class="auth-error hidden" id="authErrorBox" role="alert" aria-live="assertive"></div>
-      <p class="auth-note">Na tym etapie dane magazynowe nadal działają lokalnie, ale wejście do aplikacji wymaga już sesji użytkownika.</p>
+    <div class="auth-shell" id="authShell" aria-hidden="false">
+
+        <div class="auth-card">
+            <div class="auth-card-head">
+                <span class="badge badge-accent">Supabase Auth</span>
+                <h2>Logowanie do Magazyn PRO</h2>
+                <p>Zaloguj się kontem firmowym, żeby wejść do systemu.</p>
+            </div>
+            <form id="authLoginForm" class="auth-form" autocomplete="on">
+                <label>Adres e-mail<input type="email" id="authEmailInput" placeholder="twoj@firma.pl" autocomplete="email" required /></label>
+                <label>Hasło<input type="password" id="authPasswordInput" placeholder="••••••••" autocomplete="current-password" required /></label>
+                <button type="submit" class="btn btn-primary" id="authLoginBtn">Zaloguj</button>
+            </form>
+            <div class="auth-error hidden" id="authErrorBox" role="alert" aria-live="assertive"></div>
+            <p class="auth-note">Na tym etapie dane magazynowe nadal działają lokalnie, ale wejście do aplikacji wymaga już sesji użytkownika.</p>
+        </div>
     </div>
-  </div>
 
   <main class="appShell hidden" id="appShell">
     <div class="appMain">
