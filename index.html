@@ -324,47 +324,87 @@
     </aside>
   </main>
 
-  <div class="account-modal-backdrop hidden" id="accountSettingsBackdrop" aria-hidden="true">
-    <div class="account-modal-shell">
-      <div class="account-modal-panel hidden" id="accountSettingsPanel" role="dialog" aria-modal="true" aria-labelledby="accountSettingsTitle">
-        <button type="button" class="account-modal-close" id="accountSettingsCloseBtn" aria-label="Zamknij">×</button>
-        <div class="editor-header" style="margin-bottom:var(--space-4)">
+  <div class="account-settings-backdrop hidden" id="accountSettingsBackdrop" aria-hidden="true">
+    <div class="account-settings-shell">
+      <button type="button" class="account-settings-close" id="accountSettingsCloseBtn" aria-label="Zamknij">×</button>
+
+      <div class="account-settings-panel hidden" id="accountSettingsPanel" role="dialog" aria-modal="true" aria-labelledby="accountSettingsTitle">
+        <div class="account-settings-head">
           <div>
-            <h4 class="editor-title" id="accountSettingsTitle">Konto</h4>
-            <span class="editor-hint">Podstawowe informacje o zalogowanym użytkowniku.</span>
+            <div class="account-settings-kicker">
+              <span class="badge badge-accent">Konto użytkownika</span>
+            </div>
+            <h3 class="account-settings-title" id="accountSettingsTitle">Ustawienia konta</h3>
+            <p class="account-settings-subtitle">
+              Dane sesji i podstawowe ustawienia aktualnie zalogowanego użytkownika.
+            </p>
           </div>
         </div>
-        <div class="account-modal-grid">
-          <div class="account-modal-card">
-            <span class="account-modal-label">Nazwa</span>
-            <strong id="accountUserDisplay">—</strong>
-          </div>
-          <div class="account-modal-card">
-            <span class="account-modal-label">E-mail</span>
-            <strong id="accountEmailDisplay">—</strong>
-          </div>
-          <div class="account-modal-card">
-            <span class="account-modal-label">Firma</span>
-            <strong id="accountCompanyDisplay">—</strong>
-          </div>
-          <div class="account-modal-card">
-            <span class="account-modal-label">Rola</span>
-            <strong id="accountRoleDisplay">—</strong>
-          </div>
-        </div>
-        <div class="account-modal-section">
-          <div class="editor-header" style="margin-bottom:var(--space-3)">
+
+        <div class="account-settings-section">
+          <div class="account-settings-section-head">
             <div>
-              <h5 class="editor-title">Hasło</h5>
-              <span class="editor-hint">Zmiana hasła będzie dodana w następnym kroku.</span>
+              <h4>Informacje o koncie</h4>
+              <p>Tylko najważniejsze dane bez zbędnych pól.</p>
             </div>
           </div>
-          <div class="account-modal-card">
-            <span class="account-modal-label">Aktualne ustawienie</span>
-            <strong id="accountPasswordDisplay">••••••••</strong>
+
+          <div class="account-settings-stats account-settings-stats-3">
+            <div class="history-stat-card">
+              <span class="history-stat-label">E-mail</span>
+              <strong class="history-stat-value account-value-break" id="accountEmailDisplay">—</strong>
+            </div>
+            <div class="history-stat-card">
+              <span class="history-stat-label">Firma</span>
+              <strong class="history-stat-value account-value-break" id="accountCompanyDisplay">—</strong>
+            </div>
+            <div class="history-stat-card">
+              <span class="history-stat-label">Rola</span>
+              <strong class="history-stat-value" id="accountRoleDisplay">—</strong>
+            </div>
           </div>
         </div>
-        <div class="users-admin-actions" style="margin-top:var(--space-4)">
+
+        <div class="account-settings-section">
+          <div class="account-settings-section-head">
+            <div>
+              <h4>Zmiana hasła</h4>
+              <p>Nowe hasło zostanie zapisane dla aktualnie zalogowanego użytkownika.</p>
+            </div>
+          </div>
+
+          <div class="account-settings-form">
+            <div class="form-row form-row-2" style="margin-bottom:var(--space-3)">
+              <label>
+                Nowe hasło
+                <input
+                  type="password"
+                  id="accountNewPasswordInput"
+                  placeholder="Minimum 8 znaków"
+                  autocomplete="new-password"
+                />
+              </label>
+
+              <label>
+                Powtórz nowe hasło
+                <input
+                  type="password"
+                  id="accountRepeatPasswordInput"
+                  placeholder="Powtórz hasło"
+                  autocomplete="new-password"
+                />
+              </label>
+            </div>
+
+            <div class="auth-error hidden" id="accountPasswordErrorBox" role="alert" aria-live="assertive"></div>
+
+            <div class="users-admin-actions">
+              <button type="button" class="btn btn-primary" id="accountSavePasswordBtn">Zapisz nowe hasło</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="users-admin-actions" style="margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid var(--border)">
           <button type="button" class="btn btn-secondary" id="authLogoutBtn">Wyloguj</button>
         </div>
       </div>

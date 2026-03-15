@@ -714,11 +714,13 @@ function getAuthElements() {
     settingsBackdrop: document.getElementById("accountSettingsBackdrop"),
     settingsPanel: document.getElementById("accountSettingsPanel"),
     settingsCloseBtn: document.getElementById("accountSettingsCloseBtn"),
-    accountUserDisplay: document.getElementById("accountUserDisplay"),
     accountEmailDisplay: document.getElementById("accountEmailDisplay"),
     accountCompanyDisplay: document.getElementById("accountCompanyDisplay"),
     accountRoleDisplay: document.getElementById("accountRoleDisplay"),
-    accountPasswordDisplay: document.getElementById("accountPasswordDisplay")
+    accountNewPasswordInput: document.getElementById("accountNewPasswordInput"),
+    accountRepeatPasswordInput: document.getElementById("accountRepeatPasswordInput"),
+    accountSavePasswordBtn: document.getElementById("accountSavePasswordBtn"),
+    accountPasswordErrorBox: document.getElementById("accountPasswordErrorBox")
   };
 }
 
@@ -748,15 +750,33 @@ function setAuthError(message) {
   errorBox.classList.toggle("hidden", !text);
 }
 
+function setAccountPasswordError(message) {
+  const { accountPasswordErrorBox } = getAuthElements();
+  if (!accountPasswordErrorBox) return;
+
+  const text = String(message || "").trim();
+  accountPasswordErrorBox.textContent = text;
+  accountPasswordErrorBox.classList.toggle("hidden", !text);
+}
+
+function clearAccountPasswordForm() {
+  const {
+    accountNewPasswordInput,
+    accountRepeatPasswordInput
+  } = getAuthElements();
+
+  if (accountNewPasswordInput) accountNewPasswordInput.value = "";
+  if (accountRepeatPasswordInput) accountRepeatPasswordInput.value = "";
+  setAccountPasswordError("");
+}
+
 function updateAuthUI() {
   const {
     panelStatusText,
     panelCompanyName,
-    accountUserDisplay,
     accountEmailDisplay,
     accountCompanyDisplay,
     accountRoleDisplay,
-    accountPasswordDisplay,
     settingsBackdrop,
     settingsPanel
   } = getAuthElements();
@@ -767,11 +787,10 @@ function updateAuthUI() {
   if (!loggedIn) {
     if (panelStatusText) panelStatusText.textContent = "—";
     if (panelCompanyName) panelCompanyName.textContent = "—";
-    if (accountUserDisplay) accountUserDisplay.textContent = "—";
     if (accountEmailDisplay) accountEmailDisplay.textContent = "—";
     if (accountCompanyDisplay) accountCompanyDisplay.textContent = "—";
     if (accountRoleDisplay) accountRoleDisplay.textContent = "—";
-    if (accountPasswordDisplay) accountPasswordDisplay.textContent = "••••••••";
+    clearAccountPasswordForm();
     if (settingsBackdrop) {
       settingsBackdrop.classList.add("hidden");
       settingsBackdrop.setAttribute("aria-hidden", "true");
@@ -780,19 +799,17 @@ function updateAuthUI() {
     return;
   }
 
-  const displayName = window.appAuth?.profile?.full_name || window.appAuth?.profile?.email || window.appAuth?.user?.email || "—";
   const email = window.appAuth?.profile?.email || window.appAuth?.user?.email || "—";
   const role = window.appAuth?.companyRole || window.appAuth?.membership?.role || "—";
   const companyName = window.appAuth?.companyName || window.appAuth?.companyId || "—";
 
   if (panelStatusText) panelStatusText.textContent = "ZALOGOWANO";
   if (panelCompanyName) panelCompanyName.textContent = companyName;
-  if (accountUserDisplay) accountUserDisplay.textContent = displayName;
   if (accountEmailDisplay) accountEmailDisplay.textContent = email;
   if (accountCompanyDisplay) accountCompanyDisplay.textContent = companyName;
   if (accountRoleDisplay) accountRoleDisplay.textContent = String(role).toUpperCase();
-  if (accountPasswordDisplay) accountPasswordDisplay.textContent = "••••••••";
   setAuthError("");
+  setAccountPasswordError("");
   if (loggedIn) applyRoleAccess();
 }
 
@@ -840,11 +857,15 @@ function bindAuthUI() {
     settingsBtn,
     settingsBackdrop,
     settingsPanel,
-    settingsCloseBtn
+    settingsCloseBtn,
+    accountNewPasswordInput,
+    accountRepeatPasswordInput,
+    accountSavePasswordBtn
   } = getAuthElements();
 
   const openAccountSettings = () => {
     if (!window.appAuth?.session || !settingsBackdrop || !settingsPanel) return;
+    clearAccountPasswordForm();
     settingsBackdrop.classList.remove("hidden");
     settingsBackdrop.setAttribute("aria-hidden", "false");
     settingsPanel.classList.remove("hidden");
@@ -852,6 +873,7 @@ function bindAuthUI() {
   };
 
   const closeAccountSettings = () => {
+    clearAccountPasswordForm();
     settingsBackdrop?.classList.add("hidden");
     settingsBackdrop?.setAttribute("aria-hidden", "true");
     settingsPanel?.classList.add("hidden");
@@ -904,6 +926,52 @@ function bindAuthUI() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeAccountSettings();
+  });
+
+  accountSavePasswordBtn?.addEventListener("click", async () => {
+    const newPassword = String(accountNewPasswordInput?.value || "");
+    const repeatPassword = String(accountRepeatPasswordInput?.value || "");
+
+    setAccountPasswordError("");
+
+    if (!newPassword) {
+      setAccountPasswordError("Nowe hasło nie może być puste.");
+      accountNewPasswordInput?.focus?.();
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setAccountPasswordError("Nowe hasło musi mieć co najmniej 8 znaków.");
+      accountNewPasswordInput?.focus?.();
+      return;
+    }
+
+    if (newPassword !== repeatPassword) {
+      setAccountPasswordError("Pola nowego hasła muszą być identyczne.");
+      accountRepeatPasswordInput?.focus?.();
+      return;
+    }
+
+    if (accountSavePasswordBtn) {
+      accountSavePasswordBtn.disabled = true;
+      accountSavePasswordBtn.textContent = "Zapisywanie...";
+    }
+
+    try {
+      await window.updateOwnPassword?.(newPassword);
+      clearAccountPasswordForm();
+      toast("Hasło zmienione", "Nowe hasło zostało zapisane.", "success");
+    } catch (err) {
+      console.error("Błąd zmiany hasła:", err);
+      const msg = err?.message || "Nie udało się zmienić hasła.";
+      setAccountPasswordError(msg);
+      toast("Nie zapisano hasła", msg, "error");
+    } finally {
+      if (accountSavePasswordBtn) {
+        accountSavePasswordBtn.disabled = false;
+        accountSavePasswordBtn.textContent = "Zapisz nowe hasło";
+      }
+    }
   });
 
   logoutBtn?.addEventListener("click", async () => {

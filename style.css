@@ -2725,76 +2725,169 @@ body.part-details-open {
   box-shadow: var(--focus-ring);
 }
 
-.account-modal-backdrop {
+.account-settings-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 12000;
-  background: rgba(5, 8, 15, 0.72);
-  backdrop-filter: blur(10px);
-  display: grid;
-  place-items: center;
-  padding: var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 3vw, 32px);
+  background: rgba(5, 8, 17, 0.58);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1265;
 }
 
-.account-modal-shell {
-  width: min(100%, 560px);
+.account-settings-backdrop.hidden {
+  display: none;
 }
 
-.account-modal-panel {
+.account-settings-shell {
   position: relative;
+  width: min(920px, 100%);
+  max-height: calc(100vh - clamp(32px, 6vw, 64px));
+}
+
+.account-settings-panel {
+  max-height: calc(100vh - clamp(32px, 6vw, 64px));
+  overflow: auto;
+  margin: 0;
   background: var(--modal-panel-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: var(--space-5);
-}
-
-.account-modal-close {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.account-modal-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.account-modal-card {
-  display: grid;
-  gap: 4px;
-  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface-1);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: var(--space-5);
 }
 
-.account-modal-label {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--text-tertiary);
+.account-settings-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 17, 25, 0.9);
+  color: var(--text-secondary);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--trans-fast);
 }
 
-.account-modal-card strong {
+.account-settings-close:hover {
   color: var(--text);
-  word-break: break-word;
+  background: rgba(24, 27, 39, 0.96);
+  border-color: var(--border-strong);
 }
 
-.account-modal-section {
-  margin-top: var(--space-4);
+.account-settings-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-right: 52px;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.account-settings-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.account-settings-title {
+  font-size: clamp(1.3rem, 1rem + 1vw, 1.8rem);
+  margin-bottom: var(--space-1);
+}
+
+.account-settings-subtitle {
+  color: var(--text-secondary);
+  max-width: 760px;
+}
+
+.account-settings-section + .account-settings-section {
+  margin-top: var(--space-5);
+}
+
+.account-settings-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.account-settings-section-head h4 {
+  margin: 0 0 var(--space-1);
+}
+
+.account-settings-section-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.account-settings-stats {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: 0;
+}
+
+.account-settings-stats-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.account-settings-form {
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.account-value-break {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+body.account-settings-open {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .account-settings-backdrop {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .account-settings-shell,
+  .account-settings-panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
+  .account-settings-head {
+    padding-right: 44px;
+  }
+
+  .account-settings-stats-3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
-  .account-modal-grid {
-    grid-template-columns: 1fr;
+  .account-settings-panel {
+    padding: var(--space-4);
   }
 }

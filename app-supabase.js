@@ -189,6 +189,21 @@ window.signOutApp = async function signOutApp() {
   if (error) throw error;
 };
 
+window.updateOwnPassword = async function updateOwnPassword(newPassword) {
+  if (!window.sb) throw new Error("Brak klienta Supabase.");
+
+  const password = String(newPassword || "");
+  if (!password) throw new Error("Nowe hasło nie może być puste.");
+  if (password.length < 8) throw new Error("Nowe hasło musi mieć co najmniej 8 znaków.");
+
+  const { data, error } = await window.sb.auth.updateUser({
+    password
+  });
+
+  if (error) throw error;
+  return data;
+};
+
 window.fetchCompanyUsers = async function fetchCompanyUsers(companyIdOverride) {
   if (!window.sb) throw new Error("Brak klienta Supabase.");
 
