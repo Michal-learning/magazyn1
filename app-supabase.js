@@ -3,7 +3,7 @@
 window.APP_SUPABASE_CONFIG = {
   url: "https://vprzhxqgotxrmrjslzll.supabase.co",
   key: "sb_publishable_tQQWuI1oZN3VQ814S3eFOg_4Mi25nFD",
-  inviteWorkerFunctionName: "invite-company-worker"
+  createWorkerFunctionName: "create-company-worker"
 };
 
 (function initSupabaseGlobal() {
@@ -238,20 +238,29 @@ window.updateCompanyMember = async function updateCompanyMember(memberId, update
   return data;
 };
 
-window.inviteCompanyWorker = async function inviteCompanyWorker(email, role = 'worker') {
+window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
   if (!window.sb) throw new Error("Brak klienta Supabase.");
 
-  const companyId = window.appAuth?.companyId;
-  if (!companyId) throw new Error("Brak company_id w kontekście użytkownika.");
+  const email = String(payload?.email || "").trim().toLowerCase();
+  const password = String(payload?.password || "");
+  const role = String(payload?.role || "worker").trim().toLowerCase() || "worker";
+  const companyId = window.appAuth?.companyId || null;
 
-  const functionName = String(window.APP_SUPABASE_CONFIG?.inviteWorkerFunctionName || '').trim();
+  if (!companyId) throw new Error("Brak company_id w kontekście użytkownika.");
+  if (!email) throw new Error("Podaj adres e-mail pracownika.");
+  if (!password) throw new Error("Podaj hasło startowe.");
+  if (password.length < 6) throw new Error("Hasło startowe musi mieć co najmniej 6 znaków.");
+  if (role !== "worker") throw new Error("Na tym etapie można tworzyć tylko konta worker.");
+
+  const functionName = String(window.APP_SUPABASE_CONFIG?.createWorkerFunctionName || "").trim();
   if (!functionName) {
-    throw new Error("Brak nazwy Edge Function dla zaproszeń. Skonfiguruj inviteWorkerFunctionName.");
+    throw new Error("Brak nazwy Edge Function dla ręcznego tworzenia pracownika. Skonfiguruj createWorkerFunctionName.");
   }
 
   const { data, error } = await window.sb.functions.invoke(functionName, {
     body: {
       email,
+      password,
       companyId,
       role
     }

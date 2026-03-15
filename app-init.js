@@ -592,12 +592,15 @@ function bindUserManagementUI() {
     }
   });
 
-  document.getElementById('inviteWorkerBtn')?.addEventListener('click', async () => {
+  document.getElementById('createWorkerBtn')?.addEventListener('click', async () => {
     if (!canAccessTab('users')) return;
 
-    const emailInput = document.getElementById('inviteWorkerEmailInput');
-    const roleSelect = document.getElementById('inviteWorkerRoleSelect');
+    const emailInput = document.getElementById('createWorkerEmailInput');
+    const passwordInput = document.getElementById('createWorkerPasswordInput');
+    const roleSelect = document.getElementById('createWorkerRoleSelect');
+
     const email = String(emailInput?.value || '').trim().toLowerCase();
+    const password = String(passwordInput?.value || '');
     const role = String(roleSelect?.value || 'worker').trim().toLowerCase() || 'worker';
 
     if (!email) {
@@ -606,25 +609,53 @@ function bindUserManagementUI() {
       return;
     }
 
-    const btn = document.getElementById('inviteWorkerBtn');
+    if (!password) {
+      toast('Brak hasła', 'Podaj hasło startowe pracownika.', 'warning');
+      passwordInput?.focus?.();
+      return;
+    }
+
+    if (password.length < 6) {
+      toast('Za krótkie hasło', 'Hasło startowe musi mieć co najmniej 6 znaków.', 'warning');
+      passwordInput?.focus?.();
+      return;
+    }
+
+    const btn = document.getElementById('createWorkerBtn');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Dodawanie...';
+      btn.textContent = 'Tworzenie...';
     }
 
     try {
-      const result = await window.inviteCompanyWorker?.(email, role);
-      emailInput && (emailInput.value = '');
+      const result = await window.createCompanyWorker?.({
+        email,
+        password,
+        role
+      });
+
+      if (emailInput) emailInput.value = '';
+      if (passwordInput) passwordInput.value = '';
+
       await loadCompanyUsers();
       renderUsersAdmin();
-      toast('Pracownik dodany', result?.message || `Uruchomiono bezpieczny flow dla ${email}.`, 'success');
+
+      toast(
+        'Pracownik utworzony',
+        result?.message || `Konto ${email} zostało utworzone.`,
+        'success'
+      );
     } catch (err) {
-      console.error('Błąd dodawania pracownika:', err);
-      toast('Nie dodano pracownika', err?.message || 'Nie udało się uruchomić flow zaproszenia.', 'error');
+      console.error('Błąd tworzenia pracownika:', err);
+      toast(
+        'Nie utworzono pracownika',
+        err?.message || 'Nie udało się utworzyć konta pracownika.',
+        'error'
+      );
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = 'Dodaj pracownika';
+        btn.textContent = 'Utwórz pracownika';
       }
     }
   });

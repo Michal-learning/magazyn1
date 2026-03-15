@@ -222,18 +222,25 @@
                 </div>
               </div>
               <div class="form-row form-row-2" style="margin-bottom:var(--space-3)">
-                <label>Adres e-mail<input type="email" id="inviteWorkerEmailInput" placeholder="pracownik@firma.pl" autocomplete="email" /></label>
+                <label>Adres e-mail
+                  <input type="email" id="createWorkerEmailInput" placeholder="pracownik@firma.pl" autocomplete="email" />
+                </label>
+                <label>Hasło startowe
+                  <input type="password" id="createWorkerPasswordInput" placeholder="Minimum 6 znaków" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="form-row" style="margin-bottom:var(--space-3)">
                 <label>Rola
-                  <select id="inviteWorkerRoleSelect">
+                  <select id="createWorkerRoleSelect">
                     <option value="worker" selected>worker</option>
                   </select>
                 </label>
               </div>
               <div class="users-admin-actions">
-                <button type="button" class="btn btn-primary" id="inviteWorkerBtn">Dodaj pracownika</button>
+                <button type="button" class="btn btn-primary" id="createWorkerBtn">Utwórz pracownika</button>
               </div>
               <p class="text-muted" style="margin-top:var(--space-3);font-size:var(--text-sm)">
-                Jeśli backendowy endpoint zaproszeń nie jest jeszcze wdrożony, formularz pokaże jasny komunikat zamiast udawać magię.
+                Konto jest tworzone od razu przez bezpieczną Edge Function. Bez maili, bez invite linków, bez wkładania service_role do przeglądarki.
               </p>
             </div>
 
