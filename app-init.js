@@ -276,6 +276,105 @@ function fillPartThresholdForm(part = null) {
   if (redInput) redInput.value = part?.redThreshold ?? "";
 }
 
+function getDeliverySupplierOptions(supplierName) {
+  const supName = normalize(supplierName);
+  if (!supName) return [];
+
+  const sup = state.suppliers.get(supName);
+  const skuListRaw = (sup && sup.prices && sup.prices.size)
+    ? Array.from(sup.prices.keys())
+    : Array.from(state.partsCatalog.keys());
+
+  return skuListRaw
+    .filter(k => state.partsCatalog.has(k))
+    .map(k => {
+      const part = state.partsCatalog.get(k);
+      const price = (sup && sup.prices) ? (sup.prices.get(k) ?? 0) : 0;
+      return {
+        key: k,
+        sku: part?.sku || k,
+        name: part?.name || '',
+        price: safeFloat(price)
+      };
+    });
+}
+
+function syncDeliveryPartPriceFromSelection() {
+  const partSelect = document.getElementById('supplierPartsSelect');
+  const priceEl = document.getElementById('deliveryPrice');
+  if (!priceEl) return;
+  const opt = partSelect?.selectedOptions?.[0];
+  priceEl.value = (opt && opt.value) ? (opt.dataset.price ?? 0) : 0;
+}
+
+function rebuildDeliveryPartSelect(supplierName, opts = {}) {
+  const { preferredSku = null, keepExistingIfPossible = true } = opts;
+  const partSelect = document.getElementById('supplierPartsSelect');
+  if (!partSelect) return;
+
+  const supName = normalize(supplierName);
+  const previousValue = normalize(partSelect.value);
+  const currentDraftItems = Array.isArray(state.currentDelivery?.items) ? state.currentDelivery.items : [];
+  const draftSku = normalize(currentDraftItems[0]?.sku || '');
+
+  partSelect.disabled = !supName;
+
+  if (!supName) {
+    partSelect.innerHTML = '<option value="">-- Wybierz część --</option>';
+    partSelect.value = '';
+    syncDeliveryPartPriceFromSelection();
+    try { refreshComboFromSelect(partSelect, { placeholder: 'Wybierz część...' }); } catch {}
+    return;
+  }
+
+  const options = getDeliverySupplierOptions(supName);
+  partSelect.innerHTML = '<option value="">-- Wybierz część --</option>' + options.map(opt => `
+    <option value="${escapeHtml(opt.key)}" data-price="${opt.price}">
+      ${escapeHtml(opt.sku)} - ${escapeHtml(opt.name)} (${escapeHtml(fmtPLN.format(opt.price))})
+    </option>`).join('');
+
+  const allowed = new Set(options.map(opt => opt.key));
+  const preferredCandidates = [
+    normalize(preferredSku),
+    keepExistingIfPossible ? previousValue : '',
+    draftSku ? skuKey(draftSku) : ''
+  ].filter(Boolean);
+
+  const nextValue = preferredCandidates.find(val => allowed.has(val)) || '';
+  partSelect.value = nextValue;
+  syncDeliveryPartPriceFromSelection();
+  try { refreshComboFromSelect(partSelect, { placeholder: 'Wybierz część...' }); } catch {}
+}
+
+function syncDeliveryDraftUI(opts = {}) {
+  const { keepSelectedPart = true } = opts;
+  const supplierSelect = document.getElementById('supplierSelect');
+  const dateInput = document.getElementById('deliveryDate');
+  if (!supplierSelect) return;
+
+  const supplierNames = Array.from(state.suppliers.keys());
+  let draftSupplier = normalize(state.currentDelivery?.supplier);
+  if (draftSupplier && !supplierNames.includes(draftSupplier)) {
+    const hasDraftItems = Array.isArray(state.currentDelivery?.items) && state.currentDelivery.items.length > 0;
+    if (!hasDraftItems) {
+      draftSupplier = '';
+      state.currentDelivery.supplier = null;
+    }
+  }
+
+  supplierSelect.value = draftSupplier || '';
+  try { refreshComboFromSelect(supplierSelect, { placeholder: 'Wybierz dostawcę...' }); } catch {}
+
+  if (dateInput) {
+    const today = new Date().toISOString().slice(0, 10);
+    const draftDate = normalize(state.currentDelivery?.dateISO) || today;
+    dateInput.value = draftDate;
+    state.currentDelivery.dateISO = draftDate;
+  }
+
+  rebuildDeliveryPartSelect(draftSupplier, { keepExistingIfPossible: keepSelectedPart });
+}
+
 function initNewPartToggle() {
   const btn = document.getElementById("toggleNewPartBtn");
   const cancelBtn = document.getElementById("cancelNewPartBtn");
@@ -371,22 +470,42 @@ function init() {
     initComboFromSelect(document.getElementById("supplierEditorPartSelect"), { placeholder: "Wybierz część..." });
     initComboFromSelect(document.getElementById("bomSkuSelect"), { placeholder: "Wybierz część..." });
 
-    const supSel = document.getElementById("supplierSelect");
-    const partSel = document.getElementById("supplierPartsSelect");
-    if (partSel) {
-      partSel.disabled = !supSel?.value;
-      refreshComboFromSelect(partSel, { placeholder: "Wybierz część..." });
-    }
+    syncDeliveryDraftUI({ keepSelectedPart: true });
   } catch (e) {
     console.warn("Combobox init warning:", e);
   }
   
-  // Set default dates
+  // Set default dates and keep draft dates in sync with state
   const today = new Date().toISOString().slice(0, 10);
   const deliveryDate = document.getElementById("deliveryDate");
   const buildDate = document.getElementById("buildDate");
-  if (deliveryDate && !deliveryDate.value) deliveryDate.value = today;
-  if (buildDate && !buildDate.value) buildDate.value = today;
+
+  if (deliveryDate) {
+    deliveryDate.addEventListener("input", (e) => {
+      state.currentDelivery.dateISO = normalize(e.target.value);
+      save();
+    });
+    deliveryDate.addEventListener("change", (e) => {
+      state.currentDelivery.dateISO = normalize(e.target.value);
+      save();
+    });
+  }
+
+  if (buildDate) {
+    const buildDraftDate = normalize(state.currentBuild?.dateISO) || today;
+    buildDate.value = buildDraftDate;
+    state.currentBuild.dateISO = buildDraftDate;
+    buildDate.addEventListener("input", (e) => {
+      state.currentBuild.dateISO = normalize(e.target.value);
+      save();
+    });
+    buildDate.addEventListener("change", (e) => {
+      state.currentBuild.dateISO = normalize(e.target.value);
+      save();
+    });
+  }
+
+  save();
 }
 
 // === Unsaved changes warning ===
@@ -405,50 +524,24 @@ function initBeforeUnloadWarning() {
 
 // Delivery events
 document.getElementById("supplierSelect")?.addEventListener("change", (e) => {
-  if (state.currentDelivery.items.length > 0 && state.currentDelivery.supplier && state.currentDelivery.supplier !== e.target.value) {
+  const nextSupplier = normalize(e.target.value);
+  const currentSupplier = normalize(state.currentDelivery?.supplier);
+  const hasItems = Array.isArray(state.currentDelivery?.items) && state.currentDelivery.items.length > 0;
+
+  if (hasItems && currentSupplier && currentSupplier !== nextSupplier) {
     if (!confirm("Zmiana dostawcy spowoduje usunięcie bieżących pozycji dostawy. Kontynuować?")) {
-      e.target.value = state.currentDelivery.supplier || "";
+      e.target.value = currentSupplier || "";
+      try { refreshComboFromSelect(e.target, { placeholder: "Wybierz dostawcę..." }); } catch {}
+      rebuildDeliveryPartSelect(currentSupplier, { keepExistingIfPossible: true });
       return;
     }
     state.currentDelivery.items = [];
-    state.currentDelivery.supplier = e.target.value;
-    renderDelivery();
-  }
-  
-  const supName = e.target.value;
-  const skuSelect = document.getElementById("supplierPartsSelect");
-  if (skuSelect) skuSelect.disabled = !supName;
-
-  if (!supName) {
-    skuSelect.innerHTML = '<option value="">-- Wybierz część --</option>';
-    const priceEl = document.getElementById("deliveryPrice");
-    if (priceEl) priceEl.value = 0;
-    try { refreshComboFromSelect(skuSelect, { placeholder: "Wybierz część..." }); } catch {}
-    return;
   }
 
-  const sup = state.suppliers.get(supName);
-  const skuListRaw = (sup && sup.prices && sup.prices.size)
-    ? Array.from(sup.prices.keys())
-    : Array.from(state.partsCatalog.keys());
-
-  const skuList = skuListRaw.filter(k => state.partsCatalog.has(k));
-  
-  skuSelect.innerHTML =
-    '<option value="">-- Wybierz część --</option>' +
-    skuList.map(k => {
-      const p = state.partsCatalog.get(k);
-      const price = (sup && sup.prices) ? (sup.prices.get(k) ?? 0) : 0;
-      return `<option value="${k}" data-price="${price}">
-        ${p ? p.sku : k} - ${p ? p.name : ""} (${fmtPLN.format(price)})
-      </option>`;
-    }).join("");
-
-  const priceEl = document.getElementById("deliveryPrice");
-  if (priceEl) priceEl.value = 0;
-
-  skuSelect.dispatchEvent(new Event("change"));
-  try { refreshComboFromSelect(skuSelect, { placeholder: "Wybierz część..." }); } catch {}
+  state.currentDelivery.supplier = nextSupplier || null;
+  rebuildDeliveryPartSelect(nextSupplier, { keepExistingIfPossible: !hasItems });
+  save();
+  renderDelivery();
 });
 
 document.getElementById("supplierPartsSelect")?.addEventListener("change", (e) => {
@@ -498,6 +591,11 @@ document.getElementById("addDeliveryItemBtn")?.addEventListener("click", () => {
     return;
   }
 
+  const deliveryDateInput = document.getElementById("deliveryDate");
+  if (deliveryDateInput) {
+    state.currentDelivery.dateISO = normalize(deliveryDateInput.value);
+  }
+
   if (btn) btn.dataset.busy = "1";
   try {
     addToDelivery(sup, part.sku, qtyNum, priceNum);
@@ -545,14 +643,25 @@ document.getElementById("addBuildItemBtn")?.addEventListener("click", () => {
     return;
   }
 
+  const buildDateInput = document.getElementById("buildDate");
+  if (buildDateInput) {
+    state.currentBuild.dateISO = normalize(buildDateInput.value);
+  }
+
   if (btn) btn.dataset.busy = "1";
   
-  state.currentBuild.items.push({ id: nextId(), machineCode: code, qty: qtyNum });
+  const machine = state.machineCatalog.find(m => m.code === code);
+  state.currentBuild.items.push({
+    id: nextId(),
+    machineCode: code,
+    qty: qtyNum,
+    machineNameSnapshot: machine?.name || code,
+    bomSnapshot: getMachineBomSnapshot(code)
+  });
   save();
   renderBuild();
 
   if (qtyEl) qtyEl.value = "";
-  const machine = state.machineCatalog.find(m => m.code === code);
   toast("Dodano do produkcji", `${machine?.name || code} - ${qtyNum} szt.`, "success");
 
   setTimeout(() => { if (btn) btn.dataset.busy = "0"; }, 250);
@@ -626,6 +735,14 @@ document.getElementById("addPartBtn")?.addEventListener("click", () => {
   const sku = document.getElementById("partSkuInput")?.value ?? "";
   const name = document.getElementById("partNameInput")?.value ?? "";
 
+  const normalizedSku = normalize(sku);
+  const skuInput = document.getElementById("partSkuInput");
+  if (normalizedSku && state.partsCatalog.has(skuKey(normalizedSku))) {
+    toast("ID zajęte", `Część o ID "${normalizedSku}" już istnieje w bazie.`, "warning");
+    skuInput?.focus();
+    return;
+  }
+
   const box = document.getElementById("partNewSuppliersChecklist");
   const selectedSups = (typeof comboMultiGetSelected === "function") ? comboMultiGetSelected(box) : [];
   const thresholds = readPartThresholdForm();
@@ -681,7 +798,9 @@ window.askDeleteSupplier = (n) => {
 
 // === EDITORS ===
 let editingSup = null;
+let editingSupSnapshot = null;
 let editingMachine = null;
+let editingMachineSnapshot = null;
 let editingMachineOriginalCode = null;
 let editingMachineIsNew = false;
 
@@ -706,7 +825,13 @@ function getBomEditorSelection() {
     : '';
   const selectValue = normalize(selectEl?.value ?? '');
   const rawValue = comboValue || selectValue;
-  const part = rawValue ? state.partsCatalog.get(skuKey(rawValue)) : null;
+  const partKey = rawValue ? skuKey(rawValue) : '';
+  const part = partKey ? state.partsCatalog.get(partKey) : null;
+
+  if (selectEl && rawValue && selectValue !== rawValue) {
+    selectEl.value = rawValue;
+  }
+
   return {
     selectEl,
     rawValue,
@@ -721,9 +846,13 @@ function resetBomEditorInputs() {
 
   if (qtyInput) qtyInput.value = '1';
   if (selectEl) {
-    selectEl.value = '';
-    if (typeof refreshComboFromSelect === 'function') {
-      try { refreshComboFromSelect(selectEl, { placeholder: 'Wybierz część...' }); } catch {}
+    if (typeof setComboValueForSelect === 'function') {
+      setComboValueForSelect(selectEl, '', { placeholder: 'Wybierz część...' });
+    } else {
+      selectEl.value = '';
+      if (typeof refreshComboFromSelect === 'function') {
+        try { refreshComboFromSelect(selectEl, { placeholder: 'Wybierz część...' }); } catch {}
+      }
     }
   }
 }
@@ -774,6 +903,7 @@ function closeMachineEditorModal() {
 function startNewMachineFlow() {
   editingMachineIsNew = true;
   editingMachineOriginalCode = null;
+  editingMachineSnapshot = null;
   editingMachine = { code: "", name: "", bom: [] };
   unsavedChanges.clear("machineEditor");
 
@@ -818,6 +948,8 @@ window.askDeleteMachine = (code) => {
 
 window.openSupplierEditor = (name) => {
   editingSup = name;
+  const originalSup = state.suppliers.get(name);
+  editingSupSnapshot = originalSup ? { name, prices: new Map(originalSup.prices || []) } : null;
   const panel = document.getElementById("supplierEditorTemplate");
   const nameEl = document.getElementById("supplierEditorName");
   if (nameEl) nameEl.textContent = name;
@@ -865,6 +997,7 @@ document.getElementById("supplierEditorSetPriceBtn")?.addEventListener("click", 
 document.getElementById("supplierEditorSaveBtn")?.addEventListener("click", () => {
   closeSupplierEditorModal();
   editingSup = null;
+  editingSupSnapshot = null;
   unsavedChanges.clear("supplierEditor");
   renderAllSuppliers();
   refreshCatalogsUI();
@@ -878,10 +1011,15 @@ document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", ()
     }
   }
 
+  if (editingSup && editingSupSnapshot) {
+    state.suppliers.set(editingSup, { prices: new Map(editingSupSnapshot.prices || []) });
+    save();
+  }
+
   closeSupplierEditorModal();
   editingSup = null;
+  editingSupSnapshot = null;
   unsavedChanges.clear("supplierEditor");
-  load();
   renderAllSuppliers();
   refreshCatalogsUI();
 });
@@ -891,6 +1029,11 @@ window.openMachineEditor = (code) => {
   const machine = state.machineCatalog.find(m => m.code === code);
   if (!machine) return;
   editingMachineOriginalCode = machine.code;
+  editingMachineSnapshot = {
+    code: machine.code,
+    name: machine.name,
+    bom: cloneBomItems(machine.bom)
+  };
   editingMachine = {
     code: machine.code,
     name: machine.name,
@@ -996,9 +1139,13 @@ document.getElementById("addBomItemBtn")?.addEventListener("click", () => {
   }
 
   if (selectEl) {
-    selectEl.value = sku;
-    if (typeof refreshComboFromSelect === "function") {
-      try { refreshComboFromSelect(selectEl, { placeholder: "Wybierz część..." }); } catch {}
+    if (typeof setComboValueForSelect === "function") {
+      setComboValueForSelect(selectEl, sku, { placeholder: "Wybierz część..." });
+    } else {
+      selectEl.value = sku;
+      if (typeof refreshComboFromSelect === "function") {
+        try { refreshComboFromSelect(selectEl, { placeholder: "Wybierz część..." }); } catch {}
+      }
     }
   }
 
@@ -1082,6 +1229,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
   save();
   closeMachineEditorModal();
   editingMachine = null;
+  editingMachineSnapshot = null;
   editingMachineOriginalCode = null;
   refreshCatalogsUI();
 });
@@ -1093,21 +1241,29 @@ document.getElementById("machineEditorCancelBtn")?.addEventListener("click", () 
     }
   }
 
-  closeMachineEditorModal();
-
   if (editingMachineIsNew) {
+    closeMachineEditorModal();
     editingMachineIsNew = false;
     editingMachine = null;
+    editingMachineSnapshot = null;
     editingMachineOriginalCode = null;
     unsavedChanges.clear("machineEditor");
     return;
   }
-  
-  load();
+
+  if (editingMachineSnapshot) {
+    editingMachine = {
+      code: editingMachineSnapshot.code,
+      name: editingMachineSnapshot.name,
+      bom: cloneBomItems(editingMachineSnapshot.bom)
+    };
+  }
+
+  closeMachineEditorModal();
   editingMachine = null;
+  editingMachineSnapshot = null;
   editingMachineOriginalCode = null;
   unsavedChanges.clear("machineEditor");
-  refreshCatalogsUI();
 });
 
 // === Supplier Editor Modal ===
@@ -1131,26 +1287,56 @@ function closeSupplierEditorModal() {
 }
 
 function bindSupplierEditorModal() {
-  document.getElementById("supplierEditorCloseBtn")?.addEventListener("click", closeSupplierEditorModal);
+  const requestCancel = () => {
+    const cancelBtn = document.getElementById("supplierEditorCancelBtn");
+    if (cancelBtn) cancelBtn.click();
+    else closeSupplierEditorModal();
+  };
+
+  document.getElementById("supplierEditorCloseBtn")?.addEventListener("click", requestCancel);
   document.getElementById("supplierEditorBackdrop")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeSupplierEditorModal();
+    if (e.target === e.currentTarget) requestCancel();
   });
 }
 
 // === Machine Editor Modal ===
 function bindMachineEditorModal() {
-  document.getElementById("machineEditorCloseBtn")?.addEventListener("click", closeMachineEditorModal);
+  const requestCancel = () => {
+    const cancelBtn = document.getElementById("machineEditorCancelBtn");
+    if (cancelBtn) cancelBtn.click();
+    else closeMachineEditorModal();
+  };
+
+  document.getElementById("machineEditorCloseBtn")?.addEventListener("click", requestCancel);
   document.getElementById("machineEditorBackdrop")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeMachineEditorModal();
+    if (e.target === e.currentTarget) requestCancel();
   });
 }
 
 // === Part Editor Modal ===
 function bindPartEditorModal() {
-  document.getElementById("partEditorCloseBtn")?.addEventListener("click", closePartEditorModal);
+  const requestCancel = () => {
+    const cancelBtn = document.getElementById(partEditorIsNew ? "cancelNewPartBtn" : "cancelEditPartBtn");
+    if (cancelBtn) cancelBtn.click();
+    else closePartEditorModal();
+  };
+
+  document.getElementById("partEditorCloseBtn")?.addEventListener("click", requestCancel);
   document.getElementById("partEditorBackdrop")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closePartEditorModal();
+    if (e.target === e.currentTarget) requestCancel();
   });
+
+  const markDirty = () => {
+    if (!partEditorIsNew) unsavedChanges.mark("partEditor");
+  };
+
+  document.getElementById("partSkuInput")?.addEventListener("input", markDirty);
+  document.getElementById("partNameInput")?.addEventListener("input", markDirty);
+  document.getElementById("partYellowThresholdInput")?.addEventListener("input", markDirty);
+  document.getElementById("partRedThresholdInput")?.addEventListener("input", markDirty);
+  document.getElementById("editPartSuppliersChecklist")?.addEventListener("change", markDirty);
+  document.getElementById("editPartSuppliersChecklist")?.addEventListener("input", markDirty);
+  document.getElementById("editPartSupplierPrices")?.addEventListener("input", markDirty);
 }
 
 // === Tab Modal ===
@@ -1175,15 +1361,24 @@ function bindSearch() {
 
 // === Tabs ===
 function bindTabs() {
+  const tabRefreshers = {
+    parts: () => renderWarehouse(),
+    delivery: () => { renderAllSuppliers(); refreshCatalogsUI(); renderDelivery(); },
+    build: () => { refreshCatalogsUI(); renderBuild(); },
+    machines: () => renderMachinesStock(),
+    catalog_parts: () => refreshCatalogsUI(),
+    catalog_suppliers: () => renderAllSuppliers(),
+    catalog_machines: () => refreshCatalogsUI(),
+    history: () => renderHistory()
+  };
+
   document.querySelectorAll('.tab-btn[data-tab-target]').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.getAttribute('data-tab-target');
       
-      // Update active states
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       
-      // Show/hide panels
       document.querySelectorAll('.tabPanel').forEach(panel => {
         if (panel.getAttribute('data-tab-panel') === target) {
           panel.classList.remove('hidden');
@@ -1191,6 +1386,9 @@ function bindTabs() {
           panel.classList.add('hidden');
         }
       });
+
+      const refresh = tabRefreshers[target];
+      if (typeof refresh === 'function') refresh();
     });
   });
 }
@@ -1294,6 +1492,18 @@ function saveEditPart() {
     });
   });
 
+  state.currentBuild.items.forEach(item => {
+    const bomSnapshot = Array.isArray(item?.bomSnapshot) ? item.bomSnapshot : [];
+    bomSnapshot.forEach(bomItem => {
+      if (skuKey(bomItem?.sku) === originalK) {
+        bomItem.sku = sku;
+        bomItem.name = name;
+      }
+    });
+  });
+
+  updateHistoryPartReferences(originalK, { sku, name });
+
   const editChecklist = document.getElementById("editPartSuppliersChecklist");
   const selectedSups = (typeof comboMultiGetSelected === "function") ? comboMultiGetSelected(editChecklist) : [];
 
@@ -1320,6 +1530,7 @@ function saveEditPart() {
   renderDelivery();
   renderBuild();
   renderMachinesStock();
+  unsavedChanges.clear("partEditor");
   closePartEditorModal();
   toast("Zapisano zmiany", `Część "${sku}" została zaktualizowana.`, "success");
 }

@@ -5,6 +5,14 @@
 
 // === CONFIGURATION & STATE ===
 const STORAGE_KEY = "magazyn_state_v3_0";
+const STORAGE_KEY_FALLBACKS = [
+  "magazyn_state_v3",
+  "magazyn_state_v2_0",
+  "magazyn_state_v2",
+  "magazyn_state_v1_0",
+  "magazyn_state_v1",
+  "magazyn_state"
+];
 const THRESHOLDS_OPEN_KEY = "magazyn_thresholds_open_v3";
 
 // Anti-double-click guards for critical operations
@@ -94,7 +102,7 @@ function serializeState() {
 
 function restoreState(data) {
   ensureUiState();
-  if (!data) return;
+  if (!data || typeof data !== "object") return;
 
   const asArr = (x) => Array.isArray(x) ? x : [];
 
@@ -123,8 +131,13 @@ function restoreState(data) {
     })).filter(b => b.sku)
   })).filter(m => m.code && m.name);
 
-  state.currentDelivery = data.currentDelivery || { supplier: null, dateISO: "", items: [] };
-  state.currentDelivery.items = asArr(state.currentDelivery.items).map(i => ({
+  const rawCurrentDelivery = (data.currentDelivery && typeof data.currentDelivery === "object") ? data.currentDelivery : {};
+  state.currentDelivery = {
+    supplier: normalize(rawCurrentDelivery.supplier) || null,
+    dateISO: normalize(rawCurrentDelivery.dateISO),
+    items: []
+  };
+  state.currentDelivery.items = asArr(rawCurrentDelivery.items).map(i => ({
     id: (typeof i?.id === "number") ? i.id : nextId(),
     sku: normalize(i?.sku),
     name: normalize(i?.name),
@@ -132,11 +145,21 @@ function restoreState(data) {
     price: safeFloat(i?.price)
   })).filter(i => i.sku);
 
-  state.currentBuild = data.currentBuild || { dateISO: "", items: [] };
-  state.currentBuild.items = asArr(state.currentBuild.items).map(i => ({
+  const rawCurrentBuild = (data.currentBuild && typeof data.currentBuild === "object") ? data.currentBuild : {};
+  state.currentBuild = {
+    dateISO: normalize(rawCurrentBuild.dateISO),
+    items: []
+  };
+  state.currentBuild.items = asArr(rawCurrentBuild.items).map(i => ({
     id: (typeof i?.id === "number") ? i.id : nextId(),
     machineCode: normalize(i?.machineCode),
-    qty: safeInt(i?.qty)
+    qty: safeInt(i?.qty),
+    machineNameSnapshot: normalize(i?.machineNameSnapshot),
+    bomSnapshot: asArr(i?.bomSnapshot).map(b => ({
+      sku: normalize(b?.sku),
+      name: normalize(b?.name),
+      qty: safeInt(b?.qty)
+    })).filter(b => b.sku)
   })).filter(i => i.machineCode);
 
   state.history = asArr(data.history).filter(Boolean);
@@ -208,8 +231,24 @@ function save() {
 function load() {
   ensureUiState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) restoreState(JSON.parse(raw));
+    const keysToTry = [STORAGE_KEY, ...STORAGE_KEY_FALLBACKS.filter(k => k && k !== STORAGE_KEY)];
+    let parsed = null;
+
+    for (const key of keysToTry) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") break;
+      } catch (err) {
+        console.warn(`Skipped unreadable storage key: ${key}`, err);
+      }
+      parsed = null;
+    }
+
+    if (parsed) {
+      restoreState(parsed);
+    }
   } catch (e) {
     console.error("Error loading data:", e);
     toast("Błąd odczytu", "Nie udało się wczytać danych.", "error");
@@ -257,6 +296,24 @@ const safeInt = (val) => {
   const n = strictPosInt(val);
   return (n === null) ? 1 : n;
 };
+
+function getLotDateSortValue(lot) {
+  const raw = normalize(lot?.dateIn || lot?.dateISO || "");
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = Date.parse(`${raw}T00:00:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareLotsForConsumption(a, b) {
+  const dateA = getLotDateSortValue(a);
+  const dateB = getLotDateSortValue(b);
+
+  if (dateA !== null && dateB !== null && dateA !== dateB) return dateA - dateB;
+  if (dateA !== null && dateB === null) return -1;
+  if (dateA === null && dateB !== null) return 1;
+
+  return safeInt(a?.id) - safeInt(b?.id);
+}
 
 const safeQtyInt = (val) => {
   const n = strictNonNegInt(val);
@@ -441,10 +498,18 @@ function addSupplier(name) {
 }
 
 function deleteSupplier(name) {
+  const deliverySupplierSelected = normalize(state.currentDelivery?.supplier) === normalize(name);
+  const deliverySupplierInForm = normalize(document.getElementById("supplierSelect")?.value || "") === normalize(name);
+
   if (state.lots.some(l => l.supplier === name)) {
     toast("Nie można usunąć", `Dostawca "${name}" ma towar na magazynie. Najpierw rozchoduj jego partie.`, "error");
     return;
   }
+  if (deliverySupplierSelected || deliverySupplierInForm) {
+    toast("Nie można usunąć", `Dostawca "${name}" jest aktualnie używany w roboczej dostawie. Zmień lub wyczyść dostawę przed usunięciem.`, "error");
+    return;
+  }
+
   state.suppliers.delete(name);
   save();
   renderAllSuppliers();
@@ -465,6 +530,11 @@ function addToDelivery(supplier, skuRaw, qty, price) {
   const k = skuKey(skuRaw);
   const part = state.partsCatalog.get(k);
   if (!part) return;
+
+  const dateInput = document.getElementById("deliveryDate");
+  if (dateInput) {
+    state.currentDelivery.dateISO = normalize(dateInput.value);
+  }
 
   state.currentDelivery.items.push({
     id: nextId(),
@@ -557,14 +627,84 @@ function finalizeDelivery() {
 }
 
 // === PRODUCTION ===
+function getMachineBomSnapshot(machineCode) {
+  const machine = state.machineCatalog.find(m => m.code === machineCode);
+  if (!machine || !Array.isArray(machine.bom)) return [];
+  return machine.bom.map(bomItem => {
+    const part = state.partsCatalog.get(skuKey(bomItem?.sku));
+    return {
+      sku: part?.sku || normalize(bomItem?.sku),
+      name: part?.name || normalize(bomItem?.name),
+      qty: safeInt(bomItem?.qty)
+    };
+  }).filter(item => item.sku);
+}
+
+function getBuildItemBom(buildItem) {
+  const snapshot = Array.isArray(buildItem?.bomSnapshot) ? buildItem.bomSnapshot : [];
+  if (snapshot.length) {
+    return snapshot.map(item => ({
+      sku: normalize(item?.sku),
+      name: normalize(item?.name),
+      qty: safeInt(item?.qty)
+    })).filter(item => item.sku);
+  }
+  return getMachineBomSnapshot(buildItem?.machineCode);
+}
+
+function getBuildItemMachineName(buildItem) {
+  const snapshotName = normalize(buildItem?.machineNameSnapshot);
+  if (snapshotName) return snapshotName;
+  const machine = state.machineCatalog.find(m => m.code === buildItem?.machineCode);
+  return machine ? machine.name : normalize(buildItem?.machineCode);
+}
+
+function updateHistoryPartReferences(originalKey, nextPart) {
+  const nextSku = normalize(nextPart?.sku);
+  const nextName = normalize(nextPart?.name);
+  if (!originalKey || !nextSku || !nextName || !Array.isArray(state.history)) return;
+
+  const updateSkuName = (obj, skuField = 'sku', nameField = 'name') => {
+    if (!obj || typeof obj !== 'object') return;
+    if (skuKey(obj[skuField]) !== originalKey) return;
+    obj[skuField] = nextSku;
+    if (nameField in obj || obj[nameField] != null) obj[nameField] = nextName;
+  };
+
+  state.history.forEach(ev => {
+    if (!ev || !Array.isArray(ev.items)) return;
+
+    if (ev.type === 'delivery') {
+      ev.items.forEach(item => updateSkuName(item));
+      return;
+    }
+
+    if (ev.type === 'adjustment') {
+      ev.items.forEach(item => updateSkuName(item));
+      return;
+    }
+
+    if (ev.type === 'build') {
+      ev.items.forEach(buildItem => {
+        if (!buildItem || !Array.isArray(buildItem.partsUsed)) return;
+        buildItem.partsUsed.forEach(partItem => {
+          updateSkuName(partItem);
+          if (Array.isArray(partItem.lots)) {
+            partItem.lots.forEach(lot => updateSkuName(lot));
+          }
+        });
+      });
+    }
+  });
+}
 function calculateBuildRequirements() {
   const needs = new Map();
   state.currentBuild.items.forEach(buildItem => {
-    const machine = state.machineCatalog.find(m => m.code === buildItem.machineCode);
-    if (!machine) return;
-    machine.bom.forEach(bomItem => {
+    const bomItems = getBuildItemBom(buildItem);
+    if (!bomItems.length) return;
+    bomItems.forEach(bomItem => {
       const k = skuKey(bomItem.sku);
-      const total = (bomItem.qty * buildItem.qty);
+      const total = (safeInt(bomItem.qty) * safeInt(buildItem.qty));
       needs.set(k, (needs.get(k) || 0) + total);
     });
   });
@@ -601,9 +741,10 @@ function finalizeBuild(manualAllocation = null) {
   
   try {
     const buildDateInput = document.getElementById("buildDate");
-    const buildISO = (buildDateInput && buildDateInput.value) 
-      ? buildDateInput.value 
-      : (new Date().toISOString().slice(0, 10));
+    if (buildDateInput) {
+      state.currentBuild.dateISO = normalize(buildDateInput.value);
+    }
+    const buildISO = normalize(state.currentBuild.dateISO) || (new Date().toISOString().slice(0, 10));
     
     const dateValidation = validateDateISO(buildISO, { allowFuture: false, maxPastYears: 1 });
     if (!dateValidation.valid) {
@@ -685,7 +826,7 @@ function finalizeBuild(manualAllocation = null) {
           return { lot, take };
         })
         .filter(Boolean)
-        .sort((a, b) => (safeInt(a.lot.id) - safeInt(b.lot.id)));
+        .sort((a, b) => compareLotsForConsumption(a.lot, b.lot));
 
       for (const ent of manualEntries) {
         ent.lot.qty = safeQtyInt(ent.lot.qty) - ent.take;
@@ -696,7 +837,7 @@ function finalizeBuild(manualAllocation = null) {
         let remain = qtyNeeded;
         const relevantLots = lotsClone
           .filter(l => skuKey(l.sku) === k && l.qty > 0)
-          .sort((a, b) => a.id - b.id);
+          .sort(compareLotsForConsumption);
         
         for (const lot of relevantLots) {
           if (remain <= 0) break;
@@ -713,7 +854,7 @@ function finalizeBuild(manualAllocation = null) {
     state.currentBuild.items.forEach(bi => {
       const existing = state.machinesStock.find(m => m.code === bi.machineCode);
       const machineDef = state.machineCatalog.find(m => m.code === bi.machineCode);
-      const currentName = machineDef ? machineDef.name : bi.machineCode;
+      const currentName = machineDef ? machineDef.name : getBuildItemMachineName(bi);
 
       if (existing) {
         existing.qty += bi.qty;
@@ -750,10 +891,10 @@ function finalizeBuild(manualAllocation = null) {
     }
 
     const buildItemsDetailed = state.currentBuild.items.map(bi => {
-      const def = state.machineCatalog.find(m => m.code === bi.machineCode);
-      const currentName = def ? def.name : bi.machineCode;
+      const currentName = getBuildItemMachineName(bi);
+      const bomItems = getBuildItemBom(bi);
 
-      const partsUsed = (def && Array.isArray(def.bom) ? def.bom : []).map(bomItem => {
+      const partsUsed = bomItems.map(bomItem => {
         const k = skuKey(bomItem.sku);
         const need = safeQtyInt(bomItem.qty) * safeQtyInt(bi.qty);
 
@@ -772,8 +913,8 @@ function finalizeBuild(manualAllocation = null) {
         });
 
         return {
-          sku: state.partsCatalog.get(k)?.sku || k,
-          name: state.partsCatalog.get(k)?.name || "",
+          sku: normalize(bomItem.sku) || state.partsCatalog.get(k)?.sku || k,
+          name: normalize(bomItem.name) || state.partsCatalog.get(k)?.name || "",
           qty: need,
           lots: lotsUsed
         };
@@ -796,6 +937,7 @@ function finalizeBuild(manualAllocation = null) {
     });
     
     state.currentBuild.items = [];
+    state.currentBuild.dateISO = "";
     if (buildDateInput) buildDateInput.value = "";
     save();
     
@@ -845,7 +987,7 @@ function getLastKnownUnitPrice(skuRaw) {
   const lots = (state.lots || [])
     .filter(l => skuKey(l.sku) === k)
     .slice()
-    .sort((a, b) => (safeInt(a.id) - safeInt(b.id)));
+    .sort(compareLotsForConsumption);
   if (!lots.length) return 0;
   const last = lots[lots.length - 1];
   return safeFloat(last?.unitPrice || 0);
@@ -1000,7 +1142,7 @@ function commitStockAdjustments() {
     const affectedLots = [];
     const relevantLots = lotsClone
       .filter(l => skuKey(l.sku) === k && safeQtyInt(l.qty) > 0)
-      .sort((a, b) => safeInt(a.id) - safeInt(b.id));
+      .sort(compareLotsForConsumption);
 
     for (const lot of relevantLots) {
       if (remainingToRemove <= 0) break;

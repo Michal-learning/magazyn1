@@ -28,11 +28,82 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+
+function ensureToastHost() {
+  if (typeof document === 'undefined') return null;
+  let host = document.querySelector('.toast-host');
+  if (host) return host;
+  host = document.createElement('div');
+  host.className = 'toast-host';
+  document.body.appendChild(host);
+  return host;
+}
+
+function getToastIcon(type) {
+  if (type === 'success') return '✓';
+  if (type === 'warning') return '!';
+  if (type === 'error') return '×';
+  return 'i';
+}
+
+function toast(title, message = '', type = 'success', opts = {}) {
+  const host = ensureToastHost();
+  if (!host) return null;
+
+  const variant = ['success', 'warning', 'error'].includes(type) ? type : 'success';
+  const duration = Number.isFinite(opts?.duration) ? Math.max(1200, opts.duration) : 3200;
+
+  const el = document.createElement('div');
+  el.className = `toast toast-${variant}`;
+  el.setAttribute('role', variant === 'error' ? 'alert' : 'status');
+  el.setAttribute('aria-live', variant === 'error' ? 'assertive' : 'polite');
+
+  const safeTitle = escapeHtml(title || 'Powiadomienie');
+  const safeMessage = escapeHtml(message || '');
+
+  el.innerHTML = `
+    <div class="toast-icon" aria-hidden="true">${getToastIcon(variant)}</div>
+    <div class="toast-content">
+      <div class="toast-title">${safeTitle}</div>
+      ${safeMessage ? `<div class="toast-message">${safeMessage}</div>` : ''}
+    </div>
+  `;
+
+  host.appendChild(el);
+
+  const remove = () => {
+    if (!el.isConnected) return;
+    el.classList.add('toast-out');
+    window.setTimeout(() => {
+      try { el.remove(); } catch {}
+    }, 220);
+  };
+
+  const timer = window.setTimeout(remove, duration);
+  el.addEventListener('click', () => {
+    window.clearTimeout(timer);
+    remove();
+  });
+
+  return el;
+}
+
 // Part details modal state
 let currentPartDetailsSku = null;
 
 function computePartsSummary() {
   const summary = new Map();
+
+  for (const [key, part] of (state.partsCatalog || new Map()).entries()) {
+    if (!key || !part) continue;
+    summary.set(key, {
+      sku: part.sku,
+      name: part.name,
+      qty: 0,
+      value: 0
+    });
+  }
+
   (state.lots || []).forEach(lot => {
     const key = skuKey(lot.sku);
     const prev = summary.get(key) || { sku: lot.sku, name: lot.name, qty: 0, value: 0 };
@@ -49,17 +120,24 @@ function renderSideMissingTop5() {
   if (!els.sideMissingSignals) return;
 
   const rows = computePartsSummary()
-    .filter(r => Number.isFinite(r.qty))
-    .sort((a, b) => (a.qty - b.qty) || String(a.sku).localeCompare(String(b.sku), "pl"))
+    .map(r => ({ ...r, statusMeta: getPartStockStatus(r.sku, r.qty) }))
+    .filter(r => r.statusMeta.level === "warning" || r.statusMeta.level === "danger")
+    .sort((a, b) => {
+      const levelOrder = { danger: 0, warning: 1, success: 2 };
+      const levelDiff = (levelOrder[a.statusMeta.level] ?? 9) - (levelOrder[b.statusMeta.level] ?? 9);
+      if (levelDiff !== 0) return levelDiff;
+      if (a.qty !== b.qty) return a.qty - b.qty;
+      return String(a.sku).localeCompare(String(b.sku), "pl");
+    })
     .slice(0, 5);
 
   if (!rows.length) {
-    els.sideMissingSignals.innerHTML = `<div class="text-muted" style="font-size:var(--text-sm);padding:var(--space-3);text-align:center">Brak danych</div>`;
+    els.sideMissingSignals.innerHTML = `<div class="text-muted" style="font-size:var(--text-sm);padding:var(--space-3);text-align:center">Brak alertów</div>`;
     return;
   }
 
   els.sideMissingSignals.innerHTML = rows.map(r => {
-    const statusMeta = getPartStockStatus(r.sku, r.qty);
+    const statusMeta = r.statusMeta || getPartStockStatus(r.sku, r.qty);
     const cls = statusMeta.level;
     const status = statusMeta.label;
 
@@ -376,40 +454,13 @@ function renderWarehouse() {
   const isEditMode = !!state.ui?.stockEditMode;
   const pendingMap = state.ui?.pendingStockAdjustments || {};
   
-  const summary = new Map();
+  const summaryRows = computePartsSummary().filter(item => {
+    if (!q) return true;
+    return String(item?.sku || '').toLowerCase().includes(q) || String(item?.name || '').toLowerCase().includes(q);
+  });
   let grandTotal = 0;
 
-  (state.lots || []).forEach(lot => {
-    if (!lot) return;
-    const key = skuKey(lot.sku);
-    if (!key) return;
-    
-    if (q && 
-        !String(lot.sku || "").toLowerCase().includes(q) &&
-        !String(lot.name || "").toLowerCase().includes(q)) {
-      return;
-    }
-    
-    if (!summary.has(key)) {
-      summary.set(key, { sku: lot.sku, name: lot.name, qty: 0, value: 0 });
-    }
-    const item = summary.get(key);
-    item.qty += safeQtyInt(lot.qty);
-    item.value += safeQtyInt(lot.qty) * safeFloat(lot.unitPrice || 0);
-  });
-
-  if (isEditMode) {
-    for (const [key, part] of state.partsCatalog.entries()) {
-      const sku = String(part?.sku || "");
-      const name = String(part?.name || "");
-      if (q && !sku.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue;
-      if (!summary.has(key)) {
-        summary.set(key, { sku, name, qty: 0, value: 0 });
-      }
-    }
-  }
-
-  summary.forEach(item => { grandTotal += item.value; });
+  summaryRows.forEach(item => { grandTotal += item.value; });
   const totalFormatted = fmtPLN.format(grandTotal);
 
   if (els.sideWarehouseTotal) els.sideWarehouseTotal.textContent = totalFormatted;
@@ -434,7 +485,7 @@ function renderWarehouse() {
     }
   }
 
-  els.summaryTable.innerHTML = Array.from(summary.values())
+  els.summaryTable.innerHTML = summaryRows
     .slice()
     .sort((a, b) => (safeQtyInt(a.qty) - safeQtyInt(b.qty)) || String(a.sku).localeCompare(String(b.sku), 'pl'))
     .map(item => {
@@ -536,12 +587,12 @@ function renderBuild() {
   if (!els.buildItems) return;
 
   els.buildItems.innerHTML = state.currentBuild.items.map(i => {
-    const m = state.machineCatalog.find(x => x.code === i.machineCode);
+    const machineName = getBuildItemMachineName(i);
     return `<tr>
       <td>
         <div style="display:flex;gap:var(--space-2);align-items:center">
           <span class="badge">${escapeHtml(i.machineCode)}</span>
-          <span>${m ? escapeHtml(m.name) : "???"}</span>
+          <span>${escapeHtml(machineName || "???")}</span>
         </div>
       </td>
       <td class="text-right">${i.qty}</td>
@@ -602,18 +653,21 @@ function renderManualConsume() {
 
   req.forEach((qtyNeeded, skuKeyStr) => {
     const part = state.partsCatalog.get(skuKeyStr);
+    const draftBomItem = state.currentBuild.items
+      .flatMap(item => getBuildItemBom(item))
+      .find(item => skuKey(item?.sku) === skuKeyStr);
 
     const lots = (state.lots || [])
       .filter(l => skuKey(l.sku) === skuKeyStr)
       .slice()
-      .sort((a, b) => (a.id || 0) - (b.id || 0));
+      .sort(compareLotsForConsumption);
 
     const html = `
       <div class="consume-part">
         <div class="consume-part-header">
           <div>
-            <strong>${escapeHtml(part?.sku || skuKeyStr)}</strong>
-            ${part?.name ? `<span class="text-muted"> - ${escapeHtml(part.name)}</span>` : ""}
+            <strong>${escapeHtml(part?.sku || draftBomItem?.sku || skuKeyStr)}</strong>
+            ${(part?.name || draftBomItem?.name) ? `<span class="text-muted"> - ${escapeHtml(part?.name || draftBomItem?.name || "")}</span>` : ""}
           </div>
           <span class="badge">Wymagane: ${qtyNeeded}</span>
         </div>
@@ -1241,6 +1295,10 @@ function refreshCatalogsUI() {
     });
   }
 
+  if (typeof syncDeliveryDraftUI === 'function') {
+    syncDeliveryDraftUI({ keepSelectedPart: true });
+  }
+
   if (typeof syncNewPartSupplierPricesUI === 'function') syncNewPartSupplierPricesUI();
   if (typeof syncEditPartSupplierPricesUI === 'function') syncEditPartSupplierPricesUI();
 }
@@ -1254,7 +1312,28 @@ let _openComboApi = null;
 function getComboValueFromSelect(selectEl) {
   if (!selectEl) return "";
   const data = _singleComboRegistry.get(selectEl);
-  return normalize(data?.currentValue ?? selectEl.value ?? "");
+  const registryValue = normalize(data?.currentValue ?? "");
+  const selectValue = normalize(selectEl.value ?? "");
+  return registryValue || selectValue;
+}
+
+function setComboValueForSelect(selectEl, value, opts = {}) {
+  if (!selectEl) return "";
+  const normalized = normalize(value ?? "");
+  selectEl.value = normalized;
+
+  const data = _singleComboRegistry.get(selectEl);
+  if (data) data.currentValue = normalized;
+
+  try {
+    refreshComboFromSelect(selectEl, opts || {});
+  } catch {}
+
+  if (opts?.dispatchChange) {
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  return normalized;
 }
 
 function closeOpenCombobox(exceptApi = null) {
