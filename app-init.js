@@ -531,34 +531,40 @@ function bindAuthUI() {
     }
   });
 
-  window.sb?.auth?.onAuthStateChange?.(async (_event, session) => {
-    if (window.appAuth) {
-      window.appAuth.session = session || null;
-      window.appAuth.user = session?.user || null;
-    }
+  window.sb?.auth?.onAuthStateChange?.((_event, session) => {
+    void (async () => {
+      if (window.appAuth) {
+        window.appAuth.session = session || null;
+        window.appAuth.user = session?.user || null;
+      }
 
-    const result = (typeof window.refreshAuthContext === "function")
-      ? await window.refreshAuthContext(session || null)
-      : { ok: false };
+      const result = (typeof window.refreshAuthContext === "function")
+        ? await window.refreshAuthContext(session || null)
+        : { ok: false };
 
-    if (!result?.ok) {
+      if (!result?.ok) {
+        setAuthLocked(true);
+        setAuthError("Nie udało się odświeżyć sesji użytkownika.");
+        return;
+      }
+
+      updateAuthUI();
+
+      const hasSession = !!window.appAuth?.session;
+      if (hasSession && !window.__appInitialized) {
+        await init();
+        return;
+      }
+
+      if (!hasSession) {
+        window.__appInitialized = false;
+        passwordInput && (passwordInput.value = "");
+      }
+    })().catch((err) => {
+      console.error("Auth state change handler error:", err);
       setAuthLocked(true);
-      setAuthError("Nie udało się odświeżyć sesji użytkownika.");
-      return;
-    }
-
-    updateAuthUI();
-
-    const hasSession = !!window.appAuth?.session;
-    if (hasSession && !window.__appInitialized) {
-      await init();
-      return;
-    }
-
-    if (!hasSession) {
-      window.__appInitialized = false;
-      passwordInput && (passwordInput.value = "");
-    }
+      setAuthError("Wystąpił błąd podczas przełączania sesji użytkownika.");
+    });
   });
 }
 
