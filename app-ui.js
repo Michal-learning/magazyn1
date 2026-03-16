@@ -1636,16 +1636,25 @@ function renderCatalogStatusBadges({ isArchived = false, warningBadges = [] } = 
 }
 
 
+function normalizeCatalogSearchQuery(value) {
+  return normalize(value).toLowerCase();
+}
+
+function catalogIncludesQuery(query, ...values) {
+  if (!query) return true;
+  return values.some(value => String(value || '').toLowerCase().includes(query));
+}
+
 function renderAllSuppliers() {
   const table = byId("suppliersListTable");
   const tbody = table?.querySelector("tbody");
   if (!tbody) return;
 
-  const q = normalize(document.getElementById("searchCatalogSuppliers")?.value).toLowerCase();
+  const q = normalizeCatalogSearchQuery(document.getElementById("searchCatalogSuppliers")?.value);
   
   tbody.innerHTML = Array.from(state.suppliers.keys())
     .sort()
-    .filter(name => !q || String(name || '').toLowerCase().includes(q))
+    .filter(name => catalogIncludesQuery(q, name))
     .map(name => {
       const warnings = getSupplierDataWarnings(name);
       const isArchived = isSupplierArchived(name);
@@ -1682,15 +1691,12 @@ function refreshCatalogsUI() {
   const parts = Array.from(state.partsCatalog.values());
   const activeParts = getActivePartsCatalog();
   const allSups = getActiveSupplierNames();
-  const partsQuery = normalize(document.getElementById("searchCatalogParts")?.value).toLowerCase();
-  const machinesQuery = normalize(document.getElementById("searchCatalogMachines")?.value).toLowerCase();
+  const partsQuery = normalizeCatalogSearchQuery(document.getElementById("searchCatalogParts")?.value);
+  const machinesQuery = normalizeCatalogSearchQuery(document.getElementById("searchCatalogMachines")?.value);
 
   // Parts catalog
   els.partsCatalog.innerHTML = parts
-    .filter(p => {
-      if (!partsQuery) return true;
-      return String(p?.sku || '').toLowerCase().includes(partsQuery) || String(p?.name || '').toLowerCase().includes(partsQuery);
-    })
+    .filter(p => catalogIncludesQuery(partsQuery, p?.sku, p?.name))
     .map(p => {
       const warnings = getPartDataWarnings(p.sku);
       const suppliers = warnings.suppliers.map(item => item.name);
@@ -1723,10 +1729,7 @@ function refreshCatalogsUI() {
 
   // Machines catalog
   els.machinesCatalog.innerHTML = state.machineCatalog
-    .filter(m => {
-      if (!machinesQuery) return true;
-      return String(m?.code || '').toLowerCase().includes(machinesQuery) || String(m?.name || '').toLowerCase().includes(machinesQuery);
-    })
+    .filter(m => catalogIncludesQuery(machinesQuery, m?.code, m?.name))
     .map(m => {
       const warnings = getMachineDataWarnings(m.code);
       const isArchived = !!m?.archived;
