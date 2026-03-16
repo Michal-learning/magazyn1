@@ -198,7 +198,50 @@ function renderSidePanel() {
   renderSideRecentActions5();
 }
 
-// === NEW: Part Details Modal Functions ===
+// === Details Modal Helpers ===
+
+function renderDetailsMetric(label, value) {
+  return `
+    <div class="history-stat-card">
+      <span class="history-stat-label">${escapeHtml(label)}</span>
+      <strong class="history-stat-value">${escapeHtml(String(value ?? "—"))}</strong>
+    </div>
+  `;
+}
+
+function renderDetailsInfoRows(rows = []) {
+  const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!safeRows.length) {
+    return `<div class="catalog-details-empty">Brak danych</div>`;
+  }
+
+  return `
+    <div class="catalog-details-list">
+      ${safeRows.map(row => `
+        <div class="catalog-details-row">
+          <span class="catalog-details-row-label">${escapeHtml(row.label || "—")}</span>
+          <strong class="catalog-details-row-value">${escapeHtml(String(row.value ?? "—"))}</strong>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderDetailsMachineList(items = []) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!safeItems.length) {
+    return `<div class="catalog-details-empty">Brak przypisanych maszyn</div>`;
+  }
+
+  return `
+    <div class="catalog-details-chip-list">
+      ${safeItems.map(item => `
+        <span class="badge">${escapeHtml(item.code || "—")}</span>
+        <span class="catalog-details-chip-text">${escapeHtml(item.name || "")}</span>
+      `).join("")}
+    </div>
+  `;
+}
 
 function openPartDetailsModal(sku) {
   const skuKeyVal = skuKey(sku);
@@ -207,96 +250,87 @@ function openPartDetailsModal(sku) {
 
   currentPartDetailsSku = sku;
 
-  // Get all lots for this part
-  const lots = (state.lots || []).filter(l => skuKey(l.sku) === skuKeyVal);
-  
-  // Group by price (ignoring supplier at this stage)
-  const priceGroups = new Map();
-  lots.forEach(lot => {
-    const price = safeFloat(lot.unitPrice || 0);
-    const priceKey = String(price);
-    if (!priceGroups.has(priceKey)) {
-      priceGroups.set(priceKey, { price, lots: [], totalQty: 0, totalValue: 0 });
-    }
-    const group = priceGroups.get(priceKey);
-    group.lots.push(lot);
-    group.totalQty += safeQtyInt(lot.qty);
-    group.totalValue += safeQtyInt(lot.qty) * price;
-  });
+  const stockQty = getPartTotalQty(part.sku);
+  const stockStatus = getPartStockStatus(part.sku, stockQty);
+  const suppliers = getPartSuppliersForStatus(part.sku);
+  const referencePrice = getPartReferencePrice(part.sku);
+  const purchaseStats = getPartPurchaseHistoryStats(part.sku);
+  const buildUsageStats = getPartBuildUsageStats(part.sku);
+  const machines = getPartUsageMachines(part.sku);
 
-  // Calculate totals
-  const totalQty = lots.reduce((sum, l) => sum + safeQtyInt(l.qty), 0);
-  const totalValue = lots.reduce((sum, l) => sum + safeQtyInt(l.qty) * safeFloat(l.unitPrice || 0), 0);
-  const uniquePrices = priceGroups.size;
-  const batchCount = lots.length;
-
-  // Update header
   const titleEl = document.getElementById("partDetailsTitle");
   const subtitleEl = document.getElementById("partDetailsSubtitle");
+  const statsEl = document.getElementById("partDetailsStats");
+  const sectionsEl = document.getElementById("partDetailsSections");
+
   if (titleEl) titleEl.textContent = part.sku;
   if (subtitleEl) subtitleEl.textContent = part.name;
 
-  // Update stats
-  const statsEl = document.getElementById("partDetailsStats");
   if (statsEl) {
-    statsEl.innerHTML = `
-      <div class="history-stat-card">
-        <span class="history-stat-label">Całkowity stan</span>
-        <strong class="history-stat-value">${totalQty} szt.</strong>
-      </div>
-      <div class="history-stat-card">
-        <span class="history-stat-label">Wartość całkowita</span>
-        <strong class="history-stat-value">${fmtPLN.format(totalValue)}</strong>
-      </div>
-      <div class="history-stat-card">
-        <span class="history-stat-label">Liczba cen</span>
-        <strong class="history-stat-value">${uniquePrices}</strong>
-      </div>
-      <div class="history-stat-card">
-        <span class="history-stat-label">Liczba partii</span>
-        <strong class="history-stat-value">${batchCount}</strong>
-      </div>
+    statsEl.innerHTML = [
+      renderDetailsMetric("Dostawcy", suppliers.length),
+      renderDetailsMetric("Stan magazynowy", `${stockQty} szt.`),
+      renderDetailsMetric("Cena referencyjna", fmtPLN.format(referencePrice || 0)),
+      renderDetailsMetric("Status", stockStatus.label)
+    ].join("");
+  }
+
+  if (sectionsEl) {
+    sectionsEl.innerHTML = `
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Podstawowe</h4><p>Najważniejsze informacje o części.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Nazwa / typ", value: part.name || "brak danych" },
+          { label: "Liczba przypisanych dostawców", value: suppliers.length },
+          { label: "Cena referencyjna", value: fmtPLN.format(referencePrice || 0) },
+          { label: "Aktualny stan magazynowy", value: `${stockQty} szt.` },
+          { label: "Status magazynowy", value: stockStatus.label }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Wykorzystanie</h4><p>Powiązania części z definicjami maszyn.</p></div>
+        </div>
+        <div class="catalog-details-subgrid">
+          <div>
+            ${renderDetailsInfoRows([
+              { label: "W ilu maszynach jest używana", value: machines.length }
+            ])}
+          </div>
+          <div>
+            <div class="catalog-details-inline-label">Lista maszyn, w których występuje</div>
+            ${renderDetailsMachineList(machines)}
+          </div>
+        </div>
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Historia zakupów</h4><p>Zakupy tej części z realnej historii dostaw.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Ile razy część była kupiona", value: purchaseStats.purchaseCount },
+          { label: "Łączna kupiona ilość", value: `${purchaseStats.totalQty} szt.` },
+          { label: "Łączna wartość zakupów", value: fmtPLN.format(purchaseStats.totalValue || 0) }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Zużycie / produkcja</h4><p>Zużycie części w realnej historii produkcji.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Ile razy ta część została zużyta w produkcji", value: buildUsageStats.usageCount },
+          { label: "Łączna zużyta ilość", value: `${buildUsageStats.totalQty} szt.` },
+          { label: "Data ostatniego użycia w budowie maszyny", value: buildUsageStats.lastDateISO ? fmtDateISO(buildUsageStats.lastDateISO) : "brak danych" }
+        ])}
+      </section>
     `;
   }
 
-  // Update price variants table
-  const variantsEl = document.getElementById("partDetailsPriceVariants");
-  if (variantsEl) {
-    const sortedGroups = Array.from(priceGroups.values()).sort((a, b) => a.price - b.price);
-    
-    if (sortedGroups.length === 0) {
-      variantsEl.innerHTML = `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:var(--space-4)">Brak partii na magazynie</td></tr>`;
-    } else {
-      variantsEl.innerHTML = sortedGroups.map(group => {
-        const batchCount = group.lots.length;
-        const correctionLots = group.lots.filter(lot => normalize(lot?.supplier) === "Korekta stanu").length;
-        return `
-          <tr>
-            <td>
-              <strong>${fmtPLN.format(group.price)}</strong>
-              ${correctionLots > 0 ? `<div class="lot-origin-note">W tym korekty: ${correctionLots}</div>` : ``}
-            </td>
-            <td class="text-right">${group.totalQty}</td>
-            <td class="text-right">${fmtPLN.format(group.totalValue)}</td>
-            <td class="text-right">
-              <span class="badge">${batchCount}</span>
-              ${correctionLots > 0 ? `<span class="lot-origin-badge">korekta</span>` : ``}
-            </td>
-            <td class="text-right">
-              <button class="btn btn-secondary btn-sm" type="button"
-                data-action="openBatchPreviewByPrice"
-                data-sku="${escapeHtml(sku)}"
-                data-price="${group.price}">
-                Podgląd
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join("");
-    }
-  }
-
-  // Show modal
   const backdrop = document.getElementById("partDetailsBackdrop");
   const panel = document.getElementById("partDetailsPanel");
   if (backdrop && panel) {
@@ -318,6 +352,197 @@ function closePartDetailsModal() {
   document.body.classList.remove("part-details-open");
   currentPartDetailsSku = null;
 }
+
+function openSupplierDetailsModal(name) {
+  const supplierName = normalize(name);
+  if (!supplierName || !state.suppliers.has(supplierName)) return;
+
+  const linkedParts = getSupplierPartsForStatus(supplierName);
+  const purchaseStats = getSupplierDeliveryStats(supplierName);
+  const partsOnStock = linkedParts.filter(item => getPartTotalQty(item.sku) > 0).length;
+
+  const titleEl = document.getElementById("supplierDetailsTitle");
+  const subtitleEl = document.getElementById("supplierDetailsSubtitle");
+  const statsEl = document.getElementById("supplierDetailsStats");
+  const sectionsEl = document.getElementById("supplierDetailsSections");
+
+  if (titleEl) titleEl.textContent = supplierName;
+  if (subtitleEl) subtitleEl.textContent = "Readonly podgląd danych dostawcy.";
+
+  if (statsEl) {
+    statsEl.innerHTML = [
+      renderDetailsMetric("Przypisane części", linkedParts.length),
+      renderDetailsMetric("Dostawy", purchaseStats.deliveryUseCount),
+      renderDetailsMetric("Kupione sztuki", `${purchaseStats.totalQty} szt.`),
+      renderDetailsMetric("Zakupy", fmtPLN.format(purchaseStats.totalValue || 0))
+    ].join("");
+  }
+
+  if (sectionsEl) {
+    const topPartLabel = purchaseStats.topPart
+      ? `${purchaseStats.topPart.sku}${purchaseStats.topPart.name ? ` • ${purchaseStats.topPart.name}` : ""} (${purchaseStats.topPart.qty} szt.)`
+      : "brak danych";
+
+    sectionsEl.innerHTML = `
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Podstawowe</h4><p>Najkrótsza możliwa wersja bez administracyjnej spiny.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Nazwa dostawcy", value: supplierName },
+          { label: "Liczba przypisanych części", value: linkedParts.length }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Historia zakupów</h4><p>Statystyki z historii dostaw.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Ile razy był użyty w dostawach", value: purchaseStats.deliveryUseCount },
+          { label: "Łączna liczba kupionych od niego sztuk", value: `${purchaseStats.totalQty} szt.` },
+          { label: "Łączna wartość zakupów", value: fmtPLN.format(purchaseStats.totalValue || 0) },
+          { label: "Data ostatniej dostawy", value: purchaseStats.lastDateISO ? fmtDateISO(purchaseStats.lastDateISO) : "brak danych" }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Przydatne powiązania</h4><p>Najbardziej sensowne jedno zdanie o tym dostawcy.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Najczęściej kupowana część od tego dostawcy", value: topPartLabel }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Status / jakość danych</h4><p>Minimalna kontrola spójności bez zabawy w dashboard.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Ile jego części jest aktualnie na magazynie", value: partsOnStock }
+        ])}
+      </section>
+    `;
+  }
+
+  const backdrop = document.getElementById("supplierDetailsBackdrop");
+  const panel = document.getElementById("supplierDetailsPanel");
+  if (backdrop && panel) {
+    backdrop.classList.remove("hidden");
+    backdrop.setAttribute("aria-hidden", "false");
+    panel.classList.remove("hidden");
+    document.body.classList.add("supplier-details-open");
+  }
+}
+
+function closeSupplierDetailsModal() {
+  const backdrop = document.getElementById("supplierDetailsBackdrop");
+  const panel = document.getElementById("supplierDetailsPanel");
+  if (backdrop) {
+    backdrop.classList.add("hidden");
+    backdrop.setAttribute("aria-hidden", "true");
+  }
+  if (panel) panel.classList.add("hidden");
+  document.body.classList.remove("supplier-details-open");
+}
+
+function openMachineDetailsModal(code) {
+  const machineCode = normalize(code);
+  const machine = (state.machineCatalog || []).find(item => normalize(item?.code) === machineCode);
+  if (!machine) return;
+
+  const bomItems = Array.isArray(machine.bom) ? machine.bom : [];
+  const totalBomQty = bomItems.reduce((sum, item) => sum + safeQtyInt(item?.qty), 0);
+  const estimatedUnitCost = bomItems.reduce((sum, item) => sum + (safeQtyInt(item?.qty) * getPartReferencePrice(item?.sku)), 0);
+  const productionStats = getMachineProductionStats(machineCode);
+  const buildCapacity = getMachineBuildCapacity(machineCode);
+
+  const titleEl = document.getElementById("machineDetailsTitle");
+  const subtitleEl = document.getElementById("machineDetailsSubtitle");
+  const statsEl = document.getElementById("machineDetailsStats");
+  const sectionsEl = document.getElementById("machineDetailsSections");
+
+  if (titleEl) titleEl.textContent = machine.code || machineCode;
+  if (subtitleEl) subtitleEl.textContent = machine.name || "Readonly podgląd danych maszyny.";
+
+  if (statsEl) {
+    statsEl.innerHTML = [
+      renderDetailsMetric("Pozycje BOM", bomItems.length),
+      renderDetailsMetric("Suma qty", `${totalBomQty} szt.`),
+      renderDetailsMetric("Wyprodukowano", `${productionStats.totalQty} szt.`),
+      renderDetailsMetric("Koszt 1 szt.", fmtPLN.format(estimatedUnitCost || 0))
+    ].join("");
+  }
+
+  if (sectionsEl) {
+    sectionsEl.innerHTML = `
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Podstawowe</h4><p>To, co rzeczywiście trzeba wiedzieć o BOM.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Nazwa / typ", value: machine.name || "brak danych" },
+          { label: "Liczba pozycji BOM", value: bomItems.length },
+          { label: "Łączna liczba wszystkich sztuk części potrzebnych do 1 budowy", value: `${totalBomQty} szt.` }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Produkcja</h4><p>Dane z historii produkcji tej maszyny.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Ile razy była budowana", value: productionStats.buildCount },
+          { label: "Ile łącznie sztuk tej maszyny wyprodukowano", value: `${productionStats.totalQty} szt.` },
+          { label: "Data ostatniej budowy", value: productionStats.lastDateISO ? fmtDateISO(productionStats.lastDateISO) : "brak danych" }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>Koszt</h4><p>Szacunek na bazie cen referencyjnych części.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Szacowany koszt budowy 1 sztuki", value: fmtPLN.format(estimatedUnitCost || 0) }
+        ])}
+      </section>
+
+      <section class="part-details-section">
+        <div class="part-details-section-head">
+          <div><h4>BOM / gotowość</h4><p>Ile da się realnie złożyć z obecnego magazynu.</p></div>
+        </div>
+        ${renderDetailsInfoRows([
+          { label: "Maksymalna liczba sztuk możliwych do zbudowania z obecnego magazynu", value: buildCapacity }
+        ])}
+      </section>
+    `;
+  }
+
+  const backdrop = document.getElementById("machineDetailsBackdrop");
+  const panel = document.getElementById("machineDetailsPanel");
+  if (backdrop && panel) {
+    backdrop.classList.remove("hidden");
+    backdrop.setAttribute("aria-hidden", "false");
+    panel.classList.remove("hidden");
+    document.body.classList.add("machine-details-open");
+  }
+}
+
+function closeMachineDetailsModal() {
+  const backdrop = document.getElementById("machineDetailsBackdrop");
+  const panel = document.getElementById("machineDetailsPanel");
+  if (backdrop) {
+    backdrop.classList.add("hidden");
+    backdrop.setAttribute("aria-hidden", "true");
+  }
+  if (panel) panel.classList.add("hidden");
+  document.body.classList.remove("machine-details-open");
+}
+
+window.openPartDetailsModal = openPartDetailsModal;
+window.openSupplierDetailsModal = openSupplierDetailsModal;
+window.openMachineDetailsModal = openMachineDetailsModal;
 
 // === NEW: Batch Preview by Price (with supplier breakdown) ===
 
@@ -1212,10 +1437,13 @@ function renderAllSuppliers() {
           ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
         <td class="text-right">
-          <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div class="catalog-actions">
+            <button class="btn btn-secondary btn-sm" type="button" onclick="openSupplierDetailsModal('${escapeHtml(name)}')">Szczegóły</button>
+            <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -1252,10 +1480,13 @@ function refreshCatalogsUI() {
         ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
       </td>
       <td class="text-right">
-        <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div class="catalog-actions">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="openPartDetailsModal('${escapeHtml(p.sku)}')">Szczegóły</button>
+          <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </td>
     </tr>`;
   }).join("");
@@ -1278,10 +1509,13 @@ function refreshCatalogsUI() {
           ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
         <td class="text-right">
-          <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div class="catalog-actions">
+            <button class="btn btn-secondary btn-sm" type="button" onclick="openMachineDetailsModal('${escapeHtml(m.code)}')">Szczegóły</button>
+            <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -1861,6 +2095,8 @@ document.addEventListener('click', (e) => {
 document.getElementById('partDetailsCloseBtn')?.addEventListener('click', closePartDetailsModal);
 document.getElementById('batchPreviewCloseBtn')?.addEventListener('click', closeBatchPreviewModal);
 document.getElementById('historyPreviewCloseBtn')?.addEventListener('click', closeHistoryPreviewModal);
+document.getElementById('supplierDetailsCloseBtn')?.addEventListener('click', closeSupplierDetailsModal);
+document.getElementById('machineDetailsCloseBtn')?.addEventListener('click', closeMachineDetailsModal);
 
 // Close modals on backdrop click
 document.getElementById('partDetailsBackdrop')?.addEventListener('click', (e) => {
@@ -1872,6 +2108,12 @@ document.getElementById('batchPreviewBackdrop')?.addEventListener('click', (e) =
 document.getElementById('historyPreviewBackdrop')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeHistoryPreviewModal();
 });
+document.getElementById('supplierDetailsBackdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeSupplierDetailsModal();
+});
+document.getElementById('machineDetailsBackdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeMachineDetailsModal();
+});
 
 // Close modals on Escape key
 document.addEventListener('keydown', (e) => {
@@ -1879,5 +2121,7 @@ document.addEventListener('keydown', (e) => {
     closePartDetailsModal();
     closeBatchPreviewModal();
     closeHistoryPreviewModal();
+    closeSupplierDetailsModal();
+    closeMachineDetailsModal();
   }
 });

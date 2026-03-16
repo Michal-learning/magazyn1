@@ -1078,6 +1078,183 @@ function getMachineDataWarnings(machineCodeRaw) {
 }
 
 
+function getPartReferencePrice(skuRaw) {
+  const supplierReference = getPartReferencePriceForStatus(skuRaw);
+  if (Number.isFinite(supplierReference) && supplierReference > 0) return safeFloat(supplierReference);
+  return safeFloat(getLastKnownUnitPrice(skuRaw));
+}
+
+function getPartPurchaseHistoryStats(skuRaw) {
+  const k = skuKey(skuRaw);
+  const deliveries = (state.history || []).filter(ev => ev?.type === "delivery");
+
+  let purchaseCount = 0;
+  let totalQty = 0;
+  let totalValue = 0;
+  let lastDateISO = "";
+
+  deliveries.forEach(ev => {
+    const matches = (ev.items || []).filter(item => skuKey(item?.sku) === k);
+    if (!matches.length) return;
+
+    purchaseCount += matches.length;
+    matches.forEach(item => {
+      const qty = safeQtyInt(item?.qty);
+      const price = safeFloat(item?.price ?? item?.unitPrice ?? 0);
+      totalQty += qty;
+      totalValue += qty * price;
+    });
+
+    const evDate = normalize(ev?.dateISO);
+    if (evDate && (!lastDateISO || evDate > lastDateISO)) lastDateISO = evDate;
+  });
+
+  return {
+    purchaseCount,
+    totalQty,
+    totalValue,
+    lastDateISO
+  };
+}
+
+function getPartBuildUsageStats(skuRaw) {
+  const k = skuKey(skuRaw);
+  const builds = (state.history || []).filter(ev => ev?.type === "build");
+
+  let usageCount = 0;
+  let totalQty = 0;
+  let lastDateISO = "";
+
+  builds.forEach(ev => {
+    let usedInEvent = false;
+
+    for (const machineItem of (ev.items || [])) {
+      for (const partItem of (machineItem?.partsUsed || [])) {
+        if (skuKey(partItem?.sku) !== k) continue;
+        usageCount += 1;
+        totalQty += safeQtyInt(partItem?.qty);
+        usedInEvent = true;
+      }
+    }
+
+    const evDate = normalize(ev?.dateISO);
+    if (usedInEvent && evDate && (!lastDateISO || evDate > lastDateISO)) lastDateISO = evDate;
+  });
+
+  return {
+    usageCount,
+    totalQty,
+    lastDateISO
+  };
+}
+
+function getSupplierDeliveryStats(supplierNameRaw) {
+  const supplierName = normalize(supplierNameRaw);
+  const deliveries = (state.history || []).filter(ev => ev?.type === "delivery" && normalize(ev?.supplier) === supplierName);
+
+  let deliveryUseCount = 0;
+  let totalQty = 0;
+  let totalValue = 0;
+  let lastDateISO = "";
+  const partTotals = new Map();
+
+  deliveries.forEach(ev => {
+    deliveryUseCount += 1;
+    (ev.items || []).forEach(item => {
+      const sku = normalize(item?.sku);
+      const qty = safeQtyInt(item?.qty);
+      const value = qty * safeFloat(item?.price ?? item?.unitPrice ?? 0);
+      totalQty += qty;
+      totalValue += value;
+      if (sku) partTotals.set(sku, (partTotals.get(sku) || 0) + qty);
+    });
+
+    const evDate = normalize(ev?.dateISO);
+    if (evDate && (!lastDateISO || evDate > lastDateISO)) lastDateISO = evDate;
+  });
+
+  let topPartSku = "";
+  let topPartQty = 0;
+  for (const [sku, qty] of partTotals.entries()) {
+    if (qty > topPartQty) {
+      topPartSku = sku;
+      topPartQty = qty;
+    }
+  }
+
+  const topPart = topPartSku ? (state.partsCatalog.get(skuKey(topPartSku)) || null) : null;
+
+  return {
+    deliveryUseCount,
+    totalQty,
+    totalValue,
+    lastDateISO,
+    topPart: topPart ? {
+      sku: topPart.sku,
+      name: topPart.name,
+      qty: topPartQty
+    } : null
+  };
+}
+
+function getPartUsageMachines(skuRaw) {
+  const k = skuKey(skuRaw);
+  return (state.machineCatalog || [])
+    .filter(machine => Array.isArray(machine?.bom) && machine.bom.some(item => skuKey(item?.sku) === k))
+    .map(machine => ({
+      code: normalize(machine?.code),
+      name: normalize(machine?.name)
+    }));
+}
+
+function getMachineProductionStats(machineCodeRaw) {
+  const machineCode = normalize(machineCodeRaw);
+  const builds = (state.history || []).filter(ev => ev?.type === "build");
+
+  let buildCount = 0;
+  let totalQty = 0;
+  let lastDateISO = "";
+
+  builds.forEach(ev => {
+    let matched = false;
+
+    (ev.items || []).forEach(item => {
+      if (normalize(item?.code) !== machineCode) return;
+      buildCount += 1;
+      totalQty += safeQtyInt(item?.qty);
+      matched = true;
+    });
+
+    const evDate = normalize(ev?.dateISO);
+    if (matched && evDate && (!lastDateISO || evDate > lastDateISO)) lastDateISO = evDate;
+  });
+
+  return {
+    buildCount,
+    totalQty,
+    lastDateISO
+  };
+}
+
+function getMachineBuildCapacity(machineCodeRaw) {
+  const machineCode = normalize(machineCodeRaw);
+  const machine = (state.machineCatalog || []).find(item => normalize(item?.code) === machineCode);
+  if (!machine || !Array.isArray(machine?.bom) || !machine.bom.length) return 0;
+
+  let capacity = Infinity;
+
+  machine.bom.forEach(item => {
+    const required = safeQtyInt(item?.qty);
+    if (required <= 0) return;
+    const stock = getPartTotalQty(item?.sku);
+    const possible = Math.floor(stock / required);
+    capacity = Math.min(capacity, possible);
+  });
+
+  return Number.isFinite(capacity) ? Math.max(0, capacity) : 0;
+}
+
+
 function getPendingStockAdjustmentsCount() {
   ensureUiState();
   return Object.values(state.ui.pendingStockAdjustments || {}).filter(item => item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty)).length;

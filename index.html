@@ -521,15 +521,43 @@
           </div>
         </div>
         <div class="part-details-stats" id="partDetailsStats"></div>
-        <div class="part-details-section">
-          <div class="part-details-section-head"><div><h4>Warianty cenowe</h4><p>Kliknij "Podgląd" aby zobaczyć partie od dostawców.</p></div></div>
-          <div class="table-container part-details-table-wrap">
-            <table class="part-details-table">
-              <thead><tr><th>Cena zak.</th><th class="text-right">Ilość</th><th class="text-right">Wartość</th><th class="text-right">Partie</th><th class="text-right">Akcje</th></tr></thead>
-              <tbody id="partDetailsPriceVariants"></tbody>
-            </table>
+        <div id="partDetailsSections"></div>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <div class="part-details-backdrop hidden" id="supplierDetailsBackdrop" aria-hidden="true">
+    <div class="part-details-shell">
+      <button type="button" class="part-details-close" id="supplierDetailsCloseBtn" aria-label="Zamknij">×</button>
+      <div class="part-details-panel hidden" id="supplierDetailsPanel">
+        <div class="part-details-header">
+          <div>
+            <div class="part-details-kicker"><span class="badge badge-accent">Szczegóły dostawcy</span></div>
+            <h3 class="part-details-title" id="supplierDetailsTitle">—</h3>
+            <p class="part-details-subtitle" id="supplierDetailsSubtitle">—</p>
           </div>
         </div>
+        <div class="part-details-stats" id="supplierDetailsStats"></div>
+        <div id="supplierDetailsSections"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="part-details-backdrop hidden" id="machineDetailsBackdrop" aria-hidden="true">
+    <div class="part-details-shell">
+      <button type="button" class="part-details-close" id="machineDetailsCloseBtn" aria-label="Zamknij">×</button>
+      <div class="part-details-panel hidden" id="machineDetailsPanel">
+        <div class="part-details-header">
+          <div>
+            <div class="part-details-kicker"><span class="badge badge-accent">Szczegóły maszyny</span></div>
+            <h3 class="part-details-title" id="machineDetailsTitle">—</h3>
+            <p class="part-details-subtitle" id="machineDetailsSubtitle">—</p>
+          </div>
+        </div>
+        <div class="part-details-stats" id="machineDetailsStats"></div>
+        <div id="machineDetailsSections"></div>
       </div>
     </div>
   </div>
