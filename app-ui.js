@@ -1197,29 +1197,17 @@ function renderAllSuppliers() {
   const tbody = table?.querySelector("tbody");
   if (!tbody) return;
   
-  tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => {
-    const warnings = getSupplierDataWarnings(name);
-    const badges = [];
-
-    if (warnings.hasMissingParts) {
-      badges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
-    }
-
-    return `
-      <tr>
-        <td>${escapeHtml(name)}</td>
-        <td>
-          ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
-        </td>
-        <td class="text-right">
-          <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join("");
+  tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => `
+    <tr>
+      <td>${escapeHtml(name)}</td>
+      <td class="text-right">
+        <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join("");
 
   renderSelectOptions(document.getElementById("supplierSelect"), Array.from(state.suppliers.keys()));
 }
@@ -1261,11 +1249,22 @@ function refreshCatalogsUI() {
   }).join("");
 
   // Machines catalog
-  els.machinesCatalog.innerHTML = state.machineCatalog.map(m => `
+  els.machinesCatalog.innerHTML = state.machineCatalog.map(m => {
+    const warnings = getMachineDataWarnings(m.code);
+    const badges = [];
+
+    if (warnings.hasMissingParts) {
+      badges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
+    }
+
+    return `
     <tr>
       <td><span class="badge">${escapeHtml(m.code)}</span></td>
       <td>${escapeHtml(m.name)}</td>
-      <td class="text-right">${m.bom.length}</td>
+      <td class="text-right">${Array.isArray(m.bom) ? m.bom.length : 0}</td>
+      <td>
+        ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
+      </td>
       <td class="text-right">
         <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
         <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
@@ -1273,7 +1272,8 @@ function refreshCatalogsUI() {
         </button>
       </td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
 
   // Machine select
   renderSelectOptions(els.machineSelect, state.machineCatalog.map(m => m.code), c => {

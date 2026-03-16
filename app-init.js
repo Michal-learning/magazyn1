@@ -1731,14 +1731,14 @@ function renderBomTable() {
   const draft = ensureEditingMachineDraft();
   if (!tbody) {
     if (saveBtn) {
-      saveBtn.disabled = !draft.bom.length;
+      saveBtn.disabled = false;
       saveBtn.textContent = editingMachineIsNew ? "Utwórz" : "Zapisz zmiany";
     }
     return;
   }
 
   if (!draft.bom.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:var(--space-4)">BOM jest pusty. Dodaj przynajmniej jedną część.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:var(--space-4)">BOM jest pusty. Możesz zapisać maszynę bez części albo dodać skład później.</td></tr>`;
   } else {
     tbody.innerHTML = draft.bom.map((b, idx) => {
       const p = state.partsCatalog.get(skuKey(b.sku));
@@ -1756,7 +1756,7 @@ function renderBomTable() {
   }
 
   if (saveBtn) {
-    saveBtn.disabled = !draft.bom.length;
+    saveBtn.disabled = false;
     saveBtn.textContent = editingMachineIsNew ? "Utwórz" : "Zapisz zmiany";
   }
 }
@@ -1847,11 +1847,6 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
   if (!/^[a-zA-Z0-9_-]+$/.test(code)) {
     toast("Nieprawidłowy kod", "Kod maszyny może zawierać tylko litery, cyfry, myślniki i podkreślenia (bez spacji).", "warning");
     codeInput?.focus?.();
-    return;
-  }
-
-  if (!Array.isArray(draft.bom) || draft.bom.length === 0) {
-    toast("Pusty BOM", "Nie można zapisać maszyny bez składników. Dodaj przynajmniej jedną część.", "warning");
     return;
   }
 

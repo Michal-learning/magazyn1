@@ -1029,33 +1029,6 @@ function getPartDataWarnings(skuRaw) {
 }
 
 
-function getSupplierPartsForStatus(supplierNameRaw) {
-  const supplierName = normalize(supplierNameRaw);
-  const supplier = state.suppliers.get(supplierName);
-  if (!supplier || !(supplier.prices instanceof Map)) return [];
-
-  return Array.from(supplier.prices.entries())
-    .filter(([partKey]) => state.partsCatalog.has(partKey))
-    .map(([partKey, price]) => {
-      const part = state.partsCatalog.get(partKey);
-      return {
-        sku: part?.sku || partKey,
-        name: part?.name || '',
-        price: safeFloat(price ?? 0)
-      };
-    });
-}
-
-function getSupplierDataWarnings(supplierNameRaw) {
-  const parts = getSupplierPartsForStatus(supplierNameRaw);
-
-  return {
-    parts,
-    hasMissingParts: parts.length === 0
-  };
-}
-
-
 function getPendingStockAdjustmentsCount() {
   ensureUiState();
   return Object.values(state.ui.pendingStockAdjustments || {}).filter(item => item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty)).length;
