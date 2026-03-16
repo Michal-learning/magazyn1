@@ -1192,6 +1192,433 @@ function buildHistoryDetails(ev) {
   `;
 }
 
+
+function getHistoryEventsByType(type) {
+  return (state.history || []).filter(ev => ev && ev.type === type);
+}
+
+function getReferencePriceForCatalogDetails(skuRaw) {
+  const supplierRef = safeFloat(getPartReferencePriceForStatus(skuRaw));
+  if (supplierRef > 0) return supplierRef;
+  return safeFloat(getLastKnownUnitPrice(skuRaw));
+}
+
+function getMaxDateISO(dateList) {
+  const valid = (Array.isArray(dateList) ? dateList : []).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))).sort();
+  return valid.length ? valid[valid.length - 1] : '';
+}
+
+function getSupplierCatalogDetailsData(supplierNameRaw) {
+  const supplierName = normalize(supplierNameRaw);
+  const assignedParts = getSupplierPartsForStatus(supplierName);
+  const deliveryEvents = getHistoryEventsByType('delivery').filter(ev => normalize(ev?.supplier) === supplierName);
+
+  let totalBoughtQty = 0;
+  let totalBoughtValue = 0;
+  const purchasedByPart = new Map();
+
+  deliveryEvents.forEach(ev => {
+    (ev.items || []).forEach(item => {
+      const qty = safeQtyInt(item?.qty);
+      const value = qty * safeFloat(item?.price);
+      const k = skuKey(item?.sku);
+      totalBoughtQty += qty;
+      totalBoughtValue += value;
+      if (!k) return;
+      const prev = purchasedByPart.get(k) || {
+        sku: normalize(item?.sku),
+        name: normalize(item?.name),
+        qty: 0
+      };
+      prev.qty += qty;
+      if (!prev.name) prev.name = normalize(item?.name);
+      if (!prev.sku) prev.sku = normalize(item?.sku);
+      purchasedByPart.set(k, prev);
+    });
+  });
+
+  const mostPurchasedPart = Array.from(purchasedByPart.values())
+    .sort((a, b) => (b.qty - a.qty) || String(a.sku).localeCompare(String(b.sku), 'pl'))[0] || null;
+
+  const warehouseQty = (state.lots || [])
+    .filter(lot => normalize(lot?.supplier) === supplierName)
+    .reduce((sum, lot) => sum + safeQtyInt(lot?.qty), 0);
+
+  return {
+    supplierName,
+    assignedPartsCount: assignedParts.length,
+    deliveryCount: deliveryEvents.length,
+    totalBoughtQty,
+    totalBoughtValue,
+    lastDeliveryDateISO: getMaxDateISO(deliveryEvents.map(ev => ev?.dateISO)),
+    mostPurchasedPart,
+    warehouseQty
+  };
+}
+
+function getPartCatalogDetailsData(skuRaw) {
+  const k = skuKey(skuRaw);
+  const part = state.partsCatalog.get(k);
+  if (!part) return null;
+
+  const suppliers = getPartSuppliersForStatus(part.sku);
+  const referencePrice = getReferencePriceForCatalogDetails(part.sku);
+  const stockQty = getPartTotalQty(part.sku);
+  const stockStatus = getPartStockStatus(part.sku, stockQty);
+
+  const machines = (state.machineCatalog || [])
+    .filter(machine => Array.isArray(machine?.bom) && machine.bom.some(item => skuKey(item?.sku) === k))
+    .map(machine => ({ code: machine.code, name: machine.name }));
+
+  const deliveryEvents = getHistoryEventsByType('delivery');
+  let purchaseCount = 0;
+  let purchasedQty = 0;
+  let purchasedValue = 0;
+
+  deliveryEvents.forEach(ev => {
+    (ev.items || []).forEach(item => {
+      if (skuKey(item?.sku) !== k) return;
+      const qty = safeQtyInt(item?.qty);
+      purchaseCount += 1;
+      purchasedQty += qty;
+      purchasedValue += qty * safeFloat(item?.price);
+    });
+  });
+
+  const buildEvents = getHistoryEventsByType('build');
+  let productionUseCount = 0;
+  let consumedQty = 0;
+  const usageDates = [];
+
+  buildEvents.forEach(ev => {
+    (ev.items || []).forEach(machineItem => {
+      (machineItem?.partsUsed || []).forEach(partItem => {
+        if (skuKey(partItem?.sku) !== k) return;
+        productionUseCount += 1;
+        consumedQty += safeQtyInt(partItem?.qty);
+        if (ev?.dateISO) usageDates.push(ev.dateISO);
+      });
+    });
+  });
+
+  return {
+    sku: part.sku,
+    name: part.name,
+    suppliersCount: suppliers.length,
+    referencePrice,
+    stockQty,
+    stockStatus,
+    machineCount: machines.length,
+    machines,
+    purchaseCount,
+    purchasedQty,
+    purchasedValue,
+    productionUseCount,
+    consumedQty,
+    lastUsageDateISO: getMaxDateISO(usageDates)
+  };
+}
+
+function getMachineCatalogDetailsData(machineCodeRaw) {
+  const machineCode = normalize(machineCodeRaw);
+  const machine = (state.machineCatalog || []).find(item => normalize(item?.code) === machineCode);
+  if (!machine) return null;
+
+  const bomItems = Array.isArray(machine?.bom) ? machine.bom : [];
+  const bomCount = bomItems.length;
+  const totalBomQty = bomItems.reduce((sum, item) => sum + safeQtyInt(item?.qty), 0);
+
+  const buildEvents = getHistoryEventsByType('build');
+  let buildCount = 0;
+  let totalProducedQty = 0;
+  const buildDates = [];
+
+  buildEvents.forEach(ev => {
+    (ev.items || []).forEach(item => {
+      if (normalize(item?.code) !== machineCode) return;
+      buildCount += 1;
+      totalProducedQty += safeQtyInt(item?.qty);
+      if (ev?.dateISO) buildDates.push(ev.dateISO);
+    });
+  });
+
+  const estimatedUnitCost = bomItems.reduce((sum, item) => {
+    const qty = safeQtyInt(item?.qty);
+    const refPrice = getReferencePriceForCatalogDetails(item?.sku);
+    return sum + (qty * refPrice);
+  }, 0);
+
+  let maxBuildableUnits = 0;
+  if (bomItems.length > 0) {
+    maxBuildableUnits = bomItems.reduce((minUnits, item) => {
+      const qtyNeeded = safeQtyInt(item?.qty);
+      if (qtyNeeded <= 0) return minUnits;
+      const stock = getPartTotalQty(item?.sku);
+      const units = Math.floor(stock / qtyNeeded);
+      return Math.min(minUnits, units);
+    }, Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(maxBuildableUnits)) maxBuildableUnits = 0;
+  }
+
+  return {
+    code: machine.code,
+    name: machine.name,
+    bomCount,
+    totalBomQty,
+    buildCount,
+    totalProducedQty,
+    lastBuildDateISO: getMaxDateISO(buildDates),
+    estimatedUnitCost,
+    maxBuildableUnits
+  };
+}
+
+function renderCatalogDetailsStat(label, value, accent = '') {
+  return `
+    <div class="history-stat-card${accent ? ` ${accent}` : ''}">
+      <span class="history-stat-label">${escapeHtml(label)}</span>
+      <strong class="history-stat-value">${value}</strong>
+    </div>
+  `;
+}
+
+function renderCatalogDetailsRow(label, valueHtml) {
+  return `
+    <div class="catalog-readonly-row">
+      <span class="catalog-readonly-row-label">${escapeHtml(label)}</span>
+      <span class="catalog-readonly-row-value">${valueHtml}</span>
+    </div>
+  `;
+}
+
+function renderCatalogDetailsList(items, emptyLabel) {
+  if (!Array.isArray(items) || !items.length) {
+    return `<div class="catalog-readonly-empty">${escapeHtml(emptyLabel)}</div>`;
+  }
+  return `
+    <div class="catalog-readonly-tags">
+      ${items.map(item => `<span class="badge">${escapeHtml(item)}</span>`).join('')}
+    </div>
+  `;
+}
+
+function openSupplierCatalogDetailsModal(supplierNameRaw) {
+  const data = getSupplierCatalogDetailsData(supplierNameRaw);
+  if (!data) return;
+
+  const titleEl = document.getElementById('supplierCatalogDetailsTitle');
+  const subtitleEl = document.getElementById('supplierCatalogDetailsSubtitle');
+  const statsEl = document.getElementById('supplierCatalogDetailsStats');
+  const sectionsEl = document.getElementById('supplierCatalogDetailsSections');
+  const backdrop = document.getElementById('supplierCatalogDetailsBackdrop');
+  const panel = document.getElementById('supplierCatalogDetailsPanel');
+  if (!titleEl || !subtitleEl || !statsEl || !sectionsEl || !backdrop || !panel) return;
+
+  titleEl.textContent = data.supplierName || '—';
+  subtitleEl.textContent = 'Podgląd informacji i statystyk dostawcy.';
+
+  statsEl.innerHTML = [
+    renderCatalogDetailsStat('Przypisane części', String(data.assignedPartsCount)),
+    renderCatalogDetailsStat('Dostawy', String(data.deliveryCount)),
+    renderCatalogDetailsStat('Kupione sztuki', String(data.totalBoughtQty)),
+    renderCatalogDetailsStat('Na magazynie', String(data.warehouseQty))
+  ].join('');
+
+  const topPartHtml = data.mostPurchasedPart
+    ? `<strong>${escapeHtml(data.mostPurchasedPart.sku)}</strong>${data.mostPurchasedPart.name ? ` <span class="text-secondary">${escapeHtml(data.mostPurchasedPart.name)}</span>` : ''}<span class="text-muted"> • ${data.mostPurchasedPart.qty} szt.</span>`
+    : '<span class="text-muted">brak danych</span>';
+
+  sectionsEl.innerHTML = `
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Podstawowe</h4><p>Najważniejsze dane o dostawcy.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Nazwa dostawcy', `<strong>${escapeHtml(data.supplierName || '—')}</strong>`)}
+        ${renderCatalogDetailsRow('Liczba przypisanych części', String(data.assignedPartsCount))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Historia zakupów</h4><p>Policzone z realnej historii dostaw.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Ile razy był użyty w dostawach', String(data.deliveryCount))}
+        ${renderCatalogDetailsRow('Łączna liczba kupionych sztuk', String(data.totalBoughtQty))}
+        ${renderCatalogDetailsRow('Łączna wartość zakupów', escapeHtml(fmtPLN.format(data.totalBoughtValue)))}
+        ${renderCatalogDetailsRow('Data ostatniej dostawy', escapeHtml(fmtDateISO(data.lastDeliveryDateISO)))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Przydatne powiązania</h4><p>Szybkie odczytanie najważniejszego kontekstu.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Najczęściej kupowana część', topPartHtml)}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Status / jakość danych</h4><p>Informacje pomocnicze na dziś.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Ile jego części jest aktualnie na magazynie', String(data.warehouseQty))}
+      </div>
+    </section>
+  `;
+
+  backdrop.classList.remove('hidden');
+  backdrop.setAttribute('aria-hidden', 'false');
+  panel.classList.remove('hidden');
+  document.body.classList.add('catalog-readonly-open');
+}
+
+function closeSupplierCatalogDetailsModal() {
+  const backdrop = document.getElementById('supplierCatalogDetailsBackdrop');
+  const panel = document.getElementById('supplierCatalogDetailsPanel');
+  backdrop?.classList.add('hidden');
+  backdrop?.setAttribute('aria-hidden', 'true');
+  panel?.classList.add('hidden');
+  document.body.classList.remove('catalog-readonly-open');
+}
+
+function openCatalogPartDetailsModal(skuRaw) {
+  const data = getPartCatalogDetailsData(skuRaw);
+  if (!data) return;
+
+  const titleEl = document.getElementById('catalogPartDetailsTitle');
+  const subtitleEl = document.getElementById('catalogPartDetailsSubtitle');
+  const statsEl = document.getElementById('catalogPartDetailsStats');
+  const sectionsEl = document.getElementById('catalogPartDetailsSections');
+  const backdrop = document.getElementById('catalogPartDetailsBackdrop');
+  const panel = document.getElementById('catalogPartDetailsPanel');
+  if (!titleEl || !subtitleEl || !statsEl || !sectionsEl || !backdrop || !panel) return;
+
+  titleEl.textContent = data.sku || '—';
+  subtitleEl.textContent = data.name || 'Podgląd informacji i statystyk części.';
+
+  statsEl.innerHTML = [
+    renderCatalogDetailsStat('Dostawcy', String(data.suppliersCount)),
+    renderCatalogDetailsStat('Stan magazynowy', String(data.stockQty)),
+    renderCatalogDetailsStat('Maszyny', String(data.machineCount)),
+    renderCatalogDetailsStat('Zużycie', String(data.consumedQty))
+  ].join('');
+
+  const machineLabels = data.machines.map(machine => `${machine.code}${machine.name ? ` • ${machine.name}` : ''}`);
+  const stockStatusHtml = `<span class="status-pill status-pill-${escapeHtml(data.stockStatus.level)}">${escapeHtml(data.stockStatus.label)}</span>`;
+
+  sectionsEl.innerHTML = `
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Podstawowe</h4><p>Krótkie podsumowanie części i jej stanu.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Nazwa / typ', `<strong>${escapeHtml(data.name || '—')}</strong>`)}
+        ${renderCatalogDetailsRow('Liczba przypisanych dostawców', String(data.suppliersCount))}
+        ${renderCatalogDetailsRow('Cena referencyjna', escapeHtml(data.referencePrice > 0 ? fmtPLN.format(data.referencePrice) : 'brak danych'))}
+        ${renderCatalogDetailsRow('Aktualny stan magazynowy', String(data.stockQty))}
+        ${renderCatalogDetailsRow('Status magazynowy', stockStatusHtml)}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Wykorzystanie</h4><p>Powiązania z BOM-ami maszyn.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('W ilu maszynach jest używana', String(data.machineCount))}
+        ${renderCatalogDetailsRow('Lista maszyn, w których występuje', renderCatalogDetailsList(machineLabels, 'Brak powiązanych maszyn'))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Historia zakupów</h4><p>Zliczone z historii dostaw.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Ile razy część była kupiona', String(data.purchaseCount))}
+        ${renderCatalogDetailsRow('Łączna kupiona ilość', String(data.purchasedQty))}
+        ${renderCatalogDetailsRow('Łączna wartość zakupów', escapeHtml(fmtPLN.format(data.purchasedValue)))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Zużycie / produkcja</h4><p>Ujęte z historii produkcji.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Ile razy ta część została zużyta w produkcji', String(data.productionUseCount))}
+        ${renderCatalogDetailsRow('Łączna zużyta ilość', String(data.consumedQty))}
+        ${renderCatalogDetailsRow('Data ostatniego użycia w budowie maszyny', escapeHtml(fmtDateISO(data.lastUsageDateISO)))}
+      </div>
+    </section>
+  `;
+
+  backdrop.classList.remove('hidden');
+  backdrop.setAttribute('aria-hidden', 'false');
+  panel.classList.remove('hidden');
+  document.body.classList.add('catalog-readonly-open');
+}
+
+function closeCatalogPartDetailsModal() {
+  const backdrop = document.getElementById('catalogPartDetailsBackdrop');
+  const panel = document.getElementById('catalogPartDetailsPanel');
+  backdrop?.classList.add('hidden');
+  backdrop?.setAttribute('aria-hidden', 'true');
+  panel?.classList.add('hidden');
+  document.body.classList.remove('catalog-readonly-open');
+}
+
+function openMachineCatalogDetailsModal(machineCodeRaw) {
+  const data = getMachineCatalogDetailsData(machineCodeRaw);
+  if (!data) return;
+
+  const titleEl = document.getElementById('machineCatalogDetailsTitle');
+  const subtitleEl = document.getElementById('machineCatalogDetailsSubtitle');
+  const statsEl = document.getElementById('machineCatalogDetailsStats');
+  const sectionsEl = document.getElementById('machineCatalogDetailsSections');
+  const backdrop = document.getElementById('machineCatalogDetailsBackdrop');
+  const panel = document.getElementById('machineCatalogDetailsPanel');
+  if (!titleEl || !subtitleEl || !statsEl || !sectionsEl || !backdrop || !panel) return;
+
+  titleEl.textContent = data.code || '—';
+  subtitleEl.textContent = data.name || 'Podgląd informacji i statystyk maszyny.';
+
+  statsEl.innerHTML = [
+    renderCatalogDetailsStat('Pozycje BOM', String(data.bomCount)),
+    renderCatalogDetailsStat('Łączne sztuki na 1 budowę', String(data.totalBomQty)),
+    renderCatalogDetailsStat('Wyprodukowano', String(data.totalProducedQty)),
+    renderCatalogDetailsStat('Maks. do zbudowania', String(data.maxBuildableUnits))
+  ].join('');
+
+  sectionsEl.innerHTML = `
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Podstawowe</h4><p>Kondensat najważniejszych informacji o definicji maszyny.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Nazwa / typ', `<strong>${escapeHtml(data.name || '—')}</strong>`)}
+        ${renderCatalogDetailsRow('Liczba pozycji BOM', String(data.bomCount))}
+        ${renderCatalogDetailsRow('Łączna liczba wszystkich sztuk części potrzebnych do 1 budowy', String(data.totalBomQty))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Produkcja</h4><p>Liczone z historii produkcji.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Ile razy była budowana', String(data.buildCount))}
+        ${renderCatalogDetailsRow('Ile łącznie sztuk tej maszyny wyprodukowano', String(data.totalProducedQty))}
+        ${renderCatalogDetailsRow('Data ostatniej budowy', escapeHtml(fmtDateISO(data.lastBuildDateISO)))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>Koszt</h4><p>Szacunek liczony z referencyjnych cen części.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Szacowany koszt budowy 1 sztuki', escapeHtml(data.estimatedUnitCost > 0 ? fmtPLN.format(data.estimatedUnitCost) : 'brak danych'))}
+      </div>
+    </section>
+    <section class="catalog-readonly-section">
+      <div class="catalog-readonly-section-head"><div><h4>BOM / gotowość</h4><p>Realna gotowość ograniczona stanem magazynowym.</p></div></div>
+      <div class="catalog-readonly-grid">
+        ${renderCatalogDetailsRow('Maksymalna liczba sztuk możliwych do zbudowania z obecnego magazynu', String(data.maxBuildableUnits))}
+      </div>
+    </section>
+  `;
+
+  backdrop.classList.remove('hidden');
+  backdrop.setAttribute('aria-hidden', 'false');
+  panel.classList.remove('hidden');
+  document.body.classList.add('catalog-readonly-open');
+}
+
+function closeMachineCatalogDetailsModal() {
+  const backdrop = document.getElementById('machineCatalogDetailsBackdrop');
+  const panel = document.getElementById('machineCatalogDetailsPanel');
+  backdrop?.classList.add('hidden');
+  backdrop?.setAttribute('aria-hidden', 'true');
+  panel?.classList.add('hidden');
+  document.body.classList.remove('catalog-readonly-open');
+}
+
+
 function renderAllSuppliers() {
   const table = byId("suppliersListTable");
   const tbody = table?.querySelector("tbody");
@@ -1212,10 +1639,13 @@ function renderAllSuppliers() {
           ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
         <td class="text-right">
-          <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div class="catalog-actions">
+            <button class="btn btn-secondary btn-sm" type="button" data-action="openSupplierCatalogDetails" data-supplier="${escapeHtml(name)}">Szczegóły</button>
+            <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -1252,10 +1682,13 @@ function refreshCatalogsUI() {
         ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
       </td>
       <td class="text-right">
-        <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div class="catalog-actions">
+          <button class="btn btn-secondary btn-sm" type="button" data-action="openCatalogPartDetails" data-sku="${escapeHtml(p.sku)}">Szczegóły</button>
+          <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </td>
     </tr>`;
   }).join("");
@@ -1278,10 +1711,13 @@ function refreshCatalogsUI() {
           ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
         <td class="text-right">
-          <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div class="catalog-actions">
+            <button class="btn btn-secondary btn-sm" type="button" data-action="openMachineCatalogDetails" data-machine-code="${escapeHtml(m.code)}">Szczegóły</button>
+            <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -1830,11 +2266,35 @@ function closeHistoryPreviewModal() {
 
 // === Global click handlers for new actions ===
 document.addEventListener('click', (e) => {
-  // Part Details button
+  // Existing warehouse part details button
   const detailsBtn = e.target?.closest?.('[data-action="openPartDetails"]');
   if (detailsBtn) {
     const sku = detailsBtn.getAttribute('data-sku');
     if (sku) openPartDetailsModal(sku);
+    return;
+  }
+
+  // Catalog supplier details button
+  const supplierDetailsBtn = e.target?.closest?.('[data-action="openSupplierCatalogDetails"]');
+  if (supplierDetailsBtn) {
+    const supplier = supplierDetailsBtn.getAttribute('data-supplier');
+    if (supplier) openSupplierCatalogDetailsModal(supplier);
+    return;
+  }
+
+  // Catalog part details button
+  const catalogPartDetailsBtn = e.target?.closest?.('[data-action="openCatalogPartDetails"]');
+  if (catalogPartDetailsBtn) {
+    const sku = catalogPartDetailsBtn.getAttribute('data-sku');
+    if (sku) openCatalogPartDetailsModal(sku);
+    return;
+  }
+
+  // Catalog machine details button
+  const machineDetailsBtn = e.target?.closest?.('[data-action="openMachineCatalogDetails"]');
+  if (machineDetailsBtn) {
+    const code = machineDetailsBtn.getAttribute('data-machine-code');
+    if (code) openMachineCatalogDetailsModal(code);
     return;
   }
   
@@ -1859,12 +2319,24 @@ document.addEventListener('click', (e) => {
 
 // === Modal close buttons ===
 document.getElementById('partDetailsCloseBtn')?.addEventListener('click', closePartDetailsModal);
+document.getElementById('supplierCatalogDetailsCloseBtn')?.addEventListener('click', closeSupplierCatalogDetailsModal);
+document.getElementById('catalogPartDetailsCloseBtn')?.addEventListener('click', closeCatalogPartDetailsModal);
+document.getElementById('machineCatalogDetailsCloseBtn')?.addEventListener('click', closeMachineCatalogDetailsModal);
 document.getElementById('batchPreviewCloseBtn')?.addEventListener('click', closeBatchPreviewModal);
 document.getElementById('historyPreviewCloseBtn')?.addEventListener('click', closeHistoryPreviewModal);
 
 // Close modals on backdrop click
 document.getElementById('partDetailsBackdrop')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closePartDetailsModal();
+});
+document.getElementById('supplierCatalogDetailsBackdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeSupplierCatalogDetailsModal();
+});
+document.getElementById('catalogPartDetailsBackdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeCatalogPartDetailsModal();
+});
+document.getElementById('machineCatalogDetailsBackdrop')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeMachineCatalogDetailsModal();
 });
 document.getElementById('batchPreviewBackdrop')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeBatchPreviewModal();
@@ -1877,6 +2349,9 @@ document.getElementById('historyPreviewBackdrop')?.addEventListener('click', (e)
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closePartDetailsModal();
+    closeSupplierCatalogDetailsModal();
+    closeCatalogPartDetailsModal();
+    closeMachineCatalogDetailsModal();
     closeBatchPreviewModal();
     closeHistoryPreviewModal();
   }

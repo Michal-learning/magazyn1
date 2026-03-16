@@ -2004,6 +2004,220 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--text-sm);
 }
 
+.catalog-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.catalog-readonly-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 3vw, 32px);
+  background: rgba(5, 8, 17, 0.58);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1261;
+}
+
+.catalog-readonly-backdrop.hidden {
+  display: none;
+}
+
+.catalog-readonly-shell {
+  position: relative;
+  width: min(920px, 100%);
+  max-height: calc(100vh - clamp(32px, 6vw, 64px));
+}
+
+.catalog-readonly-panel {
+  max-height: calc(100vh - clamp(32px, 6vw, 64px));
+  overflow: auto;
+  margin: 0;
+  background: var(--modal-panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: var(--space-5);
+}
+
+.catalog-readonly-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 17, 25, 0.9);
+  color: var(--text-secondary);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--trans-fast);
+}
+
+.catalog-readonly-close:hover {
+  color: var(--text);
+  background: rgba(24, 27, 39, 0.96);
+  border-color: var(--border-strong);
+}
+
+.catalog-readonly-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-right: 52px;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.catalog-readonly-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.catalog-readonly-title {
+  font-size: clamp(1.3rem, 1rem + 1vw, 1.8rem);
+  margin-bottom: var(--space-1);
+}
+
+.catalog-readonly-subtitle {
+  color: var(--text-secondary);
+  max-width: 760px;
+}
+
+.catalog-readonly-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.catalog-readonly-section + .catalog-readonly-section {
+  margin-top: var(--space-5);
+}
+
+.catalog-readonly-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.catalog-readonly-section-head h4 {
+  margin: 0 0 var(--space-1);
+}
+
+.catalog-readonly-section-head p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.catalog-readonly-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.catalog-readonly-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.catalog-readonly-row-label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 40%;
+}
+
+.catalog-readonly-row-value {
+  text-align: right;
+  color: var(--text);
+  min-width: 0;
+  flex: 1;
+}
+
+.catalog-readonly-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.catalog-readonly-empty {
+  color: var(--text-muted);
+}
+
+body.catalog-readonly-open {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .catalog-readonly-shell,
+  .catalog-readonly-panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
+  .catalog-readonly-header {
+    padding-right: 44px;
+  }
+
+  .catalog-readonly-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalog-readonly-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .catalog-readonly-row-label,
+  .catalog-readonly-row-value {
+    max-width: none;
+    text-align: left;
+  }
+
+  .catalog-readonly-tags {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .catalog-readonly-panel {
+    padding: var(--space-4);
+  }
+
+  .catalog-readonly-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- 25) Part Details Modal ---------- */
 .part-details-backdrop {
   position: fixed;
