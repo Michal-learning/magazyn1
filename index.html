@@ -162,6 +162,7 @@
       <section class="tabPanel hidden" data-tab-panel="catalog_parts">
         <div class="card">
           <div class="cardHeader"><div><h2>Baza Części</h2><p class="text-secondary">Zarządzaj katalogiem części</p></div><button type="button" class="btn btn-primary btn-sm" id="toggleNewPartBtn">Nowa</button></div>
+          <div class="toolbar"><input type="text" id="searchCatalogParts" placeholder="Szukaj po Nazwie/Typie..." autocomplete="off" /></div>
           <div class="table-container">
             <table id="partsCatalogTable"><thead><tr><th>Nazwa (ID)</th><th>Typ</th><th>Dostawcy</th><th>Status</th><th class="text-right">Akcje</th></tr></thead><tbody></tbody></table>
           </div>
@@ -176,6 +177,7 @@
               <label>Nazwa dostawcy<input type="text" id="supplierNameInput" placeholder="np. Hurtownia X" autocomplete="off" /></label>
               <button type="button" class="btn btn-primary" id="addSupplierBtn" style="height:42px">Dodaj</button>
             </div>
+            <div class="toolbar"><input type="text" id="searchCatalogSuppliers" placeholder="Szukaj po nazwie dostawcy..." autocomplete="off" /></div>
             <div class="table-container">
               <table id="suppliersListTable"><thead><tr><th>Dostawca</th><th>Status</th><th class="text-right">Akcje</th></tr></thead><tbody></tbody></table>
             </div>
@@ -186,6 +188,7 @@
       <section class="tabPanel hidden" data-tab-panel="catalog_machines">
         <div class="card">
           <div class="cardHeader"><div><h2>Baza Maszyn (BOM)</h2><p class="text-secondary">Bill of Materials</p></div><button type="button" class="btn btn-primary btn-sm" id="openMachineModalBtn">Nowa</button></div>
+          <div class="toolbar"><input type="text" id="searchCatalogMachines" placeholder="Szukaj po Nazwie/Typie..." autocomplete="off" /></div>
           <div class="table-container">
             <table id="machinesCatalogTable"><thead><tr><th>Nazwa (ID)</th><th>Typ</th><th class="text-right">Części</th><th>Status</th><th class="text-right">Akcje</th></tr></thead><tbody id="machinesCatalogBody"></tbody></table>
           </div>

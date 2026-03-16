@@ -1640,32 +1640,37 @@ function renderAllSuppliers() {
   const table = byId("suppliersListTable");
   const tbody = table?.querySelector("tbody");
   if (!tbody) return;
+
+  const q = normalize(document.getElementById("searchCatalogSuppliers")?.value).toLowerCase();
   
-  tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => {
-    const warnings = getSupplierDataWarnings(name);
-    const isArchived = isSupplierArchived(name);
-    const warningBadges = [];
+  tbody.innerHTML = Array.from(state.suppliers.keys())
+    .sort()
+    .filter(name => !q || String(name || '').toLowerCase().includes(q))
+    .map(name => {
+      const warnings = getSupplierDataWarnings(name);
+      const isArchived = isSupplierArchived(name);
+      const warningBadges = [];
 
-    if (warnings.hasMissingParts) {
-      warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
-    }
+      if (warnings.hasMissingParts) {
+        warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
+      }
 
-    return `
-      <tr>
-        <td>${escapeHtml(name)}</td>
-        <td>
-          ${renderCatalogStatusBadges({ isArchived, warningBadges })}
-        </td>
-        <td class="text-right">
-          <div class="catalog-actions">
-            <button class="btn btn-secondary btn-sm" type="button" data-action="openSupplierCatalogDetails" data-supplier="${escapeHtml(name)}">Szczegóły</button>
-            <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
-            <button class="btn btn-secondary btn-sm" onclick="toggleSupplierArchive('${escapeHtml(name)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
+      return `
+        <tr>
+          <td>${escapeHtml(name)}</td>
+          <td>
+            ${renderCatalogStatusBadges({ isArchived, warningBadges })}
+          </td>
+          <td class="text-right">
+            <div class="catalog-actions">
+              <button class="btn btn-secondary btn-sm" type="button" data-action="openSupplierCatalogDetails" data-supplier="${escapeHtml(name)}">Szczegóły</button>
+              <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleSupplierArchive('${escapeHtml(name)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
 
   renderSelectOptions(document.getElementById("supplierSelect"), getActiveSupplierNames());
 }
@@ -1677,66 +1682,78 @@ function refreshCatalogsUI() {
   const parts = Array.from(state.partsCatalog.values());
   const activeParts = getActivePartsCatalog();
   const allSups = getActiveSupplierNames();
+  const partsQuery = normalize(document.getElementById("searchCatalogParts")?.value).toLowerCase();
+  const machinesQuery = normalize(document.getElementById("searchCatalogMachines")?.value).toLowerCase();
 
   // Parts catalog
-  els.partsCatalog.innerHTML = parts.map(p => {
-    const warnings = getPartDataWarnings(p.sku);
-    const suppliers = warnings.suppliers.map(item => item.name);
-    const isArchived = !!p?.archived;
-    const warningBadges = [];
+  els.partsCatalog.innerHTML = parts
+    .filter(p => {
+      if (!partsQuery) return true;
+      return String(p?.sku || '').toLowerCase().includes(partsQuery) || String(p?.name || '').toLowerCase().includes(partsQuery);
+    })
+    .map(p => {
+      const warnings = getPartDataWarnings(p.sku);
+      const suppliers = warnings.suppliers.map(item => item.name);
+      const isArchived = !!p?.archived;
+      const warningBadges = [];
 
-    if (warnings.hasMissingPrice) {
-      warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CENY</span>');
-    }
-    if (warnings.hasMissingSuppliers) {
-      warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK DOSTAWCÓW</span>');
-    }
+      if (warnings.hasMissingPrice) {
+        warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CENY</span>');
+      }
+      if (warnings.hasMissingSuppliers) {
+        warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK DOSTAWCÓW</span>');
+      }
 
-    return `<tr>
-      <td><span class="badge">${escapeHtml(p.sku)}</span></td>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${suppliers.length ? suppliers.map(s => escapeHtml(s)).join(", ") : '<span class="text-muted">-</span>'}</td>
-      <td>
-        ${renderCatalogStatusBadges({ isArchived, warningBadges })}
-      </td>
-      <td class="text-right">
-        <div class="catalog-actions">
-          <button class="btn btn-secondary btn-sm" type="button" data-action="openCatalogPartDetails" data-sku="${escapeHtml(p.sku)}">Szczegóły</button>
-          <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
-          <button class="btn btn-secondary btn-sm" onclick="togglePartArchive('${escapeHtml(p.sku)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
-
-  // Machines catalog
-  els.machinesCatalog.innerHTML = state.machineCatalog.map(m => {
-    const warnings = getMachineDataWarnings(m.code);
-    const isArchived = !!m?.archived;
-    const warningBadges = [];
-
-    if (warnings.hasMissingParts) {
-      warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
-    }
-
-    return `
-      <tr>
-        <td><span class="badge">${escapeHtml(m.code)}</span></td>
-        <td>${escapeHtml(m.name)}</td>
-        <td class="text-right">${Array.isArray(m.bom) ? m.bom.length : 0}</td>
+      return `<tr>
+        <td><span class="badge">${escapeHtml(p.sku)}</span></td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${suppliers.length ? suppliers.map(s => escapeHtml(s)).join(", ") : '<span class="text-muted">-</span>'}</td>
         <td>
           ${renderCatalogStatusBadges({ isArchived, warningBadges })}
         </td>
         <td class="text-right">
           <div class="catalog-actions">
-            <button class="btn btn-secondary btn-sm" type="button" data-action="openMachineCatalogDetails" data-machine-code="${escapeHtml(m.code)}">Szczegóły</button>
-            <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
-            <button class="btn btn-secondary btn-sm" onclick="toggleMachineArchive('${escapeHtml(m.code)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
+            <button class="btn btn-secondary btn-sm" type="button" data-action="openCatalogPartDetails" data-sku="${escapeHtml(p.sku)}">Szczegóły</button>
+            <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
+            <button class="btn btn-secondary btn-sm" onclick="togglePartArchive('${escapeHtml(p.sku)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
           </div>
         </td>
-      </tr>
-    `;
-  }).join("");
+      </tr>`;
+    }).join("");
+
+  // Machines catalog
+  els.machinesCatalog.innerHTML = state.machineCatalog
+    .filter(m => {
+      if (!machinesQuery) return true;
+      return String(m?.code || '').toLowerCase().includes(machinesQuery) || String(m?.name || '').toLowerCase().includes(machinesQuery);
+    })
+    .map(m => {
+      const warnings = getMachineDataWarnings(m.code);
+      const isArchived = !!m?.archived;
+      const warningBadges = [];
+
+      if (warnings.hasMissingParts) {
+        warningBadges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
+      }
+
+      return `
+        <tr>
+          <td><span class="badge">${escapeHtml(m.code)}</span></td>
+          <td>${escapeHtml(m.name)}</td>
+          <td class="text-right">${Array.isArray(m.bom) ? m.bom.length : 0}</td>
+          <td>
+            ${renderCatalogStatusBadges({ isArchived, warningBadges })}
+          </td>
+          <td class="text-right">
+            <div class="catalog-actions">
+              <button class="btn btn-secondary btn-sm" type="button" data-action="openMachineCatalogDetails" data-machine-code="${escapeHtml(m.code)}">Szczegóły</button>
+              <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleMachineArchive('${escapeHtml(m.code)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
 
   // Machine select
   renderSelectOptions(els.machineSelect, getActiveMachineCatalog().map(m => m.code), c => {

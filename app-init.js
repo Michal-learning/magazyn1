@@ -2083,12 +2083,24 @@ function bindTabModal() {
 function bindSearch() {
   const partsSearch = document.getElementById("searchParts");
   const machinesSearch = document.getElementById("searchMachines");
+  const catalogPartsSearch = document.getElementById("searchCatalogParts");
+  const catalogMachinesSearch = document.getElementById("searchCatalogMachines");
+  const catalogSuppliersSearch = document.getElementById("searchCatalogSuppliers");
   
   if (partsSearch) {
     partsSearch.addEventListener("input", debounce(() => renderWarehouse(), 200));
   }
   if (machinesSearch) {
     machinesSearch.addEventListener("input", debounce(() => renderMachinesStock(), 200));
+  }
+  if (catalogPartsSearch) {
+    catalogPartsSearch.addEventListener("input", debounce(() => refreshCatalogsUI(), 200));
+  }
+  if (catalogMachinesSearch) {
+    catalogMachinesSearch.addEventListener("input", debounce(() => refreshCatalogsUI(), 200));
+  }
+  if (catalogSuppliersSearch) {
+    catalogSuppliersSearch.addEventListener("input", debounce(() => renderAllSuppliers(), 200));
   }
 }
 
