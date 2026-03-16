@@ -81,7 +81,10 @@ function serializeState() {
   return {
     lots: state.lots,
     machinesStock: state.machinesStock,
-    machineCatalog: state.machineCatalog,
+    machineCatalog: state.machineCatalog.map(machine => ({
+      ...machine,
+      archived: !!machine?.archived
+    })),
     currentDelivery: state.currentDelivery,
     currentBuild: state.currentBuild,
     history: state.history,
@@ -91,11 +94,13 @@ function serializeState() {
       sku: normalize(part?.sku),
       name: normalize(part?.name),
       yellowThreshold: normalizeThresholdValue(part?.yellowThreshold),
-      redThreshold: normalizeThresholdValue(part?.redThreshold)
+      redThreshold: normalizeThresholdValue(part?.redThreshold),
+      archived: !!part?.archived
     }])),
     suppliers: Array.from(state.suppliers.entries()).map(([name, data]) => ({
       name,
-      prices: Array.from(data.prices.entries())
+      archived: !!data?.archived,
+      prices: Array.from((data?.prices instanceof Map ? data.prices : new Map()).entries())
     }))
   };
 }
@@ -125,6 +130,7 @@ function restoreState(data) {
   state.machineCatalog = asArr(data.machineCatalog).map(m => ({
     code: normalize(m?.code),
     name: normalize(m?.name),
+    archived: !!m?.archived,
     bom: asArr(m?.bom).map(b => ({
       sku: normalize(b?.sku),
       qty: safeInt(b?.qty)
@@ -186,7 +192,8 @@ function restoreState(data) {
       sku,
       name,
       yellowThreshold: normalizeThresholdValue(v?.yellowThreshold),
-      redThreshold: normalizeThresholdValue(v?.redThreshold)
+      redThreshold: normalizeThresholdValue(v?.redThreshold),
+      archived: !!v?.archived
     });
   }
 
@@ -210,12 +217,16 @@ function restoreState(data) {
       if (!pk) continue;
       prices.set(pk, safeFloat(pe[1]));
     }
-    state.suppliers.set(name, { prices });
+    state.suppliers.set(name, {
+      archived: !!s?.archived,
+      prices
+    });
   }
 
   state.ui.stockEditMode = false;
   state.ui.pendingStockAdjustments = {};
 
+  clearArchivedItemsFromDrafts();
   syncIdCounter();
 }
 
@@ -324,6 +335,100 @@ const safeQtyInt = (val) => {
 function normalizeThresholdValue(val) {
   const n = strictNonNegInt(val);
   return n === null ? null : n;
+}
+
+function isPartArchived(skuRaw) {
+  const part = state.partsCatalog.get(skuKey(skuRaw));
+  return !!part?.archived;
+}
+
+function isSupplierArchived(nameRaw) {
+  const supplier = state.suppliers.get(normalize(nameRaw));
+  return !!supplier?.archived;
+}
+
+function isMachineArchived(codeRaw) {
+  const machineCode = normalize(codeRaw);
+  const machine = (state.machineCatalog || []).find(item => normalize(item?.code) === machineCode);
+  return !!machine?.archived;
+}
+
+function getActivePartsCatalog() {
+  return Array.from(state.partsCatalog.values()).filter(part => !part?.archived);
+}
+
+function getActiveSupplierNames() {
+  return Array.from(state.suppliers.entries())
+    .filter(([_, data]) => !data?.archived)
+    .map(([name]) => name)
+    .sort((a, b) => String(a).localeCompare(String(b), 'pl'));
+}
+
+function getActiveMachineCatalog() {
+  return (state.machineCatalog || []).filter(machine => !machine?.archived);
+}
+
+function partUsedInAnyActiveMachineBom(skuRaw) {
+  const k = skuKey(skuRaw);
+  return (state.machineCatalog || []).find(machine => !machine?.archived && Array.isArray(machine?.bom) && machine.bom.some(item => skuKey(item?.sku) === k)) || null;
+}
+
+function clearArchivedItemsFromDrafts() {
+  if (state.currentDelivery && Array.isArray(state.currentDelivery.items)) {
+    state.currentDelivery.items = state.currentDelivery.items.filter(item => !isPartArchived(item?.sku));
+    if (isSupplierArchived(state.currentDelivery?.supplier)) {
+      state.currentDelivery.supplier = null;
+      state.currentDelivery.items = [];
+    }
+  }
+
+  if (state.currentBuild && Array.isArray(state.currentBuild.items)) {
+    state.currentBuild.items = state.currentBuild.items.filter(item => !isMachineArchived(item?.machineCode));
+  }
+}
+
+function setPartArchived(skuRaw, archived) {
+  const k = skuKey(skuRaw);
+  const part = state.partsCatalog.get(k);
+  if (!part) return { success: false, msg: 'Nie znaleziono części.' };
+
+  const nextArchived = !!archived;
+  if (nextArchived) {
+    const activeMachine = partUsedInAnyActiveMachineBom(k);
+    if (activeMachine) {
+      return {
+        success: false,
+        msg: `Część nie może zostać zarchiwizowana, bo jest używana w aktywnym BOM-ie maszyny "${activeMachine.name}".`
+      };
+    }
+  }
+
+  part.archived = nextArchived;
+  clearArchivedItemsFromDrafts();
+  save();
+  return { success: true, msg: nextArchived ? 'Część została zarchiwizowana.' : 'Część została przywrócona.' };
+}
+
+function setSupplierArchived(nameRaw, archived) {
+  const supplierName = normalize(nameRaw);
+  const supplier = state.suppliers.get(supplierName);
+  if (!supplier) return { success: false, msg: 'Nie znaleziono dostawcy.' };
+
+  supplier.archived = !!archived;
+  clearArchivedItemsFromDrafts();
+  save();
+  return { success: true, msg: supplier.archived ? 'Dostawca został zarchiwizowany.' : 'Dostawca został przywrócony.' };
+}
+
+function setMachineArchived(codeRaw, archived) {
+  const machineCode = normalize(codeRaw);
+  const machine = (state.machineCatalog || []).find(item => normalize(item?.code) === machineCode);
+  if (!machine) return { success: false, msg: 'Nie znaleziono maszyny.' };
+
+  machine.archived = !!archived;
+  clearArchivedItemsFromDrafts();
+  save();
+  return { success: true, msg: machine.archived ? 'Maszyna została zarchiwizowana.' : 'Maszyna została przywrócona.' };
 }
 
 function validatePartThresholds(yellowThreshold, redThreshold) {
@@ -488,7 +593,7 @@ function addSupplier(name) {
     toast("Dostawca już istnieje", `Dostawca "${n}" jest już w bazie.`, "warning");
     return false;
   }
-  state.suppliers.set(n, { prices: new Map() });
+  state.suppliers.set(n, { archived: false, prices: new Map() });
   save();
   renderAllSuppliers();
   refreshCatalogsUI();
@@ -529,7 +634,7 @@ function updateSupplierPrice(supplierName, skuRaw, price) {
 function addToDelivery(supplier, skuRaw, qty, price) {
   const k = skuKey(skuRaw);
   const part = state.partsCatalog.get(k);
-  if (!part) return;
+  if (!part || part.archived) return;
 
   const dateInput = document.getElementById("deliveryDate");
   if (dateInput) {
@@ -999,7 +1104,7 @@ function getPartSuppliersForStatus(skuRaw) {
   if (!k) return [];
 
   return Array.from(state.suppliers.entries())
-    .filter(([_, data]) => data?.prices instanceof Map && data.prices.has(k))
+    .filter(([_, data]) => !data?.archived && data?.prices instanceof Map && data.prices.has(k))
     .map(([name, data]) => ({
       name,
       price: safeFloat(data?.prices?.get(k) ?? 0)
@@ -1035,7 +1140,7 @@ function getSupplierPartsForStatus(supplierNameRaw) {
   if (!supplier || !(supplier.prices instanceof Map)) return [];
 
   return Array.from(supplier.prices.entries())
-    .filter(([partKey]) => state.partsCatalog.has(partKey))
+    .filter(([partKey]) => state.partsCatalog.has(partKey) && !state.partsCatalog.get(partKey)?.archived)
     .map(([partKey, price]) => {
       const part = state.partsCatalog.get(partKey);
       return {
