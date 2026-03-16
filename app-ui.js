@@ -454,7 +454,7 @@ function renderWarehouse() {
   const isEditMode = !!state.ui?.stockEditMode;
   const pendingMap = state.ui?.pendingStockAdjustments || {};
   
-  const summaryRows = computePartsSummary().filter(item => {
+  const summaryRows = computePartsSummary().filter(item => !isPartArchived(item?.sku)).filter(item => {
     if (!q) return true;
     return String(item?.sku || '').toLowerCase().includes(q) || String(item?.name || '').toLowerCase().includes(q);
   });
@@ -524,13 +524,9 @@ function renderWarehouse() {
           </div>
         `;
 
-      const archivedBadge = isPartArchived(item?.sku)
-        ? ' <span class="badge badge-muted">ZARCHIWIZOWANE</span>'
-        : '';
-
       return `
         <tr class="${rowClass}">
-          <td><span class="badge">${escapeHtml(item.sku)}</span>${archivedBadge}</td>
+          <td><span class="badge">${escapeHtml(item.sku)}</span></td>
           <td>${escapeHtml(item.name || "")}</td>
           <td class="text-right stock-edit-cell">${stockCell}</td>
           <td class="text-right">${fmtPLN.format(item.value)}</td>
@@ -712,21 +708,17 @@ function renderMachinesStock() {
   if (!tbody) return;
 
   tbody.innerHTML = state.machinesStock
+    .filter(m => !isMachineArchived(m?.code))
     .filter(m => !q || m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
-    .map(m => {
-      const archivedBadge = isMachineArchived(m?.code)
-        ? ' <span class="badge badge-muted">ZARCHIWIZOWANE</span>'
-        : '';
-      return `<tr>
+    .map(m => `<tr>
       <td>
-        <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap">
-          <span class="badge">${escapeHtml(m.code)}</span>${archivedBadge}
+        <div style="display:flex;gap:var(--space-2);align-items:center">
+          <span class="badge">${escapeHtml(m.code)}</span>
         </div>
       </td>
       <td>${escapeHtml(m.name)}</td>
       <td class="text-right"><strong>${m.qty}</strong></td>
-    </tr>`;
-    }).join("");
+    </tr>`).join("");
 }
 
 function getHistoryView() {
@@ -1635,13 +1627,13 @@ function renderAllSuppliers() {
   
   tbody.innerHTML = Array.from(state.suppliers.keys()).sort().map(name => {
     const warnings = getSupplierDataWarnings(name);
-    const supplier = state.suppliers.get(name);
-    const isArchived = !!supplier?.archived;
+    const isArchived = isSupplierArchived(name);
     const badges = [];
 
     if (isArchived) {
       badges.push('<span class="badge badge-muted badge-status-warning">ZARCHIWIZOWANE</span>');
-    } else if (warnings.hasMissingParts) {
+    }
+    if (warnings.hasMissingParts) {
       badges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
     }
 
@@ -1655,9 +1647,7 @@ function renderAllSuppliers() {
           <div class="catalog-actions">
             <button class="btn btn-secondary btn-sm" type="button" data-action="openSupplierCatalogDetails" data-supplier="${escapeHtml(name)}">Szczegóły</button>
             <button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteSupplier('${escapeHtml(name)}')" aria-label="Usuń">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleSupplierArchive('${escapeHtml(name)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
           </div>
         </td>
       </tr>
@@ -1673,8 +1663,7 @@ function refreshCatalogsUI() {
 
   const parts = Array.from(state.partsCatalog.values());
   const activeParts = getActivePartsCatalog();
-  const allSups = Array.from(state.suppliers.keys()).sort();
-  const activeSups = getActiveSupplierNames();
+  const allSups = getActiveSupplierNames();
 
   // Parts catalog
   els.partsCatalog.innerHTML = parts.map(p => {
@@ -1685,13 +1674,12 @@ function refreshCatalogsUI() {
 
     if (isArchived) {
       badges.push('<span class="badge badge-muted badge-status-warning">ZARCHIWIZOWANE</span>');
-    } else {
-      if (warnings.hasMissingPrice) {
-        badges.push('<span class="badge badge-warning badge-status-warning">BRAK CENY</span>');
-      }
-      if (warnings.hasMissingSuppliers) {
-        badges.push('<span class="badge badge-warning badge-status-warning">BRAK DOSTAWCÓW</span>');
-      }
+    }
+    if (warnings.hasMissingPrice) {
+      badges.push('<span class="badge badge-warning badge-status-warning">BRAK CENY</span>');
+    }
+    if (warnings.hasMissingSuppliers) {
+      badges.push('<span class="badge badge-warning badge-status-warning">BRAK DOSTAWCÓW</span>');
     }
 
     return `<tr>
@@ -1705,9 +1693,7 @@ function refreshCatalogsUI() {
         <div class="catalog-actions">
           <button class="btn btn-secondary btn-sm" type="button" data-action="openCatalogPartDetails" data-sku="${escapeHtml(p.sku)}">Szczegóły</button>
           <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <button class="btn btn-secondary btn-sm" onclick="togglePartArchive('${escapeHtml(p.sku)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
         </div>
       </td>
     </tr>`;
@@ -1721,7 +1707,8 @@ function refreshCatalogsUI() {
 
     if (isArchived) {
       badges.push('<span class="badge badge-muted badge-status-warning">ZARCHIWIZOWANE</span>');
-    } else if (warnings.hasMissingParts) {
+    }
+    if (warnings.hasMissingParts) {
       badges.push('<span class="badge badge-warning badge-status-warning">BRAK CZĘŚCI</span>');
     }
 
@@ -1737,9 +1724,7 @@ function refreshCatalogsUI() {
           <div class="catalog-actions">
             <button class="btn btn-secondary btn-sm" type="button" data-action="openMachineCatalogDetails" data-machine-code="${escapeHtml(m.code)}">Szczegóły</button>
             <button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="askDeleteMachine('${escapeHtml(m.code)}')" aria-label="Usuń">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleMachineArchive('${escapeHtml(m.code)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>
           </div>
         </td>
       </tr>
@@ -1773,7 +1758,7 @@ function refreshCatalogsUI() {
   const supBox = byId("partNewSuppliersChecklist");
   if (supBox) {
     comboMultiRender(supBox, {
-      options: activeSups,
+      options: allSups,
       selected: comboMultiGetSelected(supBox),
       placeholder: allSups.length ? "Wybierz dostawców..." : "Brak zdefiniowanych dostawców."
     });
@@ -1782,7 +1767,7 @@ function refreshCatalogsUI() {
   const editBox = byId('editPartSuppliersChecklist');
   if (editBox) {
     comboMultiRender(editBox, {
-      options: activeSups,
+      options: allSups,
       selected: comboMultiGetSelected(editBox),
       placeholder: allSups.length ? 'Wybierz dostawców...' : 'Brak zdefiniowanych dostawców.'
     });

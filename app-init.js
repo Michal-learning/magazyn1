@@ -278,7 +278,7 @@ function fillPartThresholdForm(part = null) {
 
 function getDeliverySupplierOptions(supplierName) {
   const supName = normalize(supplierName);
-  if (!supName) return [];
+  if (!supName || isSupplierArchived(supName)) return [];
 
   const sup = state.suppliers.get(supName);
   const skuListRaw = (sup && sup.prices && sup.prices.size)
@@ -286,7 +286,7 @@ function getDeliverySupplierOptions(supplierName) {
     : Array.from(state.partsCatalog.keys());
 
   return skuListRaw
-    .filter(k => state.partsCatalog.has(k))
+    .filter(k => state.partsCatalog.has(k) && !state.partsCatalog.get(k)?.archived)
     .map(k => {
       const part = state.partsCatalog.get(k);
       const price = (sup && sup.prices) ? (sup.prices.get(k) ?? 0) : 0;
@@ -352,7 +352,10 @@ function syncDeliveryDraftUI(opts = {}) {
   const dateInput = document.getElementById('deliveryDate');
   if (!supplierSelect) return;
 
-  const supplierNames = Array.from(state.suppliers.keys());
+  const supplierNames = getActiveSupplierNames();
+  if (Array.isArray(state.currentDelivery?.items)) {
+    state.currentDelivery.items = state.currentDelivery.items.filter(item => !isPartArchived(item?.sku));
+  }
   let draftSupplier = normalize(state.currentDelivery?.supplier);
   if (draftSupplier && !supplierNames.includes(draftSupplier)) {
     const hasDraftItems = Array.isArray(state.currentDelivery?.items) && state.currentDelivery.items.length > 0;
@@ -1435,12 +1438,33 @@ document.getElementById("addPartBtn")?.addEventListener("click", () => {
   }
 });
 
-window.askDeletePart = (sku) => {
-  if (confirm(`Czy na pewno usunąć część "${sku}"?\n\nTej operacji nie można cofnąć.`)) {
-    const err = deletePart(sku);
-    if (err) toast("Nie można usunąć", err, "error");
-    else { toast("Usunięto", `Część "${sku}" została usunięta z bazy.`, "success"); refreshCatalogsUI(); }
+window.togglePartArchive = (sku) => {
+  const part = state.partsCatalog.get(skuKey(sku));
+  if (!part) return;
+
+  const willArchive = !part.archived;
+  const message = willArchive
+    ? `Czy na pewno zarchiwizować część "${part.sku}"?
+
+Rekord nie zostanie usunięty. Pozostanie w katalogu, zniknie z nowych operacji, a historia pozostanie bez zmian.`
+    : `Czy na pewno przywrócić część "${part.sku}" z archiwum?
+
+Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
+
+  if (!confirm(message)) return;
+
+  const result = setPartArchived(part.sku, willArchive);
+  if (!result.success) {
+    toast(willArchive ? "Nie można zarchiwizować" : "Nie można przywrócić", result.msg, "error");
+    return;
   }
+
+  refreshCatalogsUI();
+  renderWarehouse();
+  renderDelivery();
+  renderBuild();
+  renderMachinesStock();
+  toast(willArchive ? "Zarchiwizowano część" : "Przywrócono część", result.msg, "success");
 };
 
 document.getElementById("addSupplierBtn")?.addEventListener("click", () => {
@@ -1451,8 +1475,31 @@ document.getElementById("addSupplierBtn")?.addEventListener("click", () => {
   }
 });
 
-window.askDeleteSupplier = (n) => { 
-  if (confirm(`Czy na pewno usunąć dostawcę "${n}"?\n\nTej operacji nie można cofnąć.`)) deleteSupplier(n); 
+window.toggleSupplierArchive = (name) => {
+  const supplier = state.suppliers.get(normalize(name));
+  if (!supplier) return;
+
+  const willArchive = !supplier.archived;
+  const message = willArchive
+    ? `Czy na pewno zarchiwizować dostawcę "${name}"?
+
+Rekord nie zostanie usunięty. Pozostanie w katalogu, zniknie z nowych operacji, a historia pozostanie bez zmian.`
+    : `Czy na pewno przywrócić dostawcę "${name}" z archiwum?
+
+Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
+
+  if (!confirm(message)) return;
+
+  const result = setSupplierArchived(name, willArchive);
+  if (!result.success) {
+    toast(willArchive ? "Nie można zarchiwizować" : "Nie można przywrócić", result.msg, "error");
+    return;
+  }
+
+  renderAllSuppliers();
+  refreshCatalogsUI();
+  renderDelivery();
+  toast(willArchive ? "Zarchiwizowano dostawcę" : "Przywrócono dostawcę", result.msg, "success");
 };
 
 // === EDITORS ===
@@ -1486,6 +1533,7 @@ function getBomEditorSelection() {
   const rawValue = comboValue || selectValue;
   const partKey = rawValue ? skuKey(rawValue) : '';
   const part = partKey ? state.partsCatalog.get(partKey) : null;
+  const activePart = part && !part.archived ? part : null;
 
   if (selectEl && rawValue && selectValue !== rawValue) {
     selectEl.value = rawValue;
@@ -1494,8 +1542,8 @@ function getBomEditorSelection() {
   return {
     selectEl,
     rawValue,
-    part,
-    sku: part?.sku || rawValue
+    part: activePart,
+    sku: activePart?.sku || rawValue
   };
 }
 
@@ -1579,7 +1627,7 @@ function startNewMachineFlow() {
 
   const sel = document.getElementById("bomSkuSelect");
   if (sel) {
-    sel.innerHTML = '<option value="">-- Wybierz --</option>' +
+    sel.innerHTML = '<option value="">-- Wybierz --</option>' + 
       getActivePartsCatalog().map(p =>
         `<option value="${p.sku}">${p.sku} (${p.name})</option>`
       ).join("");
@@ -1594,30 +1642,45 @@ function startNewMachineFlow() {
 
 document.getElementById("openMachineModalBtn")?.addEventListener("click", startNewMachineFlow);
 
-window.askDeleteMachine = (code) => {
+window.toggleMachineArchive = (code) => {
   const machine = state.machineCatalog.find(m => m.code === code);
   const name = machine?.name || code;
-  if (confirm(`Czy na pewno usunąć maszynę "${name}" (${code})?\n\nTej operacji nie można cofnąć.`)) {
-    state.machineCatalog = state.machineCatalog.filter(m => m.code !== code);
-    save();
-    refreshCatalogsUI();
-    toast("Usunięto maszynę", `"${name}" została usunięta.`, "success");
+  if (!machine) return;
+
+  const willArchive = !machine.archived;
+  const message = willArchive
+    ? `Czy na pewno zarchiwizować maszynę "${name}" (${code})?
+
+Rekord nie zostanie usunięty. Pozostanie w katalogu, zniknie z nowych operacji, a historia pozostanie bez zmian.`
+    : `Czy na pewno przywrócić maszynę "${name}" (${code}) z archiwum?
+
+Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
+
+  if (!confirm(message)) return;
+
+  const result = setMachineArchived(code, willArchive);
+  if (!result.success) {
+    toast(willArchive ? "Nie można zarchiwizować" : "Nie można przywrócić", result.msg, "error");
+    return;
   }
+
+  refreshCatalogsUI();
+  renderBuild();
+  renderMachinesStock();
+  toast(willArchive ? "Zarchiwizowano maszynę" : "Przywrócono maszynę", result.msg, "success");
 };
 
 window.openSupplierEditor = (name) => {
   editingSup = name;
   const originalSup = state.suppliers.get(name);
-  editingSupSnapshot = originalSup
-    ? { name, archived: !!originalSup.archived, prices: new Map(originalSup.prices || []) }
-    : null;
+  editingSupSnapshot = originalSup ? { name, prices: new Map(originalSup.prices || []) } : null;
   const panel = document.getElementById("supplierEditorTemplate");
   const nameEl = document.getElementById("supplierEditorName");
   if (nameEl) nameEl.textContent = name;
   
   const sel = document.getElementById("supplierEditorPartSelect");
   if (sel) {
-    sel.innerHTML = '<option value="">-- Wybierz --</option>' +
+    sel.innerHTML = '<option value="">-- Wybierz --</option>' + 
       getActivePartsCatalog().map(p =>
         `<option value="${p.sku}">${p.sku} (${p.name})</option>`
       ).join("");
@@ -1638,7 +1701,8 @@ function renderSupEditorTable() {
   
   tbody.innerHTML = Array.from(sup.prices.entries()).map(([k, price]) => {
     const p = state.partsCatalog.get(k);
-    return `<tr><td>${p ? p.sku : k}</td><td>${p ? p.name : '-'}</td><td class="text-right">${fmtPLN.format(price)}</td></tr>`;
+    const archivedBadge = p?.archived ? ' <span class="badge badge-muted">ZARCHIWIZOWANE</span>' : '';
+    return `<tr><td>${p ? p.sku : k}${archivedBadge}</td><td>${p ? p.name : '-'}</td><td class="text-right">${fmtPLN.format(price)}</td></tr>`;
   }).join("");
 }
 
@@ -1673,10 +1737,7 @@ document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", ()
   }
 
   if (editingSup && editingSupSnapshot) {
-    state.suppliers.set(editingSup, {
-      archived: !!editingSupSnapshot.archived,
-      prices: new Map(editingSupSnapshot.prices || [])
-    });
+    state.suppliers.set(editingSup, { prices: new Map(editingSupSnapshot.prices || []) });
     save();
   }
 
@@ -1717,7 +1778,7 @@ window.openMachineEditor = (code) => {
 
   const sel = document.getElementById("bomSkuSelect");
   if (sel) {
-    sel.innerHTML = '<option value="">-- Wybierz --</option>' +
+    sel.innerHTML = '<option value="">-- Wybierz --</option>' + 
       getActivePartsCatalog().map(p =>
         `<option value="${p.sku}">${p.sku} (${p.name})</option>`
       ).join("");
@@ -1872,6 +1933,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
     state.machineCatalog.push({
       code,
       name,
+      archived: false,
       bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
     });
     editingMachineIsNew = false;
@@ -1882,6 +1944,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", () =>
       state.machineCatalog[idx] = {
         code,
         name,
+        archived: !!state.machineCatalog[idx]?.archived,
         bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
       };
     }
@@ -2073,7 +2136,7 @@ window.startEditPart = (sku) => {
 
   const editChecklist = document.getElementById("editPartSuppliersChecklist");
   if (editChecklist) {
-    const allSups = Array.from(state.suppliers.keys()).sort();
+    const allSups = getActiveSupplierNames();
     comboMultiRender(editChecklist, {
       options: allSups,
       selected: supsForPart,
@@ -2115,12 +2178,16 @@ function saveEditPart() {
     return;
   }
 
+  const originalPart = state.partsCatalog.get(originalK);
+  const originalArchived = !!originalPart?.archived;
+
   state.partsCatalog.delete(originalK);
   state.partsCatalog.set(k, {
     sku,
     name,
     yellowThreshold: thresholds.yellowThreshold,
-    redThreshold: thresholds.redThreshold
+    redThreshold: thresholds.redThreshold,
+    archived: originalArchived
   });
 
   state.lots.forEach(lot => {
