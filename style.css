@@ -599,6 +599,26 @@ tbody tr:nth-child(even):hover {
   color: var(--danger);
 }
 
+
+.catalog-status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.badge-status-warning {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.catalog-status-empty {
+  display: inline-block;
+  min-height: 24px;
+}
+
 /* ---------- 9) Navigation Tabs ---------- */
 .tabs-nav {
   display: flex;

@@ -1221,14 +1221,24 @@ function refreshCatalogsUI() {
 
   // Parts catalog
   els.partsCatalog.innerHTML = parts.map(p => {
-    const suppliers = Array.from(state.suppliers.entries())
-      .filter(([_, data]) => data.prices.has(skuKey(p.sku)))
-      .map(([n]) => n);
+    const warnings = getPartDataWarnings(p.sku);
+    const suppliers = warnings.suppliers.map(item => item.name);
+    const badges = [];
+
+    if (warnings.hasMissingPrice) {
+      badges.push('<span class="badge badge-warning badge-status-warning">BRAK CENY</span>');
+    }
+    if (warnings.hasMissingSuppliers) {
+      badges.push('<span class="badge badge-warning badge-status-warning">BRAK DOSTAWCÓW</span>');
+    }
 
     return `<tr>
       <td><span class="badge">${escapeHtml(p.sku)}</span></td>
       <td>${escapeHtml(p.name)}</td>
       <td>${suppliers.length ? suppliers.map(s => escapeHtml(s)).join(", ") : '<span class="text-muted">-</span>'}</td>
+      <td>
+        ${badges.length ? `<div class="catalog-status-badges">${badges.join('')}</div>` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
+      </td>
       <td class="text-right">
         <button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>
         <button class="btn btn-danger btn-sm btn-icon" onclick="askDeletePart('${escapeHtml(p.sku)}')" aria-label="Usuń">

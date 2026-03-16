@@ -993,6 +993,42 @@ function getLastKnownUnitPrice(skuRaw) {
   return safeFloat(last?.unitPrice || 0);
 }
 
+
+function getPartSuppliersForStatus(skuRaw) {
+  const k = skuKey(skuRaw);
+  if (!k) return [];
+
+  return Array.from(state.suppliers.entries())
+    .filter(([_, data]) => data?.prices instanceof Map && data.prices.has(k))
+    .map(([name, data]) => ({
+      name,
+      price: safeFloat(data?.prices?.get(k) ?? 0)
+    }));
+}
+
+function getPartReferencePriceForStatus(skuRaw) {
+  const suppliers = getPartSuppliersForStatus(skuRaw);
+  if (!suppliers.length) return 0;
+
+  const positiveSupplierPrice = suppliers.find(item => Number.isFinite(item?.price) && item.price > 0);
+  if (positiveSupplierPrice) return safeFloat(positiveSupplierPrice.price);
+
+  return safeFloat(suppliers[0]?.price ?? 0);
+}
+
+function getPartDataWarnings(skuRaw) {
+  const suppliers = getPartSuppliersForStatus(skuRaw);
+  const referencePrice = getPartReferencePriceForStatus(skuRaw);
+
+  return {
+    suppliers,
+    referencePrice,
+    hasMissingSuppliers: suppliers.length === 0,
+    hasMissingPrice: !(Number.isFinite(referencePrice) && referencePrice > 0)
+  };
+}
+
+
 function getPendingStockAdjustmentsCount() {
   ensureUiState();
   return Object.values(state.ui.pendingStockAdjustments || {}).filter(item => item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty)).length;
