@@ -523,26 +523,62 @@ function getDefaultTabForRole(roleOverride) {
   return allowed.includes('parts') ? 'parts' : (allowed[0] || 'parts');
 }
 
-async function loadCompanyRolePermissions() {
+function normalizeRolePermissionsCollection(rawItems) {
+  const normalizedItems = {};
+  const source = rawItems && typeof rawItems === 'object' ? rawItems : {};
+
+  Object.values(source).forEach(row => {
+    const role = String(row?.role || '').trim().toLowerCase();
+    if (!role) return;
+    normalizedItems[role] = {
+      ...row,
+      role,
+      tab_permissions: normalizeRoleTabPermissions(role, row?.tab_permissions)
+    };
+  });
+
+  return normalizedItems;
+}
+
+function syncRolePermissionsStateFromAuth(opts = {}) {
   const st = window.companyRolePermissionsState || (window.companyRolePermissionsState = {});
+  const preserveError = opts.preserveError === true;
+  const normalizedItems = normalizeRolePermissionsCollection(window.appAuth?.rolePermissions);
+
+  st.items = normalizedItems;
+  if (!preserveError) st.error = '';
+  window.appAuth.rolePermissions = normalizedItems;
+  return normalizedItems;
+}
+
+async function loadCompanyRolePermissions(options = {}) {
+  const st = window.companyRolePermissionsState || (window.companyRolePermissionsState = {});
+  const force = options?.force === true;
+  const canUseAuthContext = !force
+    && !!window.appAuth?.companyId
+    && window.appAuth?.rolePermissions
+    && typeof window.appAuth.rolePermissions === 'object';
+
   st.loading = true;
-  st.error = '';
+  if (!options?.preserveError) st.error = '';
 
   try {
-    const rows = await window.fetchCompanyRolePermissions?.();
-    const items = {};
+    if (canUseAuthContext) {
+      return syncRolePermissionsStateFromAuth();
+    }
 
-    (Array.isArray(rows) ? rows : []).forEach(row => {
-      const role = String(row?.role || '').trim().toLowerCase();
-      if (!role) return;
-      items[role] = {
-        ...row,
-        role,
-        tab_permissions: normalizeRoleTabPermissions(role, row?.tab_permissions)
-      };
-    });
+    const rows = await window.fetchCompanyRolePermissions?.();
+    const items = normalizeRolePermissionsCollection(
+      (Array.isArray(rows) ? rows : []).reduce((acc, row) => {
+        const role = String(row?.role || '').trim().toLowerCase();
+        if (!role) return acc;
+        acc[role] = row;
+        return acc;
+      }, {})
+    );
 
     st.items = items;
+    st.error = '';
     window.appAuth.rolePermissions = items;
     return items;
   } catch (err) {
@@ -623,6 +659,7 @@ async function saveRolePermissions(role) {
       delete st.drafts[normalizedRole];
     }
     window.appAuth.rolePermissions = st.items;
+    refreshRoleAccessUI();
     toast('Uprawnienia zapisane', `Konfiguracja roli ${normalizedRole} została zaktualizowana.`, 'success');
   } catch (err) {
     console.error('Błąd zapisu konfiguracji ról:', err);
@@ -778,6 +815,18 @@ function applyRoleAccess() {
   }
 }
 
+function refreshRoleAccessUI(opts = {}) {
+  if (window.appAuth?.rolePermissions && typeof window.appAuth.rolePermissions === 'object') {
+    syncRolePermissionsStateFromAuth({ preserveError: true });
+  }
+
+  applyRoleAccess();
+
+  if (opts.refreshActiveTab !== false) {
+    setActiveTab(currentActiveTab || getDefaultTabForRole(), { skipRefresh: false });
+  }
+}
+
 function hasAppAccess() {
   if (!window.appAuth?.session) return false;
   if (window.appAuth?.profile?.is_active === false) return false;
@@ -888,7 +937,7 @@ function bindUserManagementUI() {
       renderUsersAdmin();
       await Promise.all([
         loadCompanyUsers(),
-        loadCompanyRolePermissions()
+        loadCompanyRolePermissions({ force: true })
       ]);
       renderUsersAdmin();
       toast('Odświeżono', 'Lista użytkowników i konfiguracja ról zostały odświeżone.', 'success');
@@ -943,7 +992,7 @@ function bindUserManagementUI() {
     }
 
     try {
-      const result = await window.createCompanyWorker?.({
+      const result = await window.createCompanyUser?.({
         email,
         password,
         role
@@ -1188,6 +1237,12 @@ async function ensureAuthSession() {
     return false;
   }
 
+  syncRolePermissionsStateFromAuth({ preserveError: !!result?.rolePermissionsError });
+  if (result?.rolePermissionsError) {
+    const st = window.companyRolePermissionsState || (window.companyRolePermissionsState = {});
+    st.error = result.rolePermissionsError?.message || 'Nie udało się pobrać konfiguracji ról.';
+  }
+
   updateAuthUI();
 
   if (!window.appAuth?.session) {
@@ -1366,9 +1421,16 @@ function bindAuthUI() {
       }
 
       if (result?.ok && window.appAuth?.session) {
-        await loadCompanyRolePermissions();
+        syncRolePermissionsStateFromAuth({ preserveError: !!result?.rolePermissionsError });
+        if (result?.rolePermissionsError) {
+          const st = window.companyRolePermissionsState || (window.companyRolePermissionsState = {});
+          st.error = result.rolePermissionsError?.message || 'Nie udało się pobrać konfiguracji ról.';
+        }
       }
       updateAuthUI();
+      if (window.appAuth?.session) {
+        refreshRoleAccessUI();
+      }
 
       const hasSession = !!window.appAuth?.session;
       if (hasSession && !window.__appInitialized) {
@@ -1422,7 +1484,7 @@ async function init() {
   initSidePanelSignals();
   initBeforeUnloadWarning();
 
-  await loadCompanyRolePermissions();
+  syncRolePermissionsStateFromAuth();
 
   renderWarehouse();
   renderAllSuppliers();

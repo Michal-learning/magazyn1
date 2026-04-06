@@ -3,6 +3,7 @@
 window.APP_SUPABASE_CONFIG = {
   url: "https://vprzhxqgotxrmrjslzll.supabase.co",
   key: "sb_publishable_tQQWuI1oZN3VQ814S3eFOg_4Mi25nFD",
+  createUserFunctionName: "create-company-worker",
   createWorkerFunctionName: "create-company-worker"
 };
 
@@ -98,7 +99,8 @@ window.refreshAuthContext = async function refreshAuthContext(sessionOverride) {
     if (!user) {
       return {
         ok: true,
-        loggedIn: false
+        loggedIn: false,
+        rolePermissions: {}
       };
     }
 
@@ -149,11 +151,35 @@ window.refreshAuthContext = async function refreshAuthContext(sessionOverride) {
       }
     }
 
+    let rolePermissions = {};
+    let rolePermissionsError = null;
+
+    if (membership?.company_id) {
+      try {
+        const rows = await window.fetchCompanyRolePermissions?.(membership.company_id);
+        rolePermissions = Array.isArray(rows)
+          ? rows.reduce((acc, row) => {
+              const role = String(row?.role || "").trim().toLowerCase();
+              if (!role) return acc;
+              acc[role] = {
+                ...row,
+                role
+              };
+              return acc;
+            }, {})
+          : {};
+      } catch (err) {
+        rolePermissionsError = err;
+        console.error("Błąd pobierania role permissions w refreshAuthContext:", err);
+      }
+    }
+
     window.appAuth.profile = profile || null;
     window.appAuth.membership = membership || null;
     window.appAuth.companyId = membership?.company_id || null;
     window.appAuth.companyName = company?.name || null;
     window.appAuth.companyRole = membership?.role || null;
+    window.appAuth.rolePermissions = rolePermissions;
 
     return {
       ok: true,
@@ -161,7 +187,10 @@ window.refreshAuthContext = async function refreshAuthContext(sessionOverride) {
       user,
       profile,
       membership,
-      company
+      company,
+      rolePermissions,
+      rolePermissionsLoaded: !rolePermissionsError,
+      rolePermissionsError
     };
   })();
 
@@ -318,7 +347,7 @@ window.updateCompanyMember = async function updateCompanyMember(memberId, update
   return data;
 };
 
-window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
+window.createCompanyUser = async function createCompanyUser(payload = {}) {
   if (!window.sb) throw new Error("Brak klienta Supabase.");
 
   const email = String(payload?.email || "").trim().toLowerCase();
@@ -332,9 +361,13 @@ window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
   if (password.length < 6) throw new Error("Hasło startowe musi mieć co najmniej 6 znaków.");
   if (!["worker", "admin"].includes(role)) throw new Error("Na tym etapie można tworzyć tylko konta worker albo admin.");
 
-  const functionName = String(window.APP_SUPABASE_CONFIG?.createWorkerFunctionName || "").trim();
+  const functionName = String(
+    window.APP_SUPABASE_CONFIG?.createUserFunctionName
+    || window.APP_SUPABASE_CONFIG?.createWorkerFunctionName
+    || ""
+  ).trim();
   if (!functionName) {
-    throw new Error("Brak nazwy Edge Function dla ręcznego tworzenia pracownika. Skonfiguruj createWorkerFunctionName.");
+    throw new Error("Brak nazwy Edge Function dla ręcznego tworzenia użytkownika. Skonfiguruj createUserFunctionName.");
   }
 
   const { data: sessionData, error: sessionError } = await window.sb.auth.getSession();
@@ -379,6 +412,10 @@ window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
   }
 
   return result || null;
+};
+
+window.createCompanyWorker = async function createCompanyWorker(payload = {}) {
+  return window.createCompanyUser(payload);
 };
 
 window.testSupabaseConnection = async function testSupabaseConnection() {
