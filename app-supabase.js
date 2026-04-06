@@ -855,6 +855,7 @@ window.setMachineArchivedInSupabase = async function setMachineArchivedInSupabas
 };
 
 
+
 function normalizeBusinessNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -864,18 +865,248 @@ function normalizeBusinessInt(value, fallback = 0) {
   return Math.max(0, Math.trunc(normalizeBusinessNumber(value, fallback)));
 }
 
-function resolveRowDateISO(row = {}, fallback = '') {
-  const raw = String(
-    row?.date_in
-    || row?.dateISO
-    || row?.event_date
-    || row?.eventDate
-    || row?.received_at
-    || row?.created_at
-    || fallback
-    || ''
-  ).trim();
+const INVENTORY_LOT_DB_FIELDS = Object.freeze({
+  initialQty: 'qty_initial',
+  remainingQty: 'qty_remaining',
+  receivedAt: 'received_at'
+});
+
+const HISTORY_EVENT_DB_TYPE_BY_LOCAL = Object.freeze({
+  delivery: 'delivery_finalized',
+  build: 'production_finalized',
+  adjustment: 'stock_adjustment'
+});
+
+const HISTORY_EVENT_LOCAL_TYPE_BY_DB = Object.freeze({
+  delivery_finalized: 'delivery',
+  production_finalized: 'build',
+  stock_adjustment: 'adjustment'
+});
+
+function getInventoryLotReceivedDateISO(row = {}, fallback = '') {
+  const raw = String(row?.[INVENTORY_LOT_DB_FIELDS.receivedAt] || row?.created_at || fallback || '').trim();
   return raw ? raw.slice(0, 10) : '';
+}
+
+function getHistoryEventDateISO(row = {}, payload = {}) {
+  const raw = String(payload?.dateISO || row?.created_at || '').trim();
+  return raw ? raw.slice(0, 10) : '';
+}
+
+function mapDbEventTypeToLocal(dbTypeRaw) {
+  const dbType = String(dbTypeRaw || '').trim().toLowerCase();
+  return HISTORY_EVENT_LOCAL_TYPE_BY_DB[dbType] || null;
+}
+
+function mapLocalEventTypeToDb(localTypeRaw) {
+  const localType = String(localTypeRaw || '').trim().toLowerCase();
+  return HISTORY_EVENT_DB_TYPE_BY_LOCAL[localType] || null;
+}
+
+function mapUiHistoryLotToDb(lot = {}) {
+  return {
+    lot_id: lot?.lotId == null ? null : String(lot.lotId),
+    qty: normalizeBusinessInt(lot?.qty, 0),
+    removed_qty: normalizeBusinessInt(lot?.removedQty, 0),
+    remaining_after: normalizeBusinessInt(lot?.remainingAfter, 0),
+    sku: String(lot?.sku || '').trim(),
+    name: String(lot?.name || '').trim(),
+    supplier: String(lot?.supplier || '').trim() || '-',
+    date_in: String(lot?.dateIn || lot?.dateISO || '').trim() || null,
+    unit_price: Math.max(0, normalizeBusinessNumber(lot?.unitPrice, 0))
+  };
+}
+
+function mapDbHistoryLotToUi(lot = {}) {
+  const rawDate = String(lot?.date_in || lot?.dateIn || '').trim();
+  return {
+    lotId: lot?.lot_id == null ? (lot?.lotId == null ? null : String(lot.lotId)) : String(lot.lot_id),
+    qty: normalizeBusinessInt(lot?.qty, 0),
+    removedQty: normalizeBusinessInt(lot?.removed_qty ?? lot?.removedQty, 0),
+    remainingAfter: normalizeBusinessInt(lot?.remaining_after ?? lot?.remainingAfter, 0),
+    sku: String(lot?.sku || '').trim(),
+    name: String(lot?.name || '').trim(),
+    supplier: String(lot?.supplier || '-').trim() || '-',
+    dateIn: rawDate ? rawDate.slice(0, 10) : '',
+    unitPrice: Math.max(0, normalizeBusinessNumber(lot?.unit_price ?? lot?.unitPrice, 0))
+  };
+}
+
+function mapUiHistoryEventToDbPayload(historyEvent = {}) {
+  const localType = String(historyEvent?.type || '').trim().toLowerCase();
+  const dateISO = String(historyEvent?.dateISO || '').trim() || '';
+
+  if (localType === 'delivery') {
+    return {
+      dateISO,
+      supplier: String(historyEvent?.supplier || '').trim() || '-',
+      items: (Array.isArray(historyEvent?.items) ? historyEvent.items : []).map(item => ({
+        sku: String(item?.sku || '').trim(),
+        name: String(item?.name || '').trim(),
+        qty: normalizeBusinessInt(item?.qty, 0),
+        unit_price: Math.max(0, normalizeBusinessNumber(item?.price ?? item?.unitPrice, 0))
+      })).filter(item => item.sku)
+    };
+  }
+
+  if (localType === 'build') {
+    return {
+      dateISO,
+      items: (Array.isArray(historyEvent?.items) ? historyEvent.items : []).map(item => ({
+        code: String(item?.code || '').trim(),
+        name: String(item?.name || '').trim(),
+        qty: normalizeBusinessInt(item?.qty, 0),
+        parts_used: (Array.isArray(item?.partsUsed) ? item.partsUsed : []).map(part => ({
+          sku: String(part?.sku || '').trim(),
+          name: String(part?.name || '').trim(),
+          qty: normalizeBusinessInt(part?.qty, 0),
+          lots: (Array.isArray(part?.lots) ? part.lots : []).map(mapUiHistoryLotToDb)
+        })).filter(part => part.sku)
+      })).filter(item => item.code)
+    };
+  }
+
+  if (localType === 'adjustment') {
+    const items = Array.isArray(historyEvent?.items)
+      ? historyEvent.items
+      : (Array.isArray(historyEvent?.details?.changes) ? historyEvent.details.changes : []);
+
+    return {
+      dateISO,
+      parts_changed: normalizeBusinessInt(historyEvent?.partsChanged ?? items.length, items.length),
+      items: items.map(item => ({
+        sku: String(item?.sku || '').trim(),
+        name: String(item?.name || '').trim(),
+        previous_qty: normalizeBusinessInt(item?.previousQty, 0),
+        new_qty: normalizeBusinessInt(item?.newQty, 0),
+        diff: Math.trunc(normalizeBusinessNumber(item?.diff, 0)),
+        direction: String(item?.direction || '').trim(),
+        reference_unit_price: Math.max(0, normalizeBusinessNumber(item?.referenceUnitPrice, 0)),
+        created_lot: item?.createdLot ? mapUiHistoryLotToDb(item.createdLot) : null,
+        affected_lots: (Array.isArray(item?.affectedLots) ? item.affectedLots : []).map(mapUiHistoryLotToDb)
+      })).filter(item => item.sku)
+    };
+  }
+
+  return { dateISO };
+}
+
+function getHistoryEventTitle(historyEvent = {}) {
+  const localType = String(historyEvent?.type || '').trim().toLowerCase();
+
+  if (localType === 'delivery') {
+    const supplier = String(historyEvent?.supplier || '').trim() || '—';
+    return `Dostawa • ${supplier}`;
+  }
+
+  if (localType === 'build') {
+    const count = Array.isArray(historyEvent?.items) ? historyEvent.items.length : 0;
+    return count > 0 ? `Produkcja • ${count} poz.` : 'Produkcja';
+  }
+
+  if (localType === 'adjustment') {
+    const count = normalizeBusinessInt(historyEvent?.partsChanged, 0) || (Array.isArray(historyEvent?.items) ? historyEvent.items.length : 0);
+    return count > 0 ? `Korekta stanów • ${count} cz.` : 'Korekta stanów';
+  }
+
+  return 'Historia operacji';
+}
+
+function getHistoryEventDescription(historyEvent = {}) {
+  const localType = String(historyEvent?.type || '').trim().toLowerCase();
+  const dateISO = String(historyEvent?.dateISO || '').trim();
+
+  if (localType === 'delivery') {
+    const items = Array.isArray(historyEvent?.items) ? historyEvent.items : [];
+    return `Przyjęto ${items.length} pozycji${dateISO ? ` • ${dateISO}` : ''}`;
+  }
+
+  if (localType === 'build') {
+    const items = Array.isArray(historyEvent?.items) ? historyEvent.items : [];
+    const totalQty = items.reduce((sum, item) => sum + normalizeBusinessInt(item?.qty, 0), 0);
+    return `Wyprodukowano ${totalQty} szt.${dateISO ? ` • ${dateISO}` : ''}`;
+  }
+
+  if (localType === 'adjustment') {
+    const items = Array.isArray(historyEvent?.items)
+      ? historyEvent.items
+      : (Array.isArray(historyEvent?.details?.changes) ? historyEvent.details.changes : []);
+    const netDiff = items.reduce((sum, item) => sum + Math.trunc(normalizeBusinessNumber(item?.diff, 0)), 0);
+    const netLabel = netDiff > 0 ? `+${netDiff}` : String(netDiff);
+    return `Bilans korekty: ${netLabel}${dateISO ? ` • ${dateISO}` : ''}`;
+  }
+
+  return dateISO || '';
+}
+
+function mapDbHistoryRowToUi(row = {}) {
+  const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+  const localType = mapDbEventTypeToLocal(row?.event_type);
+  const dateISO = getHistoryEventDateISO(row, payload);
+  const ts = Date.parse(String(row?.created_at || '').trim()) || Date.now();
+
+  if (localType === 'delivery') {
+    return {
+      id: row?.id,
+      ts,
+      type: 'delivery',
+      dateISO,
+      supplier: String(payload?.supplier || '-').trim() || '-',
+      items: (Array.isArray(payload?.items) ? payload.items : []).map(item => ({
+        sku: String(item?.sku || '').trim(),
+        name: String(item?.name || '').trim(),
+        qty: normalizeBusinessInt(item?.qty, 0),
+        price: Math.max(0, normalizeBusinessNumber(item?.unit_price ?? item?.price ?? item?.unitPrice, 0))
+      })).filter(item => item.sku)
+    };
+  }
+
+  if (localType === 'build') {
+    return {
+      id: row?.id,
+      ts,
+      type: 'build',
+      dateISO,
+      items: (Array.isArray(payload?.items) ? payload.items : []).map(item => ({
+        code: String(item?.code || '').trim(),
+        name: String(item?.name || '').trim(),
+        qty: normalizeBusinessInt(item?.qty, 0),
+        partsUsed: (Array.isArray(item?.parts_used) ? item.parts_used : Array.isArray(item?.partsUsed) ? item.partsUsed : []).map(part => ({
+          sku: String(part?.sku || '').trim(),
+          name: String(part?.name || '').trim(),
+          qty: normalizeBusinessInt(part?.qty, 0),
+          lots: (Array.isArray(part?.lots) ? part.lots : []).map(mapDbHistoryLotToUi)
+        })).filter(part => part.sku)
+      })).filter(item => item.code)
+    };
+  }
+
+  if (localType === 'adjustment') {
+    const items = Array.isArray(payload?.items)
+      ? payload.items
+      : (Array.isArray(payload?.details?.changes) ? payload.details.changes : []);
+
+    return {
+      id: row?.id,
+      ts,
+      type: 'adjustment',
+      dateISO,
+      partsChanged: normalizeBusinessInt(payload?.parts_changed ?? payload?.partsChanged ?? items.length, items.length),
+      items: items.map(item => ({
+        sku: String(item?.sku || '').trim(),
+        name: String(item?.name || '').trim(),
+        previousQty: normalizeBusinessInt(item?.previous_qty ?? item?.previousQty, 0),
+        newQty: normalizeBusinessInt(item?.new_qty ?? item?.newQty, 0),
+        diff: Math.trunc(normalizeBusinessNumber(item?.diff, 0)),
+        direction: String(item?.direction || '').trim(),
+        referenceUnitPrice: Math.max(0, normalizeBusinessNumber(item?.reference_unit_price ?? item?.referenceUnitPrice, 0)),
+        createdLot: item?.created_lot ? mapDbHistoryLotToUi(item.created_lot) : (item?.createdLot ? mapDbHistoryLotToUi(item.createdLot) : null),
+        affectedLots: (Array.isArray(item?.affected_lots) ? item.affected_lots : Array.isArray(item?.affectedLots) ? item.affectedLots : []).map(mapDbHistoryLotToUi)
+      })).filter(item => item.sku)
+    };
+  }
+
+  return null;
 }
 
 async function buildBusinessLookups(companyIdOverride) {
@@ -901,9 +1132,9 @@ window.fetchInventoryLotsRows = async function fetchInventoryLotsRows(companyIdO
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from('inventory_lots')
-    .select('*')
+    .select('id, company_id, part_id, supplier_id, unit_price, qty_initial, qty_remaining, received_at, created_at')
     .eq('company_id', companyId)
-    .order('date_in', { ascending: true, nullsFirst: false })
+    .order('received_at', { ascending: true })
     .order('id', { ascending: true });
 
   if (error) throw error;
@@ -914,7 +1145,7 @@ window.fetchMachineStockRows = async function fetchMachineStockRows(companyIdOve
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from('machine_stock')
-    .select('*')
+    .select('id, company_id, machine_definition_id, qty, created_at')
     .eq('company_id', companyId)
     .order('id', { ascending: true });
 
@@ -926,7 +1157,7 @@ window.fetchHistoryEventRows = async function fetchHistoryEventRows(companyIdOve
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from('history_events')
-    .select('*')
+    .select('id, company_id, event_type, title, description, payload, created_at')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });
@@ -955,8 +1186,8 @@ window.fetchOperationalStateFromSupabase = async function fetchOperationalStateF
       name,
       supplier: String(supplier?.name || row?.supplier_name || row?.supplier || '-').trim() || '-',
       unitPrice: Math.max(0, normalizeBusinessNumber(row?.unit_price ?? row?.price ?? row?.unitPrice, 0)),
-      qty: normalizeBusinessInt(row?.qty, 0),
-      dateIn: resolveRowDateISO(row)
+      qty: normalizeBusinessInt(row?.qty_remaining, 0),
+      dateIn: getInventoryLotReceivedDateISO(row)
     };
   }).filter(Boolean);
 
@@ -974,54 +1205,7 @@ window.fetchOperationalStateFromSupabase = async function fetchOperationalStateF
     };
   }).filter(Boolean);
 
-  const history = (historyRows || []).map(row => {
-    const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
-    const type = String(row?.event_type || row?.type || payload?.type || '').trim().toLowerCase();
-    const dateISO = resolveRowDateISO(row, payload?.dateISO || payload?.date_iso || '');
-    const ts = Date.parse(String(row?.created_at || payload?.created_at || '').trim()) || Date.now();
-
-    if (type === 'delivery') {
-      return {
-        id: row?.id,
-        ts,
-        type: 'delivery',
-        dateISO,
-        supplier: String(payload?.supplier || '-').trim() || '-',
-        items: Array.isArray(payload?.items) ? payload.items.map(item => ({
-          sku: String(item?.sku || '').trim(),
-          name: String(item?.name || '').trim(),
-          qty: normalizeBusinessInt(item?.qty, 0),
-          price: Math.max(0, normalizeBusinessNumber(item?.price ?? item?.unitPrice, 0))
-        })).filter(item => item.sku) : []
-      };
-    }
-
-    if (type === 'build') {
-      return {
-        id: row?.id,
-        ts,
-        type: 'build',
-        dateISO,
-        items: Array.isArray(payload?.items) ? payload.items : []
-      };
-    }
-
-    if (type === 'adjustment') {
-      const items = Array.isArray(payload?.items)
-        ? payload.items
-        : (Array.isArray(payload?.details?.changes) ? payload.details.changes : []);
-      return {
-        id: row?.id,
-        ts,
-        type: 'adjustment',
-        dateISO,
-        partsChanged: normalizeBusinessInt(payload?.partsChanged ?? items.length, items.length),
-        items
-      };
-    }
-
-    return null;
-  }).filter(Boolean);
+  const history = (historyRows || []).map(mapDbHistoryRowToUi).filter(Boolean);
 
   return { lots, machinesStock, history };
 };
@@ -1030,6 +1214,7 @@ async function persistInventoryLotsSnapshot(nextLots = [], companyIdOverride) {
   const lookups = await buildBusinessLookups(companyIdOverride);
   const currentRows = await window.fetchInventoryLotsRows(lookups.companyId);
   const currentIds = new Set((currentRows || []).map(row => row?.id).filter(id => id != null));
+  const currentById = new Map((currentRows || []).map(row => [row?.id, row]).filter(entry => entry[0] != null));
   const nextIds = new Set((nextLots || []).map(lot => lot?.id).filter(id => id != null));
 
   const toDeleteIds = Array.from(currentIds).filter(id => !nextIds.has(id));
@@ -1048,13 +1233,20 @@ async function persistInventoryLotsSnapshot(nextLots = [], companyIdOverride) {
 
     const supplierName = String(lot?.supplier || '').trim();
     const supplier = supplierName ? lookups.suppliersByName.get(supplierName) || null : null;
+    const existingRow = lot?.id != null ? currentById.get(lot.id) || null : null;
+    const remainingQty = normalizeBusinessInt(lot?.qty, 0);
+    const initialQty = existingRow
+      ? normalizeBusinessInt(existingRow?.qty_initial, remainingQty)
+      : remainingQty;
+    const receivedAt = String(lot?.dateIn || existingRow?.received_at || '').trim() || null;
     const payload = {
       company_id: lookups.companyId,
       part_id: part.id,
       supplier_id: supplier?.id || null,
-      qty: normalizeBusinessInt(lot?.qty, 0),
       unit_price: Math.max(0, normalizeBusinessNumber(lot?.unitPrice, 0)),
-      date_in: String(lot?.dateIn || '').trim() || null
+      qty_initial: initialQty,
+      qty_remaining: remainingQty,
+      received_at: receivedAt
     };
 
     if (lot?.id != null && currentIds.has(lot.id)) {
@@ -1125,16 +1317,17 @@ async function persistMachineStockSnapshot(nextMachineStock = [], companyIdOverr
 
 async function insertHistoryEventRow(historyEvent = {}, companyIdOverride) {
   const companyId = requireBusinessCompanyId(companyIdOverride);
+  const eventType = mapLocalEventTypeToDb(historyEvent?.type);
+
+  if (!eventType) throw new Error('Brak typu eventu historii.');
+
   const payload = {
     company_id: companyId,
-    event_type: String(historyEvent?.type || '').trim().toLowerCase(),
-    date_iso: String(historyEvent?.dateISO || '').trim() || null,
-    payload: historyEvent && typeof historyEvent === 'object'
-      ? JSON.parse(JSON.stringify({ ...historyEvent, id: undefined, ts: undefined }))
-      : {}
+    event_type: eventType,
+    title: getHistoryEventTitle(historyEvent),
+    description: getHistoryEventDescription(historyEvent),
+    payload: mapUiHistoryEventToDbPayload(historyEvent)
   };
-
-  if (!payload.event_type) throw new Error('Brak typu eventu historii.');
 
   const { data, error } = await window.sb
     .from('history_events')
@@ -1151,6 +1344,7 @@ window.saveDeliveryToSupabase = async function saveDeliveryToSupabase(payload = 
   const supplierName = String(payload?.supplier || '').trim();
   const supplier = supplierName ? lookups.suppliersByName.get(supplierName) || null : null;
   const items = Array.isArray(payload?.items) ? payload.items : [];
+  const receivedAt = String(payload?.dateISO || '').trim() || null;
 
   if (!supplierName) throw new Error('Brak dostawcy dla dostawy.');
   if (!items.length) throw new Error('Brak pozycji dostawy do zapisania.');
@@ -1158,14 +1352,16 @@ window.saveDeliveryToSupabase = async function saveDeliveryToSupabase(payload = 
   const insertPayload = items.map(item => {
     const sku = String(item?.sku || '').trim().toLowerCase();
     const part = lookups.partsBySku.get(sku);
+    const qty = normalizeBusinessInt(item?.qty, 0);
     if (!part?.id) throw new Error(`Nie znaleziono części ${item?.sku || '—'} w Supabase.`);
     return {
       company_id: lookups.companyId,
       part_id: part.id,
       supplier_id: supplier?.id || null,
-      qty: normalizeBusinessInt(item?.qty, 0),
       unit_price: Math.max(0, normalizeBusinessNumber(item?.price, 0)),
-      date_in: String(payload?.dateISO || '').trim() || null
+      qty_initial: qty,
+      qty_remaining: qty,
+      received_at: receivedAt
     };
   });
 
