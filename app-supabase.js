@@ -641,6 +641,7 @@ window.saveCatalogPartToSupabase = async function saveCatalogPartToSupabase(payl
       const supplierId = supplierIdsByName.get(nameKey);
       if (!supplierId) return null;
       return {
+        company_id: companyId,
         supplier_id: supplierId,
         part_id: savedPart.id,
         price: Math.max(0, Number(pricesBySupplier[nameKey]) || 0)
@@ -714,6 +715,7 @@ window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabas
       const partId = partIdsBySku.get(String(sku || '').trim().toLowerCase());
       if (!partId) return null;
       return {
+        company_id: companyId,
         supplier_id: supplierRow.id,
         part_id: partId,
         price: Math.max(0, Number(price) || 0)
