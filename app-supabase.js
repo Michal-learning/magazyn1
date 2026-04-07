@@ -711,7 +711,7 @@ window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabas
   const pricesBySku = payload?.pricesBySku && typeof payload?.pricesBySku === 'object'
     ? payload.pricesBySku
     : {};
-  const expectedUpdatedAt = String(payload?.expectedUpdatedAt || '').trim();
+  const expectedUpdatedAt = ensureExpectedUpdatedAt(payload?.expectedUpdatedAt, 'dostawca');
 
   if (!supplierName) throw new Error('Brak nazwy dostawcy.');
 
@@ -720,57 +720,26 @@ window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabas
   if (!supplierRow?.id) throw new Error('Nie znaleziono dostawcy w Supabase.');
 
   const partsRows = await window.fetchCatalogParts(companyId);
-  const partIdsBySku = new Map(
-    (partsRows || [])
-      .map(row => [String(row?.sku || '').trim().toLowerCase(), row?.id])
-      .filter(entry => entry[0] && entry[1])
-  );
+  const pPrices = Object.entries(pricesBySku).map(([sku, price]) => ({
+    part_id: getPartIdBySkuFromCatalogRows(partsRows, sku),
+    price: Math.max(0, Number(price) || 0)
+  }));
 
-  const { data: touchedSupplier, error: touchSupplierError } = await window.sb
-    .from('suppliers')
-    .update({
-      name: supplierRow.name,
-      is_active: supplierRow.is_active !== false
-    })
-    .eq('id', supplierRow.id)
-    .eq('updated_at', ensureExpectedUpdatedAt(expectedUpdatedAt, 'dostawca'))
-    .select('id, name, updated_at')
-    .maybeSingle();
-  if (touchSupplierError) throw touchSupplierError;
-  if (!touchedSupplier) {
-    throw new Error(getCatalogConflictErrorMessage('dostawca'));
+  const { data, error } = await window.sb.rpc('save_supplier_prices', {
+    p_company_id: companyId,
+    p_supplier_name: supplierName,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_prices: pPrices
+  });
+
+  if (error) throw error;
+
+  const savedSupplier = data?.supplier || null;
+  if (!savedSupplier || !savedSupplier.id) {
+    throw new Error('Nie udało się zapisać cennika dostawcy w Supabase.');
   }
 
-  const { error: deletePricesError } = await window.sb
-    .from('supplier_part_prices')
-    .delete()
-    .eq('supplier_id', supplierRow.id);
-  if (deletePricesError) throw deletePricesError;
-
-  const insertPayload = Object.entries(pricesBySku)
-    .map(([sku, price]) => {
-      const partId = partIdsBySku.get(String(sku || '').trim().toLowerCase());
-      if (!partId) return null;
-      return {
-        company_id: companyId,
-        supplier_id: supplierRow.id,
-        part_id: partId,
-        price: Math.max(0, Number(price) || 0)
-      };
-    })
-    .filter(Boolean);
-
-  if (insertPayload.length) {
-    const { error: insertPricesError } = await window.sb
-      .from('supplier_part_prices')
-      .insert(insertPayload);
-    if (insertPricesError) throw insertPricesError;
-  }
-
-  return {
-    ...supplierRow,
-    updated_at: touchedSupplier.updated_at || supplierRow.updated_at || null
-  };
+  return savedSupplier;
 };
 
 window.setCatalogSupplierArchivedInSupabase = async function setCatalogSupplierArchivedInSupabase(name, archived, companyIdOverride) {
