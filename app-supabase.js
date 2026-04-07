@@ -1380,14 +1380,50 @@ window.saveDeliveryToSupabase = async function saveDeliveryToSupabase(payload = 
 
 window.saveBuildToSupabase = async function saveBuildToSupabase(payload = {}) {
   const companyId = requireBusinessCompanyId(payload?.companyId);
-  await persistInventoryLotsSnapshot(Array.isArray(payload?.nextLots) ? payload.nextLots : [], companyId);
-  await persistMachineStockSnapshot(Array.isArray(payload?.nextMachineStock) ? payload.nextMachineStock : [], companyId);
-  await insertHistoryEventRow(payload?.historyEvent || {
-    type: 'build',
-    dateISO: String(payload?.buildISO || '').trim(),
-    items: []
-  }, companyId);
+  const buildISO = String(payload?.buildISO || '').trim();
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const manualAllocations = payload?.manualAllocations == null
+    ? null
+    : (Array.isArray(payload.manualAllocations) ? payload.manualAllocations : []);
+  const buildAt = buildISO ? `${buildISO}T00:00:00Z` : null;
+
+  if (!buildAt) throw new Error('Brak daty produkcji.');
+  if (!items.length) throw new Error('Brak pozycji produkcji do zapisania.');
+
+  const rpcItems = items.map(item => ({
+    machine_code: String(item?.machineCode || '').trim(),
+    qty: normalizeBusinessInt(item?.qty, 0)
+  }));
+
+  const invalidItem = rpcItems.find(item => !item.machine_code || item.qty <= 0);
+  if (invalidItem) throw new Error('Każda pozycja produkcji musi mieć machineCode i qty > 0.');
+
+  const rpcManualAllocations = manualAllocations === null
+    ? null
+    : manualAllocations.map(item => ({
+        lot_id: String(item?.lotId || '').trim(),
+        sku: String(item?.sku || '').trim(),
+        qty: normalizeBusinessInt(item?.qty, 0)
+      }));
+
+  const invalidManualAllocation = Array.isArray(rpcManualAllocations)
+    ? rpcManualAllocations.find(item => !item.lot_id || !item.sku || item.qty <= 0)
+    : null;
+  if (invalidManualAllocation) {
+    throw new Error('Każda ręczna alokacja musi mieć lotId, sku i qty > 0.');
+  }
+
+  const { data, error } = await window.sb.rpc('finalize_production', {
+    p_company_id: companyId,
+    p_build_date: buildAt,
+    p_items: rpcItems,
+    p_manual_allocations: rpcManualAllocations
+  });
+
+  if (error) throw error;
+  return data;
 };
+
 
 window.saveStockAdjustmentToSupabase = async function saveStockAdjustmentToSupabase(payload = {}) {
   const companyId = requireBusinessCompanyId(payload?.companyId);

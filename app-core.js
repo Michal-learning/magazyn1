@@ -857,52 +857,37 @@ async function finalizeBuild(manualAllocation = null) {
       return;
     }
 
-    const lotsClone = JSON.parse(JSON.stringify(state.lots));
-    const machinesStockClone = (state.machinesStock || []).map(item => ({ ...item }));
-    const lotSnapshotById = new Map();
-    (state.lots || []).forEach(l => { 
-      if (l && l.id != null) lotSnapshotById.set(String(l.id), JSON.parse(JSON.stringify(l))); 
-    });
-
-    const takenLotsBySku = new Map();
-    function pushTaken(k, lotId, qty) {
-      const take = safeQtyInt(qty);
-      if (take <= 0) return;
-      const id = String(lotId);
-      if (!takenLotsBySku.has(k)) takenLotsBySku.set(k, []);
-      takenLotsBySku.get(k).push({ lotId: id, qty: take });
-    }
+    let manualAllocations = null;
 
     if (manualAllocation) {
       const takenBySku = new Map();
+      const manualEntries = [];
 
       for (const [lotId, qty] of Object.entries(manualAllocation)) {
         const take = safeQtyInt(qty);
         if (take <= 0) continue;
 
-        const lot = lotsClone.find(l => l.id == lotId);
+        const lot = (state.lots || []).find(l => String(l?.id) === String(lotId));
         if (!lot) {
-          toast("Błąd partii", `Nie znaleziono partii #${lotId} w magazynie.`, "error");
-          return;
+          throw new Error(`Nie znaleziono partii #${lotId} w magazynie.`);
         }
 
         const k = skuKey(lot.sku);
 
         if (!requirements.has(k)) {
-          toast(
-            "Błąd alokacji",
-            `Partia #${lotId} (${lot.sku}) nie jest potrzebna do tej produkcji.`,
-            "error"
-          );
-          return;
+          throw new Error(`Partia #${lotId} (${lot.sku}) nie jest potrzebna do tej produkcji.`);
         }
 
         if (take > safeQtyInt(lot.qty)) {
-          toast("Za mało w partii", `W partii #${lotId} dostępne jest tylko ${lot.qty} sztuk, a próbowano pobrać ${take}.`, "error");
-          return;
+          throw new Error(`W partii #${lotId} dostępne jest tylko ${lot.qty} sztuk, a próbowano pobrać ${take}.`);
         }
 
         takenBySku.set(k, (takenBySku.get(k) || 0) + take);
+        manualEntries.push({
+          lotId: String(lot.id),
+          sku: normalize(lot.sku),
+          qty: take
+        });
       }
 
       for (const [k, needed] of requirements.entries()) {
@@ -910,135 +895,27 @@ async function finalizeBuild(manualAllocation = null) {
         if (got !== needed) {
           const skuLabel = state.partsCatalog.get(k)?.sku || k;
           const nameLabel = state.partsCatalog.get(k)?.name || "";
-          toast("Niekompletna alokacja", `Dla części ${skuLabel} ${nameLabel ? `(${nameLabel}) ` : ""}wybrano ${got}, a potrzeba ${needed}.`, "error");
-          return;
+          throw new Error(`Dla części ${skuLabel} ${nameLabel ? `(${nameLabel}) ` : ""}wybrano ${got}, a potrzeba ${needed}.`);
         }
       }
 
-      const manualEntries = Object.entries(manualAllocation)
-        .map(([lotId, qty]) => {
-          const take = safeQtyInt(qty);
-          if (take <= 0) return null;
-          const lot = lotsClone.find(l => l.id == lotId);
-          if (!lot) return null;
-          return { lot, take };
-        })
-        .filter(Boolean)
-        .sort((a, b) => compareLotsForConsumption(a.lot, b.lot));
-
-      for (const ent of manualEntries) {
-        ent.lot.qty = safeQtyInt(ent.lot.qty) - ent.take;
-        pushTaken(skuKey(ent.lot.sku), ent.lot.id, ent.take);
-      }
-    } else {
-      for (const [k, qtyNeeded] of requirements.entries()) {
-        let remain = qtyNeeded;
-        const relevantLots = lotsClone
-          .filter(l => skuKey(l.sku) === k && l.qty > 0)
-          .sort(compareLotsForConsumption);
-        
-        for (const lot of relevantLots) {
-          if (remain <= 0) break;
-          const take = Math.min(lot.qty, remain);
-          lot.qty -= take;
-          remain -= take;
-          pushTaken(k, lot.id, take);
-        }
-      }
+      manualAllocations = manualEntries;
     }
 
-    const nextLots = lotsClone.filter(l => l.qty > 0);
-    
-    state.currentBuild.items.forEach(bi => {
-      const existing = machinesStockClone.find(m => m.code === bi.machineCode);
-      const machineDef = state.machineCatalog.find(m => m.code === bi.machineCode);
-      const currentName = machineDef ? machineDef.name : getBuildItemMachineName(bi);
+    const items = state.currentBuild.items.map(bi => ({
+      machineCode: normalize(bi?.machineCode),
+      qty: safeInt(bi?.qty)
+    })).filter(item => item.machineCode);
 
-      if (existing) {
-        existing.qty += bi.qty;
-        existing.name = currentName;
-      } else {
-        machinesStockClone.push({ 
-          code: bi.machineCode, 
-          name: currentName, 
-          qty: bi.qty,
-          _rowId: null,
-          _machineDefinitionId: null
-        });
-      }
-    });
-
-    const takenPoolBySku = new Map();
-    for (const [k, arr] of takenLotsBySku.entries()) {
-      takenPoolBySku.set(k, arr.map(x => ({ lotId: String(x.lotId), qty: safeQtyInt(x.qty) })));
+    if (!items.length) {
+      toast("Brak pozycji", "Dodaj przynajmniej jedną pozycję do produkcji.", "warning");
+      return;
     }
-
-    function takeForSku(k, needed) {
-      let remain = safeQtyInt(needed);
-      const used = [];
-      const pool = takenPoolBySku.get(k) || [];
-      while (remain > 0 && pool.length) {
-        const head = pool[0];
-        const take = Math.min(safeQtyInt(head.qty), remain);
-        if (take > 0) {
-          used.push({ lotId: String(head.lotId), qty: take });
-          head.qty = safeQtyInt(head.qty) - take;
-          remain -= take;
-        }
-        if (safeQtyInt(head.qty) <= 0) pool.shift();
-      }
-      return used;
-    }
-
-    const buildItemsDetailed = state.currentBuild.items.map(bi => {
-      const currentName = getBuildItemMachineName(bi);
-      const bomItems = getBuildItemBom(bi);
-
-      const partsUsed = bomItems.map(bomItem => {
-        const k = skuKey(bomItem.sku);
-        const need = safeQtyInt(bomItem.qty) * safeQtyInt(bi.qty);
-
-        const lotsUsed = takeForSku(k, need).map(t => {
-          const snap = lotSnapshotById.get(String(t.lotId)) || {};
-          return {
-            lotId: String(t.lotId),
-            qty: safeQtyInt(t.qty),
-            sku: snap.sku || (state.partsCatalog.get(k)?.sku || k),
-            name: snap.name || (state.partsCatalog.get(k)?.name || ""),
-            type: normalize(snap.type || ""),
-            supplier: snap.supplier || "-",
-            dateIn: snap.dateIn || snap.dateISO || null,
-            unitPrice: safeFloat(snap.unitPrice || 0)
-          };
-        });
-
-        return {
-          sku: normalize(bomItem.sku) || state.partsCatalog.get(k)?.sku || k,
-          name: normalize(bomItem.name) || state.partsCatalog.get(k)?.name || "",
-          qty: need,
-          lots: lotsUsed
-        };
-      });
-
-      return {
-        code: bi.machineCode,
-        name: currentName,
-        qty: safeInt(bi.qty),
-        partsUsed
-      };
-    });
-
-    const historyEvent = {
-      type: "build",
-      dateISO: buildISO,
-      items: buildItemsDetailed
-    };
 
     await window.saveBuildToSupabase?.({
       buildISO,
-      nextLots,
-      nextMachineStock: machinesStockClone,
-      historyEvent
+      items,
+      manualAllocations
     });
     await window.loadOperationalStateFromSupabaseIntoState?.({ silent: true });
     
