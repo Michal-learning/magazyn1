@@ -1346,43 +1346,35 @@ window.saveDeliveryToSupabase = async function saveDeliveryToSupabase(payload = 
   const supplierName = String(payload?.supplier || '').trim();
   const supplier = supplierName ? lookups.suppliersByName.get(supplierName) || null : null;
   const items = Array.isArray(payload?.items) ? payload.items : [];
-  const receivedAt = String(payload?.dateISO || '').trim() || null;
+  const dateISO = String(payload?.dateISO || '').trim();
+  const receivedAt = dateISO ? `${dateISO}T00:00:00Z` : null;
 
   if (!supplierName) throw new Error('Brak dostawcy dla dostawy.');
+  if (!supplier?.id) throw new Error(`Nie znaleziono dostawcy "${supplierName}" w Supabase.`);
   if (!items.length) throw new Error('Brak pozycji dostawy do zapisania.');
+  if (!receivedAt) throw new Error('Brak daty dostawy.');
 
-  const insertPayload = items.map(item => {
+  const rpcItems = items.map(item => {
     const sku = String(item?.sku || '').trim().toLowerCase();
     const part = lookups.partsBySku.get(sku);
     const qty = normalizeBusinessInt(item?.qty, 0);
     if (!part?.id) throw new Error(`Nie znaleziono części ${item?.sku || '—'} w Supabase.`);
     return {
-      company_id: lookups.companyId,
       part_id: part.id,
-      supplier_id: supplier?.id || null,
-      unit_price: Math.max(0, normalizeBusinessNumber(item?.price, 0)),
-      qty_initial: qty,
-      qty_remaining: qty,
-      received_at: receivedAt
+      qty,
+      unit_price: Math.max(0, normalizeBusinessNumber(item?.price, 0))
     };
   });
 
-  const { error } = await window.sb
-    .from('inventory_lots')
-    .insert(insertPayload);
-  if (error) throw error;
+  const { data, error } = await window.sb.rpc('finalize_delivery', {
+    p_company_id: lookups.companyId,
+    p_supplier_id: supplier.id,
+    p_received_at: receivedAt,
+    p_items: rpcItems
+  });
 
-  await insertHistoryEventRow({
-    type: 'delivery',
-    dateISO: String(payload?.dateISO || '').trim(),
-    supplier: supplierName,
-    items: items.map(item => ({
-      sku: String(item?.sku || '').trim(),
-      name: String(item?.name || '').trim(),
-      qty: normalizeBusinessInt(item?.qty, 0),
-      price: Math.max(0, normalizeBusinessNumber(item?.price, 0))
-    }))
-  }, lookups.companyId);
+  if (error) throw error;
+  return data;
 };
 
 window.saveBuildToSupabase = async function saveBuildToSupabase(payload = {}) {
