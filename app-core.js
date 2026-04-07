@@ -938,12 +938,6 @@ async function finalizeBuild(manualAllocation = null) {
 }
 
 // === HISTORY ===
-function addHistoryEvent(ev) {
-  if (!state.history) state.history = [];
-  state.history.push(ev);
-  if (state.history.length > 200) state.history = state.history.slice(-200);
-  save();
-}
 
 function fmtDateISO(iso) {
   if (!iso) return "—";
