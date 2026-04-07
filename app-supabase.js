@@ -823,6 +823,7 @@ window.saveMachineDefinitionToSupabase = async function saveMachineDefinitionToS
     const partId = partIdsBySku.get(sku);
     if (!partId) throw new Error(`Nie znaleziono części BOM dla sku "${item?.sku || ''}".`);
     return {
+      company_id: companyId,
       machine_definition_id: savedMachine.id,
       part_id: partId,
       qty: Math.max(1, Math.trunc(Number(item?.qty) || 1))
