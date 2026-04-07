@@ -2338,7 +2338,9 @@ window.openSupplierEditor = (name) => {
   editingSupSnapshot = originalSup ? {
     name,
     archived: !!originalSup?.archived,
-    prices: new Map(originalSup.prices || [])
+    prices: new Map(originalSup.prices || []),
+    _rowId: originalSup?._rowId ?? null,
+    _updatedAt: originalSup?._updatedAt ?? null
   } : null;
   const panel = document.getElementById("supplierEditorTemplate");
   const nameEl = document.getElementById("supplierEditorName");
@@ -2397,7 +2399,8 @@ document.getElementById("supplierEditorSaveBtn")?.addEventListener("click", asyn
     }
     await window.saveSupplierPricesToSupabase?.({
       supplierName: editingSup,
-      pricesBySku: collectSupplierPriceMapBySku(editingSup)
+      pricesBySku: collectSupplierPriceMapBySku(editingSup),
+      expectedUpdatedAt: state.suppliers.get(editingSup)?._updatedAt || editingSupSnapshot?._updatedAt || null
     });
     await loadCatalogsFromSupabaseIntoState({ silent: false });
     closeSupplierEditorModal();
@@ -2426,7 +2429,9 @@ document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", ()
   if (editingSup && editingSupSnapshot) {
     state.suppliers.set(editingSup, {
       archived: !!editingSupSnapshot?.archived,
-      prices: new Map(editingSupSnapshot.prices || [])
+      prices: new Map(editingSupSnapshot.prices || []),
+      _rowId: editingSupSnapshot?._rowId ?? null,
+      _updatedAt: editingSupSnapshot?._updatedAt ?? null
     });
     save();
   }
@@ -2447,12 +2452,16 @@ window.openMachineEditor = (code) => {
   editingMachineSnapshot = {
     code: machine.code,
     name: machine.name,
-    bom: cloneBomItems(machine.bom)
+    bom: cloneBomItems(machine.bom),
+    _rowId: machine?._rowId ?? null,
+    _updatedAt: machine?._updatedAt ?? null
   };
   editingMachine = {
     code: machine.code,
     name: machine.name,
-    bom: cloneBomItems(machine.bom)
+    bom: cloneBomItems(machine.bom),
+    _rowId: machine?._rowId ?? null,
+    _updatedAt: machine?._updatedAt ?? null
   };
 
   const codeInput = document.getElementById("machineCodeInput");
@@ -2633,7 +2642,8 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", async
       code,
       name,
       archived: editingMachineIsNew ? false : !!state.machineCatalog.find(m => m.code === (editingMachineOriginalCode || code))?.archived,
-      bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) }))
+      bom: draft.bom.map(b => ({ sku: b.sku, qty: safeInt(b.qty) })),
+      expectedUpdatedAt: editingMachineSnapshot?._updatedAt || state.machineCatalog.find(m => m.code === (editingMachineOriginalCode || code))?._updatedAt || null
     });
 
     await loadCatalogsFromSupabaseIntoState({ silent: false });
@@ -2681,7 +2691,9 @@ document.getElementById("machineEditorCancelBtn")?.addEventListener("click", () 
     editingMachine = {
       code: editingMachineSnapshot.code,
       name: editingMachineSnapshot.name,
-      bom: cloneBomItems(editingMachineSnapshot.bom)
+      bom: cloneBomItems(editingMachineSnapshot.bom),
+      _rowId: editingMachineSnapshot?._rowId ?? null,
+      _updatedAt: editingMachineSnapshot?._updatedAt ?? null
     };
   }
 
@@ -2912,7 +2924,8 @@ async function saveEditPart() {
       redThreshold: thresholds.redThreshold,
       selectedSuppliers: selectedSups,
       pricesBySupplier: collectSupplierPricesFromPanel("editPartSupplierPrices", selectedSups),
-      archived: originalArchived
+      archived: originalArchived,
+      expectedUpdatedAt: originalPart?._updatedAt || null
     });
 
     applyPartNameChangeAcrossOperationalState(sku, name);

@@ -338,17 +338,31 @@ function applyCatalogState(nextCatalogState = {}) {
   const nextSuppliers = nextCatalogState?.suppliers instanceof Map ? nextCatalogState.suppliers : new Map();
   const nextMachineCatalog = Array.isArray(nextCatalogState?.machineCatalog) ? nextCatalogState.machineCatalog : [];
 
-  state.partsCatalog = new Map(nextPartsCatalog);
+  state.partsCatalog = new Map(
+    Array.from(nextPartsCatalog.entries()).map(([key, part]) => ([key, {
+      sku: normalize(part?.sku),
+      name: normalize(part?.name),
+      yellowThreshold: normalizeThresholdValue(part?.yellowThreshold),
+      redThreshold: normalizeThresholdValue(part?.redThreshold),
+      archived: !!part?.archived,
+      _rowId: part?._rowId ?? null,
+      _updatedAt: part?._updatedAt ?? null
+    }]))
+  );
   state.suppliers = new Map(
     Array.from(nextSuppliers.entries()).map(([name, data]) => ([name, {
       archived: !!data?.archived,
-      prices: new Map(data?.prices instanceof Map ? data.prices : [])
+      prices: new Map(data?.prices instanceof Map ? data.prices : []),
+      _rowId: data?._rowId ?? null,
+      _updatedAt: data?._updatedAt ?? null
     }]))
   );
   state.machineCatalog = nextMachineCatalog.map(machine => ({
     code: normalize(machine?.code),
     name: normalize(machine?.name),
     archived: !!machine?.archived,
+    _rowId: machine?._rowId ?? null,
+    _updatedAt: machine?._updatedAt ?? null,
     bom: Array.isArray(machine?.bom)
       ? machine.bom.map(item => ({ sku: normalize(item?.sku), qty: safeInt(item?.qty) })).filter(item => item.sku)
       : []

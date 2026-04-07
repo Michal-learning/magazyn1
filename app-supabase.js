@@ -436,11 +436,24 @@ function requireBusinessCompanyId(companyIdOverride) {
   return companyId;
 }
 
+
+function getCatalogConflictErrorMessage(recordLabel) {
+  return `Ten ${recordLabel} został zmieniony przez innego użytkownika. Odśwież dane i spróbuj ponownie.`;
+}
+
+function ensureExpectedUpdatedAt(expectedUpdatedAt, recordLabel) {
+  const normalized = String(expectedUpdatedAt || '').trim();
+  if (!normalized) {
+    throw new Error(`Nie udało się potwierdzić aktualnej wersji rekordu (${recordLabel}). Odśwież dane i spróbuj ponownie.`);
+  }
+  return normalized;
+}
+
 window.fetchCatalogParts = async function fetchCatalogParts(companyIdOverride) {
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from("parts")
-    .select("id, company_id, sku, name, is_active, warning_qty, critical_qty")
+    .select("id, company_id, sku, name, is_active, warning_qty, critical_qty, updated_at")
     .eq("company_id", companyId)
     .order("sku", { ascending: true });
 
@@ -452,7 +465,7 @@ window.fetchCatalogSuppliers = async function fetchCatalogSuppliers(companyIdOve
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from("suppliers")
-    .select("id, company_id, name, is_active")
+    .select("id, company_id, name, is_active, updated_at")
     .eq("company_id", companyId)
     .order("name", { ascending: true });
 
@@ -475,7 +488,7 @@ window.fetchMachineDefinitions = async function fetchMachineDefinitions(companyI
   const companyId = requireBusinessCompanyId(companyIdOverride);
   const { data, error } = await window.sb
     .from("machine_definitions")
-    .select("id, company_id, code, name, is_active")
+    .select("id, company_id, code, name, is_active, updated_at")
     .eq("company_id", companyId)
     .order("code", { ascending: true });
 
@@ -516,7 +529,9 @@ window.fetchCatalogStateFromSupabase = async function fetchCatalogStateFromSupab
       name,
       yellowThreshold: Number.isInteger(row?.warning_qty) ? row.warning_qty : (row?.warning_qty == null ? null : Math.max(0, Math.trunc(Number(row.warning_qty) || 0))),
       redThreshold: Number.isInteger(row?.critical_qty) ? row.critical_qty : (row?.critical_qty == null ? null : Math.max(0, Math.trunc(Number(row.critical_qty) || 0))),
-      archived: row?.is_active === false
+      archived: row?.is_active === false,
+      _rowId: row?.id ?? null,
+      _updatedAt: String(row?.updated_at || '').trim() || null
     });
   });
 
@@ -528,7 +543,9 @@ window.fetchCatalogStateFromSupabase = async function fetchCatalogStateFromSupab
     suppliersById.set(row.id, row);
     suppliers.set(name, {
       archived: row?.is_active === false,
-      prices: new Map()
+      prices: new Map(),
+      _rowId: row?.id ?? null,
+      _updatedAt: String(row?.updated_at || '').trim() || null
     });
   });
 
@@ -565,6 +582,8 @@ window.fetchCatalogStateFromSupabase = async function fetchCatalogStateFromSupab
     code: String(row?.code || '').trim(),
     name: String(row?.name || '').trim(),
     archived: row?.is_active === false,
+    _rowId: row?.id ?? null,
+    _updatedAt: String(row?.updated_at || '').trim() || null,
     bom: Array.isArray(bomByMachineId.get(row.id)) ? bomByMachineId.get(row.id) : []
   })).filter(row => row.code && row.name);
 
@@ -580,15 +599,20 @@ window.saveCatalogPartToSupabase = async function saveCatalogPartToSupabase(payl
   const sku = String(payload?.sku || '').trim();
   const name = String(payload?.name || '').trim();
   const originalSku = String(payload?.originalSku || sku).trim();
-  const selectedSuppliers = Array.isArray(payload?.selectedSuppliers) ? payload.selectedSuppliers.map(x => String(x || '').trim()).filter(Boolean) : [];
-  const pricesBySupplier = payload?.pricesBySupplier && typeof payload.pricesBySupplier === 'object' ? payload.pricesBySupplier : {};
+  const selectedSuppliers = Array.isArray(payload?.selectedSuppliers)
+    ? payload.selectedSuppliers.map(x => String(x || '').trim()).filter(Boolean)
+    : [];
+  const pricesBySupplier = payload?.pricesBySupplier && typeof payload.pricesBySupplier === 'object'
+    ? payload.pricesBySupplier
+    : {};
   const archived = payload?.archived === true;
+  const expectedUpdatedAt = String(payload?.expectedUpdatedAt || '').trim();
 
   if (!sku || !name) throw new Error('Część musi mieć sku i name.');
 
   const { data: currentPart, error: currentPartError } = await window.sb
     .from('parts')
-    .select('id, sku')
+    .select('id, sku, updated_at')
     .eq('company_id', companyId)
     .eq('sku', originalSku)
     .maybeSingle();
@@ -622,15 +646,19 @@ window.saveCatalogPartToSupabase = async function saveCatalogPartToSupabase(payl
       .from('parts')
       .update(partPayload)
       .eq('id', savedPart.id)
-      .select('id, sku')
+      .eq('updated_at', ensureExpectedUpdatedAt(expectedUpdatedAt, 'część'))
+      .select('id, sku, updated_at')
       .maybeSingle();
     if (error) throw error;
-    savedPart = data || { ...savedPart, sku };
+    if (!data) {
+      throw new Error(getCatalogConflictErrorMessage('część'));
+    }
+    savedPart = data;
   } else {
     const { data, error } = await window.sb
       .from('parts')
       .insert(partPayload)
-      .select('id, sku')
+      .select('id, sku, updated_at')
       .maybeSingle();
     if (error) throw error;
     savedPart = data;
@@ -639,7 +667,11 @@ window.saveCatalogPartToSupabase = async function saveCatalogPartToSupabase(payl
   if (!savedPart?.id) throw new Error('Nie udało się zapisać części w Supabase.');
 
   const supplierRows = await window.fetchCatalogSuppliers(companyId);
-  const supplierIdsByName = new Map((supplierRows || []).map(row => [String(row?.name || '').trim(), row?.id]).filter(entry => entry[0] && entry[1]));
+  const supplierIdsByName = new Map(
+    (supplierRows || [])
+      .map(row => [String(row?.name || '').trim(), row?.id])
+      .filter(entry => entry[0] && entry[1])
+  );
 
   const { error: deletePricesError } = await window.sb
     .from('supplier_part_prices')
@@ -705,7 +737,11 @@ window.createCatalogSupplierInSupabase = async function createCatalogSupplierInS
 window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabase(payload = {}) {
   const companyId = requireBusinessCompanyId(payload?.companyId);
   const supplierName = String(payload?.supplierName || '').trim();
-  const pricesBySku = payload?.pricesBySku && typeof payload.pricesBySku === 'object' ? payload.pricesBySku : {};
+  const pricesBySku = payload?.pricesBySku && typeof payload?.pricesBySku === 'object'
+    ? payload.pricesBySku
+    : {};
+  const expectedUpdatedAt = String(payload?.expectedUpdatedAt || '').trim();
+
   if (!supplierName) throw new Error('Brak nazwy dostawcy.');
 
   const suppliersRows = await window.fetchCatalogSuppliers(companyId);
@@ -713,7 +749,26 @@ window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabas
   if (!supplierRow?.id) throw new Error('Nie znaleziono dostawcy w Supabase.');
 
   const partsRows = await window.fetchCatalogParts(companyId);
-  const partIdsBySku = new Map((partsRows || []).map(row => [String(row?.sku || '').trim().toLowerCase(), row?.id]).filter(entry => entry[0] && entry[1]));
+  const partIdsBySku = new Map(
+    (partsRows || [])
+      .map(row => [String(row?.sku || '').trim().toLowerCase(), row?.id])
+      .filter(entry => entry[0] && entry[1])
+  );
+
+  const { data: touchedSupplier, error: touchSupplierError } = await window.sb
+    .from('suppliers')
+    .update({
+      name: supplierRow.name,
+      is_active: supplierRow.is_active !== false
+    })
+    .eq('id', supplierRow.id)
+    .eq('updated_at', ensureExpectedUpdatedAt(expectedUpdatedAt, 'dostawca'))
+    .select('id, name, updated_at')
+    .maybeSingle();
+  if (touchSupplierError) throw touchSupplierError;
+  if (!touchedSupplier) {
+    throw new Error(getCatalogConflictErrorMessage('dostawca'));
+  }
 
   const { error: deletePricesError } = await window.sb
     .from('supplier_part_prices')
@@ -741,7 +796,10 @@ window.saveSupplierPricesToSupabase = async function saveSupplierPricesToSupabas
     if (insertPricesError) throw insertPricesError;
   }
 
-  return supplierRow;
+  return {
+    ...supplierRow,
+    updated_at: touchedSupplier.updated_at || supplierRow.updated_at || null
+  };
 };
 
 window.setCatalogSupplierArchivedInSupabase = async function setCatalogSupplierArchivedInSupabase(name, archived, companyIdOverride) {
@@ -767,12 +825,14 @@ window.saveMachineDefinitionToSupabase = async function saveMachineDefinitionToS
   const name = String(payload?.name || '').trim();
   const originalCode = String(payload?.originalCode || code).trim();
   const archived = payload?.archived === true;
+  const expectedUpdatedAt = String(payload?.expectedUpdatedAt || '').trim();
   const bom = Array.isArray(payload?.bom) ? payload.bom : [];
+
   if (!code || !name) throw new Error('Maszyna musi mieć code i name.');
 
   const { data: currentMachine, error: currentMachineError } = await window.sb
     .from('machine_definitions')
-    .select('id, code')
+    .select('id, code, updated_at')
     .eq('company_id', companyId)
     .eq('code', originalCode)
     .maybeSingle();
@@ -804,15 +864,19 @@ window.saveMachineDefinitionToSupabase = async function saveMachineDefinitionToS
       .from('machine_definitions')
       .update(machinePayload)
       .eq('id', savedMachine.id)
-      .select('id, code')
+      .eq('updated_at', ensureExpectedUpdatedAt(expectedUpdatedAt, 'definicji maszyny'))
+      .select('id, code, updated_at')
       .maybeSingle();
     if (error) throw error;
-    savedMachine = data || { ...savedMachine, code };
+    if (!data) {
+      throw new Error(getCatalogConflictErrorMessage('rekord definicji maszyny'));
+    }
+    savedMachine = data;
   } else {
     const { data, error } = await window.sb
       .from('machine_definitions')
       .insert(machinePayload)
-      .select('id, code')
+      .select('id, code, updated_at')
       .maybeSingle();
     if (error) throw error;
     savedMachine = data;
@@ -821,7 +885,11 @@ window.saveMachineDefinitionToSupabase = async function saveMachineDefinitionToS
   if (!savedMachine?.id) throw new Error('Nie udało się zapisać definicji maszyny.');
 
   const partsRows = await window.fetchCatalogParts(companyId);
-  const partIdsBySku = new Map((partsRows || []).map(row => [String(row?.sku || '').trim().toLowerCase(), row?.id]).filter(entry => entry[0] && entry[1]));
+  const partIdsBySku = new Map(
+    (partsRows || [])
+      .map(row => [String(row?.sku || '').trim().toLowerCase(), row?.id])
+      .filter(entry => entry[0] && entry[1])
+  );
 
   const { error: deleteBomError } = await window.sb
     .from('machine_bom_items')
