@@ -1827,6 +1827,17 @@ function bindAuthUI() {
 }
 
 async function init() {
+  if (window.__appInitialized) return;
+
+  if (window.__appInitPromise) {
+    await window.__appInitPromise;
+    if (window.__appInitialized) return;
+  }
+
+  if (window.__appInitialized) return;
+  if (window.__appInitPromise) return window.__appInitPromise;
+
+  const initPromise = (async () => {
   initThresholdsToggle();
   initNewPartToggle();
   initStockEditMode();
@@ -2030,6 +2041,17 @@ async function init() {
   save();
   setActiveTab(getDefaultTabForRole());
   window.__appInitialized = true;
+  })();
+
+  window.__appInitPromise = initPromise;
+
+  try {
+    await initPromise;
+  } finally {
+    if (window.__appInitPromise === initPromise) {
+      window.__appInitPromise = null;
+    }
+  }
 }
 
 // === Unsaved changes warning ===
