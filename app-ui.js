@@ -840,7 +840,7 @@ function syncHistoryAuthorFilterOptions() {
   selectEl.value = sortedOptions.some(opt => opt.key === previousValue) ? previousValue : '';
 
   if (typeof refreshComboFromSelect === "function") {
-    try { refreshComboFromSelect(selectEl, { placeholder: "Wszyscy autorzy" }); } catch {}
+    try { refreshComboFromSelect(selectEl, { placeholder: "Wszyscy autorzy", includeEmptyOption: true }); } catch {}
   }
 }
 
@@ -2210,6 +2210,7 @@ function initComboFromSelect(selectEl, opts = {}) {
       hostEl,
       refs,
       placeholder: opts.placeholder || 'Wybierz...',
+      includeEmptyOption: !!opts.includeEmptyOption,
       activeIndex: -1,
       currentValue: normalize(selectEl.value || ''),
       refresh: null,
@@ -2225,6 +2226,9 @@ function initComboFromSelect(selectEl, opts = {}) {
   }
 
   if (opts.placeholder) data.placeholder = opts.placeholder;
+  if (Object.prototype.hasOwnProperty.call(opts, 'includeEmptyOption')) {
+    data.includeEmptyOption = !!opts.includeEmptyOption;
+  }
   refreshComboFromSelect(selectEl, opts);
   return data;
 }
@@ -2235,13 +2239,17 @@ function refreshComboFromSelect(selectEl, opts = {}) {
   if (!data) return null;
 
   if (opts.placeholder) data.placeholder = opts.placeholder;
+  if (Object.prototype.hasOwnProperty.call(opts, 'includeEmptyOption')) {
+    data.includeEmptyOption = !!opts.includeEmptyOption;
+  }
   const { refs, hostEl } = data;
+  const includeEmptyOption = !!data.includeEmptyOption;
   const options = Array.from(selectEl.options || []).map(opt => ({
     value: opt.value,
     label: opt.textContent || '',
     selected: opt.selected,
     disabled: !!opt.disabled
-  }));
+  })).filter(opt => includeEmptyOption || opt.value !== '');
   const hasVisibleOptions = options.some(opt => !opt.disabled);
 
   refs.search.placeholder = hasVisibleOptions ? 'Szukaj...' : 'Brak opcji';
