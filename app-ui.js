@@ -475,6 +475,7 @@ function renderWarehouse() {
   if (showArchivedToggle) showArchivedToggle.checked = showArchived;
   if (showOnlyAlertsToggle) showOnlyAlertsToggle.checked = showOnlyAlerts;
 
+  const totalValueRows = computePartsSummary({ includeArchived: false });
   const summaryRows = computePartsSummary({ includeArchived: showArchived }).filter(item => {
     if (q) {
       const matchesSearch = String(item?.sku || '').toLowerCase().includes(q) || String(item?.name || '').toLowerCase().includes(q);
@@ -494,7 +495,7 @@ function renderWarehouse() {
   });
   let grandTotal = 0;
 
-  summaryRows.forEach(item => { grandTotal += item.value; });
+  totalValueRows.forEach(item => { grandTotal += item.value; });
   const totalFormatted = fmtPLN.format(grandTotal);
 
   if (els.sideWarehouseTotal) els.sideWarehouseTotal.textContent = totalFormatted;
