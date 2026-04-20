@@ -121,12 +121,18 @@ function strictParseQtyInt(raw) {
 const HISTORY_VIEW_KEY = "magazyn_history_view_v3";
 
 function setHistoryView(view) {
-  const v = (view === "builds" || view === "adjustments") ? view : "deliveries";
+  const allowedViews = new Set(["all", "deliveries", "builds", "adjustments"]);
+  const v = allowedViews.has(view) ? view : "deliveries";
 
+  const bAll = document.getElementById("historyViewAllBtn");
   const bDel = document.getElementById("historyViewDeliveriesBtn");
   const bBuild = document.getElementById("historyViewBuildsBtn");
   const bAdj = document.getElementById("historyViewAdjustmentsBtn");
 
+  if (bAll) {
+    bAll.classList.toggle("active", v === "all");
+    bAll.setAttribute("aria-selected", v === "all" ? "true" : "false");
+  }
   if (bDel) {
     bDel.classList.toggle("active", v === "deliveries");
     bDel.setAttribute("aria-selected", v === "deliveries" ? "true" : "false");
@@ -142,11 +148,7 @@ function setHistoryView(view) {
 
   const search = document.getElementById("historySearch");
   if (search) {
-    search.placeholder = (v === "deliveries")
-      ? "Szukaj po Dostawcy lub Nazwie/Typie części..."
-      : (v === "builds")
-        ? "Szukaj po Nazwie/Typie maszyny..."
-        : "Szukaj po Nazwie (ID) lub Typie części...";
+    search.placeholder = "Szukaj";
   }
 
   localStorage.setItem(HISTORY_VIEW_KEY, v);
@@ -154,17 +156,94 @@ function setHistoryView(view) {
 }
 
 function initHistoryViewToggle() {
+  const bAll = document.getElementById("historyViewAllBtn");
   const bDel = document.getElementById("historyViewDeliveriesBtn");
   const bBuild = document.getElementById("historyViewBuildsBtn");
   const bAdj = document.getElementById("historyViewAdjustmentsBtn");
-  if (!bDel || !bBuild || !bAdj) return;
+  if (!bAll || !bDel || !bBuild || !bAdj) return;
 
   const saved = localStorage.getItem(HISTORY_VIEW_KEY);
-  setHistoryView(saved === "builds" || saved === "adjustments" ? saved : "deliveries");
+  setHistoryView(["all", "builds", "adjustments", "deliveries"].includes(saved) ? saved : "deliveries");
 
+  bAll.addEventListener("click", () => setHistoryView("all"));
   bDel.addEventListener("click", () => setHistoryView("deliveries"));
   bBuild.addEventListener("click", () => setHistoryView("builds"));
   bAdj.addEventListener("click", () => setHistoryView("adjustments"));
+}
+
+function clearHistoryFilters() {
+  const search = document.getElementById("historySearch");
+  const date = document.getElementById("historyDateRange");
+  const author = document.getElementById("historyAuthorFilter");
+
+  if (search) search.value = "";
+  if (date) date.value = "";
+  if (author) author.value = "";
+
+  if (author && typeof refreshComboFromSelect === "function") {
+    try { refreshComboFromSelect(author, { placeholder: "Wszyscy autorzy" }); } catch {}
+  }
+}
+
+function getHistoryAuthorKeyForCompanyUser(item) {
+  if (!item || !Array.isArray(state.history) || !state.history.length || typeof getHistoryAuthorMeta !== "function") {
+    return "";
+  }
+
+  const userId = normalize(item?.user_id || "");
+  const email = normalize(item?.email || "").toLowerCase();
+  const fullName = normalize(item?.full_name || "").toLowerCase();
+
+  const matchByUserId = userId
+    ? state.history.find(ev => normalize(ev?.authorUserId || "") === userId)
+    : null;
+  if (matchByUserId) return getHistoryAuthorMeta(matchByUserId).key;
+
+  const matchByEmail = email
+    ? state.history.find(ev => normalize(ev?.authorEmail || "").toLowerCase() === email)
+    : null;
+  if (matchByEmail) return getHistoryAuthorMeta(matchByEmail).key;
+
+  const matchByName = fullName
+    ? state.history.find(ev => normalize(ev?.authorName || "").toLowerCase() === fullName)
+    : null;
+  if (matchByName) return getHistoryAuthorMeta(matchByName).key;
+
+  return "";
+}
+
+function openHistoryForCompanyUser(memberId) {
+  const item = getCompanyUserByMemberId(memberId);
+  if (!item) {
+    setActiveTab("history");
+    setHistoryView("all");
+    clearHistoryFilters();
+    renderHistory();
+    toast("Nie znaleziono użytkownika", "Nie udało się odczytać danych wybranego użytkownika.", "warning");
+    return;
+  }
+
+  setActiveTab("history", { skipRefresh: true });
+  setHistoryView("all");
+  clearHistoryFilters();
+
+  const authorSelect = document.getElementById("historyAuthorFilter");
+  const authorKey = getHistoryAuthorKeyForCompanyUser(item);
+
+  if (authorSelect && authorKey) {
+    authorSelect.value = authorKey;
+    if (typeof refreshComboFromSelect === "function") {
+      try { refreshComboFromSelect(authorSelect, { placeholder: "Wszyscy autorzy" }); } catch {}
+    }
+  } else if (authorSelect && typeof refreshComboFromSelect === "function") {
+    try { refreshComboFromSelect(authorSelect, { placeholder: "Wszyscy autorzy" }); } catch {}
+  }
+
+  renderHistory();
+
+  if (!authorKey) {
+    toast("Brak dopasowania autora", "Nie udało się jednoznacznie ustawić filtra autora, więc pokazuję całą historię.", "warning");
+  }
 }
 
 function initHistoryFilters() {
@@ -1129,7 +1208,7 @@ function renderUsersAdmin() {
         <td class="text-right">
           <div class="user-row-actions-clean">
             <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Informacje</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-action="userHistoryPlaceholder" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-action="openUserHistory" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
           </div>
         </td>
       </tr>
@@ -1292,9 +1371,10 @@ function bindUserManagementUI() {
       return;
     }
 
-    const userHistoryPlaceholderBtn = e.target?.closest?.('[data-action="userHistoryPlaceholder"]');
-    if (userHistoryPlaceholderBtn) {
-      toast('Historia w przygotowaniu', 'Historia użytkownika będzie dostępna po wdrożeniu filtrowania po autorze.', 'success');
+    const openUserHistoryBtn = e.target?.closest?.('[data-action="openUserHistory"]');
+    if (openUserHistoryBtn) {
+      if (!canAccessTab('users')) return;
+      openHistoryForCompanyUser(openUserHistoryBtn.getAttribute('data-member-id'));
       return;
     }
 

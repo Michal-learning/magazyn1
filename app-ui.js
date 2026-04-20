@@ -754,7 +754,7 @@ function renderMachinesStock() {
 
 function getHistoryView() {
   const v = localStorage.getItem("magazyn_history_view_v3");
-  return (v === "builds" || v === "adjustments") ? v : "deliveries";
+  return (v === "all" || v === "builds" || v === "adjustments") ? v : "deliveries";
 }
 
 function parsePLDateToISO(dmy) {
@@ -871,6 +871,11 @@ function historyMatchesFilters(ev, view, qNorm, fromISO, toISO, authorKey) {
     return false;
   }
 
+  if (ev.type === "delivery") {
+    const supplier = normalize(ev.supplier || "").toLowerCase();
+    if (supplier.includes(qNorm)) return true;
+  }
+
   const items = Array.isArray(ev.items) ? ev.items : [];
   for (const it of items) {
     const code = normalize(it?.code || it?.sku || "").toLowerCase();
@@ -901,11 +906,13 @@ function renderHistory() {
     .filter(ev => historyMatchesFilters(ev, view, qNorm, fromISO, toISO, authorKey));
 
   if (!rows.length) {
-    const msg = (view === "deliveries")
-      ? "Brak dostaw w historii dla wybranych filtrów."
-      : (view === "builds")
-        ? "Brak produkcji w historii dla wybranych filtrów."
-        : "Brak korekt w historii dla wybranych filtrów.";
+    const msg = (view === "all")
+      ? "Brak akcji w historii dla wybranych filtrów."
+      : (view === "deliveries")
+        ? "Brak dostaw w historii dla wybranych filtrów."
+        : (view === "builds")
+          ? "Brak produkcji w historii dla wybranych filtrów."
+          : "Brak korekt w historii dla wybranych filtrów.";
     tbody.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:var(--space-6)">${msg}</td></tr>`;
     return;
   }
