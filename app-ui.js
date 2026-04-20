@@ -2241,9 +2241,10 @@ function refreshComboFromSelect(selectEl, opts = {}) {
     label: opt.textContent || '',
     selected: opt.selected,
     disabled: !!opt.disabled
-  })).filter(opt => opt.value !== '');
+  }));
+  const hasVisibleOptions = options.some(opt => !opt.disabled);
 
-  refs.search.placeholder = options.length ? 'Szukaj...' : 'Brak opcji';
+  refs.search.placeholder = hasVisibleOptions ? 'Szukaj...' : 'Brak opcji';
   refs.trigger.disabled = !!selectEl.disabled;
   hostEl.classList.toggle('is-disabled', !!selectEl.disabled);
 
