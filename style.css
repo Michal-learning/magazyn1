@@ -1496,6 +1496,7 @@ body.history-preview-open {
 /* Signal Row */
 .signal-row {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
@@ -1505,12 +1506,29 @@ body.history-preview-open {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--trans-fast);
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .signal-row:hover {
   background: var(--surface-2);
   border-color: var(--accent);
 }
+
+.signal-row:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.signal-row-history {
+  justify-content: flex-start;
+}
+
+.signal-info-history {
+  display: block;
+  width: 100%;
+}
+
 
 .signal-info {
   display: flex;

@@ -179,25 +179,14 @@ function initSidePanelSignals() {
   window.__sidePanelSignalsBound = true;
 
   document.addEventListener("click", (e) => {
-    const row = e.target?.closest?.(".signal-row");
+    const row = e.target?.closest?.(".signal-row[data-sku]");
     if (!row) return;
 
     const sku = row.getAttribute("data-sku");
     if (!sku) return;
 
-    const partsTabBtn = document.querySelector('.tab-btn[data-tab-target="parts"]');
-    if (partsTabBtn) partsTabBtn.click();
-
-    const search = document.getElementById("searchParts");
-    if (search) {
-      search.value = sku;
-      search.dispatchEvent(new Event("input"));
-      search.focus();
-    }
-
-    const partsPanel = document.querySelector('[data-tab-panel="parts"]');
-    if (partsPanel?.scrollIntoView) {
-      partsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (typeof openPartDetailsModal === "function") {
+      openPartDetailsModal(sku);
     }
   });
 }

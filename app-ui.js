@@ -187,12 +187,21 @@ function renderSideRecentActions5() {
         : `${(ev.items || []).length} części • inwentaryzacja`;
 
     return `
-      <li style="padding:var(--space-3);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-md)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-1)">
-          <span class="badge badge-${pillClass}">${typeLabel}</span>
-          <span class="text-muted" style="font-size:var(--text-sm)">${fmtDateISO(ev.dateISO)}</span>
-        </div>
-        <div class="text-secondary" style="font-size:var(--text-sm)">${meta}</div>
+      <li>
+        <button
+          class="signal-row signal-row-history"
+          type="button"
+          data-action="toggleHistory"
+          data-hid="${escapeHtml(String(ev.id))}"
+          aria-label="Otwórz podgląd akcji z dnia ${escapeHtml(String(fmtDateISO(ev.dateISO) || '—'))}">
+          <div class="signal-info signal-info-history">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);margin-bottom:var(--space-1)">
+              <span class="badge badge-${pillClass}">${typeLabel}</span>
+              <span class="text-muted" style="font-size:var(--text-sm)">${fmtDateISO(ev.dateISO)}</span>
+            </div>
+            <div class="text-secondary" style="font-size:var(--text-sm)">${escapeHtml(meta)}</div>
+          </div>
+        </button>
       </li>
     `;
   }).join("");
