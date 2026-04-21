@@ -1540,6 +1540,7 @@ function renderUsersAdmin() {
   const panel = document.querySelector('[data-tab-panel="users"]');
   const tbody = document.querySelector('#companyUsersTable tbody');
   const createBlock = document.getElementById('usersCreateBlock');
+  const refreshBtn = document.getElementById('refreshUsersBtn');
   if (!panel || !tbody) return;
 
   if (!canAccessTab('users')) {
@@ -1549,6 +1550,10 @@ function renderUsersAdmin() {
 
   const hasUsersManagePermission = canManageUsers();
   if (createBlock) createBlock.classList.toggle('hidden', !hasUsersManagePermission);
+  if (refreshBtn) {
+    refreshBtn.classList.toggle('hidden', !hasUsersManagePermission);
+    refreshBtn.setAttribute('aria-hidden', hasUsersManagePermission ? 'false' : 'true');
+  }
 
   const st = window.companyUsersState || { items: [], loading: false, error: '' };
   if (st.loading) {
@@ -1584,10 +1589,12 @@ function renderUsersAdmin() {
         <td><span class="user-role-text">${escapeHtml(meta.rowRole)}</span></td>
         <td><span class="status-pill status-pill-${meta.statusCls} user-status-pill">${meta.statusLabel}</span></td>
         <td class="text-right">
-          <div class="user-row-actions-clean">
-            <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Informacje</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-action="openUserHistory" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
-          </div>
+          ${hasUsersManagePermission ? `
+            <div class="user-row-actions-clean">
+              <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Informacje</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-action="openUserHistory" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
+            </div>
+          ` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
       </tr>
     `;

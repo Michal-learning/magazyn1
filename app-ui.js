@@ -485,6 +485,8 @@ function renderWarehouse() {
   if (showArchivedToggle) showArchivedToggle.checked = showArchived;
   if (showOnlyAlertsToggle) showOnlyAlertsToggle.checked = showOnlyAlerts;
   if (thresholdsBtn) {
+    thresholdsBtn.classList.toggle("hidden", !canThresholdsManage);
+    thresholdsBtn.setAttribute('aria-hidden', canThresholdsManage ? 'false' : 'true');
     thresholdsBtn.disabled = !canThresholdsManage;
     thresholdsBtn.setAttribute('aria-disabled', canThresholdsManage ? 'false' : 'true');
   }
@@ -492,6 +494,9 @@ function renderWarehouse() {
   if (dangerRange) dangerRange.disabled = !canThresholdsManage;
   if (thresholdsPanel) {
     thresholdsPanel.classList.toggle('permissions-readonly', !canThresholdsManage);
+    if (!canThresholdsManage) {
+      thresholdsPanel.classList.add('collapsed');
+    }
   }
 
   const totalValueRows = computePartsSummary({ includeArchived: false });
@@ -521,7 +526,8 @@ function renderWarehouse() {
   if (els.whTotal) els.whTotal.textContent = totalFormatted;
 
   if (stockEditToggleBtn) {
-    stockEditToggleBtn.classList.toggle("hidden", isEditMode);
+    stockEditToggleBtn.classList.toggle("hidden", isEditMode || !canStockAdjustmentsManage);
+    stockEditToggleBtn.setAttribute('aria-hidden', (!isEditMode && canStockAdjustmentsManage) ? 'false' : 'true');
     stockEditToggleBtn.disabled = !canStockAdjustmentsManage;
     stockEditToggleBtn.setAttribute('aria-disabled', canStockAdjustmentsManage ? 'false' : 'true');
   }
