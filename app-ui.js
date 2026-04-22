@@ -549,9 +549,8 @@ function renderWarehouse() {
   if (stockEditBanner) {
     if (isEditMode) {
       stockEditBanner.classList.remove("hidden");
-      const visibleSkuSet = new Set(summaryRows.map(item => skuKey(item.sku)));
-      const changedCount = Object.entries(pendingMap).filter(([pendingSku, item]) => {
-        return visibleSkuSet.has(pendingSku) && item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty);
+      const changedCount = Object.values(pendingMap).filter(item => {
+        return item && item.invalid !== true && safeQtyInt(item.newQty) !== safeQtyInt(item.previousQty);
       }).length;
       stockEditBanner.innerHTML = `
         <div>
