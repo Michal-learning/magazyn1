@@ -296,10 +296,10 @@ function renderSideRecentActions5() {
   const rows = (state.history || [])
     .slice()
     .sort((a, b) => (b.ts || 0) - (a.ts || 0))
-    .slice(0, 5);
+    .slice(0, 4);
 
   if (!rows.length) {
-    els.sideRecentActions.innerHTML = `<li class="text-muted" style="font-size:var(--text-sm);padding:var(--space-3);text-align:center">Brak akcji</li>`;
+    els.sideRecentActions.innerHTML = `<li class="text-muted" style="font-size:var(--text-sm);padding:var(--space-2);text-align:center">Brak akcji</li>`;
     return;
   }
 
@@ -307,26 +307,17 @@ function renderSideRecentActions5() {
     const typeLabel = ev.type === "delivery" ? "Dostawa" : ev.type === "build" ? "Produkcja" : "Korekta";
     const pillClass = ev.type === "delivery" ? "success" : ev.type === "build" ? "accent" : "warning";
 
-    const meta = ev.type === "delivery"
-      ? `${(ev.items || []).length} poz. • ${ev.supplier || "—"}`
-      : ev.type === "build"
-        ? `${(ev.items || []).length} poz.`
-        : `${(ev.items || []).length} części • inwentaryzacja`;
-
     return `
       <li>
         <button
-          class="signal-row signal-row-history"
+          class="signal-row signal-row-history signal-row-history-compact"
           type="button"
           data-action="toggleHistory"
           data-hid="${escapeHtml(String(ev.id))}"
-          aria-label="Otwórz podgląd akcji z dnia ${escapeHtml(String(fmtDateISO(ev.dateISO) || '—'))}">
-          <div class="signal-info signal-info-history">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);margin-bottom:var(--space-1)">
-              <span class="badge badge-${pillClass}">${typeLabel}</span>
-              <span class="text-muted" style="font-size:var(--text-sm)">${fmtDateISO(ev.dateISO)}</span>
-            </div>
-            <div class="text-secondary" style="font-size:var(--text-sm)">${escapeHtml(meta)}</div>
+          aria-label="Otwórz podgląd akcji ${escapeHtml(typeLabel)} z dnia ${escapeHtml(String(fmtDateISO(ev.dateISO) || '—'))}">
+          <div class="signal-info signal-info-history signal-info-history-compact">
+            <span class="badge badge-${pillClass}">${typeLabel}</span>
+            <span class="signal-history-date">${fmtDateISO(ev.dateISO)}</span>
           </div>
         </button>
       </li>
