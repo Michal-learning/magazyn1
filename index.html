@@ -228,50 +228,17 @@
 
       <section class="tabPanel hidden" data-tab-panel="users">
         <div class="card">
-          <div class="cardHeader">
+          <div class="cardHeader users-admin-card-header">
             <div>
               <h2>Użytkownicy firmy</h2>
               <p class="text-secondary">Tabela użytkowników i konfiguracja dostępu do zakładek per rola w obrębie bieżącej firmy.</p>
             </div>
+            <div class="users-admin-header-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="openCreateUserModalBtn">Dodaj użytkownika</button>
+            </div>
           </div>
 
           <div class="users-admin-grid">
-            <div class="users-admin-block" id="usersCreateBlock">
-              <div class="editor-header" style="margin-bottom:var(--space-3)">
-                <div>
-                  <h4 class="editor-title">Dodaj użytkownika</h4>
-                  <span class="editor-hint">Tworzenie konta przez Edge Function, bez admin API w przeglądarce.</span>
-                </div>
-              </div>
-              <div class="form-row users-create-form-row" style="margin-bottom:var(--space-3)">
-                <label>Imię i nazwisko
-                  <input type="text" id="createWorkerFullNameInput" placeholder="Jan Kowalski" autocomplete="name" />
-                </label>
-              </div>
-              <div class="form-row form-row-2 users-create-form-row users-create-form-row-credentials" style="margin-bottom:var(--space-3)">
-                <label>Adres e-mail
-                  <input type="email" id="createWorkerEmailInput" placeholder="pracownik@firma.pl" autocomplete="email" />
-                </label>
-                <label>Hasło startowe
-                  <input type="password" id="createWorkerPasswordInput" placeholder="Minimum 6 znaków" autocomplete="new-password" />
-                </label>
-              </div>
-              <div class="form-row" style="margin-bottom:var(--space-3)">
-                <label>Rola
-                  <select id="createWorkerRoleSelect">
-                    <option value="worker" selected>worker</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </label>
-              </div>
-              <div class="users-admin-actions">
-                <button type="button" class="btn btn-primary" id="createWorkerBtn">Utwórz użytkownika</button>
-              </div>
-              <p class="text-muted" style="margin-top:var(--space-3);font-size:var(--text-sm)">
-                Owner może dodawać konta worker i admin. Owner nie jest tworzony ani przepinany z tego poziomu, bo to byłby proszenie się o głupi wypadek.
-              </p>
-            </div>
-
             <div class="users-admin-block users-admin-block-wide">
               <div class="editor-header" style="margin-bottom:var(--space-3)">
                 <div>
@@ -292,6 +259,44 @@
                   </thead>
                   <tbody></tbody>
                 </table>
+              </div>
+            </div>
+
+            <div class="user-create-backdrop hidden" id="createUserBackdrop" aria-hidden="true">
+              <div class="user-create-shell">
+                <div class="user-create-panel" role="dialog" aria-modal="true" aria-labelledby="createUserModalTitle">
+                  <button type="button" class="user-create-close" id="createUserCloseBtn" aria-label="Zamknij">×</button>
+                  <div class="user-create-head">
+                    <div>
+                      <h3 class="user-create-title" id="createUserModalTitle">Dodaj użytkownika</h3>
+                    </div>
+                  </div>
+                  <div class="form-row users-create-form-row" style="margin-bottom:var(--space-3)">
+                    <label>Imię i nazwisko
+                      <input type="text" id="createWorkerFullNameInput" placeholder="Jan Kowalski" autocomplete="name" />
+                    </label>
+                  </div>
+                  <div class="form-row form-row-2 users-create-form-row users-create-form-row-credentials" style="margin-bottom:var(--space-3)">
+                    <label>Adres e-mail
+                      <input type="email" id="createWorkerEmailInput" placeholder="pracownik@firma.pl" autocomplete="email" />
+                    </label>
+                    <label>Hasło startowe
+                      <input type="password" id="createWorkerPasswordInput" placeholder="Minimum 6 znaków" autocomplete="new-password" />
+                    </label>
+                  </div>
+                  <div class="form-row" style="margin-bottom:0">
+                    <label>Rola
+                      <select id="createWorkerRoleSelect">
+                        <option value="worker" selected>worker</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="user-create-actions">
+                    <button type="button" class="btn btn-secondary" id="createUserCancelBtn">Anuluj</button>
+                    <button type="button" class="btn btn-primary" id="createWorkerBtn">Utwórz użytkownika</button>
+                  </div>
+                </div>
               </div>
             </div>
 

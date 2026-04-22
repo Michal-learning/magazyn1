@@ -1514,6 +1514,56 @@ window.companyUserModalState = window.companyUserModalState || {
   memberId: null
 };
 
+window.companyCreateUserModalState = window.companyCreateUserModalState || {
+  open: false
+};
+
+function resetCreateUserForm() {
+  const fullNameInput = document.getElementById('createWorkerFullNameInput');
+  const emailInput = document.getElementById('createWorkerEmailInput');
+  const passwordInput = document.getElementById('createWorkerPasswordInput');
+  const roleSelect = document.getElementById('createWorkerRoleSelect');
+
+  if (fullNameInput) fullNameInput.value = '';
+  if (emailInput) emailInput.value = '';
+  if (passwordInput) passwordInput.value = '';
+  if (roleSelect) roleSelect.value = 'worker';
+}
+
+function openCreateUserModal() {
+  if (!canAccessTab('users')) return;
+  if (!canManageUsers()) {
+    toast('Brak dostępu', 'Nie masz uprawnienia do tworzenia nowych użytkowników.', 'warning');
+    return;
+  }
+
+  const backdrop = document.getElementById('createUserBackdrop');
+  const fullNameInput = document.getElementById('createWorkerFullNameInput');
+  if (!backdrop) return;
+
+  window.companyCreateUserModalState.open = true;
+  backdrop.classList.remove('hidden');
+  backdrop.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('user-create-open');
+  fullNameInput?.focus?.();
+}
+
+function closeCreateUserModal(options = {}) {
+  const shouldReset = options?.reset === true;
+  const forceClose = options?.force === true;
+  const backdrop = document.getElementById('createUserBackdrop');
+  const createBtn = document.getElementById('createWorkerBtn');
+  if (!backdrop) return;
+  if (!forceClose && createBtn?.disabled && createBtn?.textContent === 'Tworzenie...') return;
+
+  if (shouldReset) resetCreateUserForm();
+
+  backdrop.classList.add('hidden');
+  backdrop.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('user-create-open');
+  window.companyCreateUserModalState.open = false;
+}
+
 function getCompanyUserByMemberId(memberId) {
   const normalizedMemberId = String(memberId || '').trim();
   const items = Array.isArray(window.companyUsersState?.items) ? window.companyUsersState.items : [];
@@ -1637,20 +1687,25 @@ function closeCompanyUserInfoModal() {
 function renderUsersAdmin() {
   const panel = document.querySelector('[data-tab-panel="users"]');
   const tbody = document.querySelector('#companyUsersTable tbody');
-  const createBlock = document.getElementById('usersCreateBlock');
+  const openCreateBtn = document.getElementById('openCreateUserModalBtn');
   const refreshBtn = document.getElementById('refreshUsersBtn');
   if (!panel || !tbody) return;
 
   if (!canAccessTab('users')) {
     panel.classList.add('hidden');
+    closeCreateUserModal();
     return;
   }
 
   const hasUsersManagePermission = canManageUsers();
-  if (createBlock) createBlock.classList.toggle('hidden', !hasUsersManagePermission);
+  if (openCreateBtn) {
+    openCreateBtn.classList.toggle('hidden', !hasUsersManagePermission);
+    openCreateBtn.setAttribute('aria-hidden', hasUsersManagePermission ? 'false' : 'true');
+  }
+  if (!hasUsersManagePermission) {
+    closeCreateUserModal({ reset: true });
+  }
   if (refreshBtn) {
-    refreshBtn.classList.toggle('hidden', !hasUsersManagePermission);
-    refreshBtn.setAttribute('aria-hidden', hasUsersManagePermission ? 'false' : 'true');
     syncUsersRefreshButtonState();
   }
 
@@ -1705,6 +1760,18 @@ function renderUsersAdmin() {
 function bindUserManagementUI() {
   if (window.__userManagementBound) return;
   window.__userManagementBound = true;
+
+  document.getElementById('openCreateUserModalBtn')?.addEventListener('click', () => {
+    openCreateUserModal();
+  });
+
+  document.getElementById('createUserCloseBtn')?.addEventListener('click', () => {
+    closeCreateUserModal({ reset: true });
+  });
+
+  document.getElementById('createUserCancelBtn')?.addEventListener('click', () => {
+    closeCreateUserModal({ reset: true });
+  });
 
   document.getElementById('refreshUsersBtn')?.addEventListener('click', async () => {
     if (!canAccessTab('users')) return;
@@ -1796,10 +1863,8 @@ function bindUserManagementUI() {
         role
       });
 
-      if (fullNameInput) fullNameInput.value = '';
-      if (emailInput) emailInput.value = '';
-      if (passwordInput) passwordInput.value = '';
-      if (roleSelect) roleSelect.value = 'worker';
+      resetCreateUserForm();
+      closeCreateUserModal({ force: true });
 
       await loadCompanyUsers();
       renderUsersAdmin();
@@ -1867,6 +1932,12 @@ function bindUserManagementUI() {
         toggleTileBtn.getAttribute('data-role'),
         toggleTileBtn.getAttribute('data-tab-id')
       );
+      return;
+    }
+
+    const createUserBackdrop = e.target?.closest?.('#createUserBackdrop');
+    if (createUserBackdrop && e.target === createUserBackdrop) {
+      closeCreateUserModal({ reset: true });
       return;
     }
 
@@ -1960,6 +2031,10 @@ function bindUserManagementUI() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (document.body.classList.contains('user-create-open')) {
+      closeCreateUserModal({ reset: true });
+      return;
+    }
     if (document.body.classList.contains('user-info-open')) {
       closeCompanyUserInfoModal();
     }
