@@ -1990,8 +1990,8 @@ function renderAllSuppliers() {
           <td class="text-right">
             <div class="catalog-actions">
               <button class="btn btn-secondary btn-sm" type="button" data-action="openSupplierCatalogDetails" data-supplier="${escapeHtml(name)}">Szczegóły</button>
-              ${canEdit ? `<button class="btn btn-success btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Cennik</button>` : ``}
-              ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="toggleSupplierArchive('${escapeHtml(name)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
+              ${canEdit ? `<button class="btn btn-catalog-edit btn-sm" onclick="openSupplierEditor('${escapeHtml(name)}')">Edytuj</button>` : ``}
+              ${canEdit ? `<button class="btn ${isArchived ? 'btn-catalog-restore' : 'btn-catalog-archive'} btn-sm" onclick="toggleSupplierArchive('${escapeHtml(name)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
             </div>
           </td>
         </tr>
@@ -2053,8 +2053,8 @@ function refreshCatalogsUI() {
         <td class="text-right">
           <div class="catalog-actions">
             <button class="btn btn-secondary btn-sm" type="button" data-action="openCatalogPartDetails" data-sku="${escapeHtml(p.sku)}">Szczegóły</button>
-            ${canPartsEdit ? `<button class="btn btn-success btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>` : ``}
-            ${canPartsEdit ? `<button class="btn btn-secondary btn-sm" onclick="togglePartArchive('${escapeHtml(p.sku)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
+            ${canPartsEdit ? `<button class="btn btn-catalog-edit btn-sm" onclick="startEditPart('${escapeHtml(p.sku)}')">Edytuj</button>` : ``}
+            ${canPartsEdit ? `<button class="btn ${isArchived ? 'btn-catalog-restore' : 'btn-catalog-archive'} btn-sm" onclick="togglePartArchive('${escapeHtml(p.sku)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
           </div>
         </td>
       </tr>`;
@@ -2083,8 +2083,8 @@ function refreshCatalogsUI() {
           <td class="text-right">
             <div class="catalog-actions">
               <button class="btn btn-secondary btn-sm" type="button" data-action="openMachineCatalogDetails" data-machine-code="${escapeHtml(m.code)}">Szczegóły</button>
-              ${canMachinesEdit ? `<button class="btn btn-success btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj BOM</button>` : ``}
-              ${canMachinesEdit ? `<button class="btn btn-secondary btn-sm" onclick="toggleMachineArchive('${escapeHtml(m.code)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
+              ${canMachinesEdit ? `<button class="btn btn-catalog-edit btn-sm" onclick="openMachineEditor('${escapeHtml(m.code)}')">Edytuj</button>` : ``}
+              ${canMachinesEdit ? `<button class="btn ${isArchived ? 'btn-catalog-restore' : 'btn-catalog-archive'} btn-sm" onclick="toggleMachineArchive('${escapeHtml(m.code)}')">${isArchived ? 'Przywróć' : 'Archiwizuj'}</button>` : ``}
             </div>
           </td>
         </tr>
