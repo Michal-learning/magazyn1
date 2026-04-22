@@ -502,6 +502,9 @@ function renderWarehouse() {
     thresholdsPanel.classList.toggle('permissions-readonly', !canThresholdsManage);
     if (!canThresholdsManage) {
       thresholdsPanel.classList.add('collapsed');
+      thresholdsPanel.setAttribute('aria-hidden', 'true');
+      thresholdsBtn?.setAttribute('aria-expanded', 'false');
+      thresholdsBtn?.classList.remove('is-active');
     }
   }
 

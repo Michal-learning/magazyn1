@@ -47,18 +47,40 @@
             <div class="toolbar warehouse-header-actions" style="margin:0">
               <button type="button" class="btn btn-secondary btn-sm warehouse-filter-toggle" id="showArchivedPartsToggle" aria-pressed="true">Pokaż zarchiwizowane</button>
               <button type="button" class="btn btn-secondary btn-sm warehouse-filter-toggle" id="showOnlyAlertsPartsToggle" aria-pressed="false">Pokaż tylko alerty</button>
-              <button type="button" class="btn btn-secondary btn-sm" id="toggleThresholdsBtn">Progi</button>
+              <div class="thresholds-popover-anchor" id="thresholdsPopoverAnchor">
+                <button type="button" class="btn btn-secondary btn-sm" id="toggleThresholdsBtn" aria-expanded="false" aria-controls="thresholdsPanel">Progi</button>
+                <div class="thresholds-popover collapsible collapsed" id="thresholdsPanel" role="dialog" aria-label="Progi globalne" aria-hidden="true">
+                  <div class="thresholds-popover-card">
+                    <div class="thresholds-popover-head">
+                      <div>
+                        <h3>Progi globalne</h3>
+                        <p>Szybkie ustawienia alertów dla całej firmy.</p>
+                      </div>
+                    </div>
+                    <div class="thresholds-popover-body">
+                      <label class="threshold-control threshold-control-warning">
+                        <span class="threshold-control-top">
+                          <span class="threshold-control-title">Ostrzeżenie</span>
+                          <strong><span id="warnValue">100</span> szt.</strong>
+                        </span>
+                        <input type="range" id="warnRange" min="0" max="1000" step="10" value="100" />
+                      </label>
+                      <label class="threshold-control threshold-control-danger">
+                        <span class="threshold-control-top">
+                          <span class="threshold-control-title">Krytyczny</span>
+                          <strong><span id="dangerValue">50</span> szt.</strong>
+                        </span>
+                        <input type="range" id="dangerRange" min="0" max="1000" step="10" value="50" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <button type="button" class="btn btn-secondary btn-sm" id="stockEditToggleBtn">Edycja stanów</button>
               <div class="warehouse-edit-actions hidden" id="stockEditActions">
                 <button type="button" class="btn btn-success btn-sm" id="stockEditSaveBtn">Zatwierdź korekty</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="stockEditCancelBtn">Anuluj</button>
               </div>
-            </div>
-          </div>
-          <div class="collapsible collapsed" id="thresholdsPanel">
-            <div class="form-row form-row-2" style="margin-bottom:var(--space-4)">
-              <label>Ostrzeżenie (żółty): <strong id="warnValue">100</strong> szt.<input type="range" id="warnRange" min="0" max="1000" step="10" value="100" /></label>
-              <label>Krytyczny (czerwony): <strong id="dangerValue">50</strong> szt.<input type="range" id="dangerRange" min="0" max="1000" step="10" value="50" /></label>
             </div>
           </div>
           <div class="toolbar">

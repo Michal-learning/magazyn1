@@ -315,19 +315,47 @@ function initStockEditMode() {
 function initThresholdsToggle() {
   const panel = byId("thresholdsPanel");
   const btn = byId("toggleThresholdsBtn");
-  if (!panel || !btn) return;
+  const anchor = byId("thresholdsPopoverAnchor");
+  if (!panel || !btn || !anchor) return;
+  if (btn.dataset.thresholdsBound === "1") return;
+  btn.dataset.thresholdsBound = "1";
+
+  const setPanelOpen = (isOpen) => {
+    panel.classList.toggle("collapsed", !isOpen);
+    panel.setAttribute("aria-hidden", isOpen ? "false" : "true");
+    btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    btn.classList.toggle("is-active", isOpen);
+    if (typeof setExpanded === "function") {
+      setExpanded(btn, isOpen);
+    }
+    localStorage.setItem(THRESHOLDS_OPEN_KEY, isOpen ? "1" : "0");
+  };
 
   const saved = localStorage.getItem(THRESHOLDS_OPEN_KEY);
-  const isOpen = saved === "1";
+  setPanelOpen(saved === "1");
 
-  panel.classList.toggle("collapsed", !isOpen);
-  setExpanded(btn, isOpen);
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const shouldOpen = panel.classList.contains("collapsed");
+    setPanelOpen(shouldOpen);
+  });
 
-  btn.addEventListener("click", () => {
-    const nowOpen = panel.classList.contains("collapsed");
-    panel.classList.toggle("collapsed", !nowOpen);
-    localStorage.setItem(THRESHOLDS_OPEN_KEY, nowOpen ? "1" : "0");
-    setExpanded(btn, nowOpen);
+  panel.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (panel.classList.contains("collapsed")) return;
+    if (anchor.contains(e.target)) return;
+    setPanelOpen(false);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (panel.classList.contains("collapsed")) return;
+    setPanelOpen(false);
+    btn.focus();
   });
 }
 
