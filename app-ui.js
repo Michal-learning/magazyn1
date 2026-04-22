@@ -106,7 +106,12 @@ function getTablePaginationMount(tableElement) {
 
   const tableId = tableElement.id || host.getAttribute('data-pagination-table-id') || '';
   if (!tableId) return null;
+
+  const shell = host.parentElement;
   host.setAttribute('data-pagination-table-id', tableId);
+  host.classList.add('table-scroll-paginated-host');
+  shell.classList.add('table-section-shell', 'table-section-shell-paginated');
+  shell.setAttribute('data-pagination-shell', tableId);
 
   let mount = host.nextElementSibling;
   if (!mount || !mount.classList?.contains('table-pagination')) {
@@ -115,6 +120,7 @@ function getTablePaginationMount(tableElement) {
     host.insertAdjacentElement('afterend', mount);
   }
 
+  mount.classList.add('table-pagination-stable');
   mount.setAttribute('data-pagination-for', tableId);
   return mount;
 }
