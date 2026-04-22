@@ -767,14 +767,27 @@ tbody tr:nth-child(even):hover {
   scrollbar-gutter: stable both-edges;
 }
 
+.table-section-card.table-section-card-paginated {
+  --paginated-section-height: min(78vh, 860px);
+  display: flex;
+  flex-direction: column;
+  height: var(--paginated-section-height);
+}
+
 .table-section-shell.table-section-shell-paginated {
   display: flex;
   flex-direction: column;
-  min-height: min(68vh, 720px);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.table-section-card.table-section-card-paginated > .table-section-shell.table-section-shell-paginated {
+  flex: 1 1 auto;
 }
 
 .table-scroll-paginated-host {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 
@@ -799,8 +812,14 @@ tbody tr:nth-child(even):hover {
     max-height: min(62vh, 640px);
   }
 
-  .table-section-shell.table-section-shell-paginated {
-    min-height: min(62vh, 640px);
+  .table-section-card.table-section-card-paginated {
+    --paginated-section-height: min(74vh, 780px);
+  }
+}
+
+@media (max-width: 640px) {
+  .table-section-card.table-section-card-paginated {
+    --paginated-section-height: min(72vh, 720px);
   }
 }
 
@@ -808,8 +827,8 @@ tbody tr:nth-child(even):hover {
   display: flex;
   justify-content: center;
   margin-top: auto;
-  padding-top: var(--space-3);
-  min-height: 48px;
+  padding-top: var(--space-5);
+  min-height: 60px;
 }
 
 .table-pagination.hidden {

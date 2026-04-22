@@ -108,10 +108,17 @@ function getTablePaginationMount(tableElement) {
   if (!tableId) return null;
 
   const shell = host.parentElement;
+  const card = tableElement.closest('.card');
+
   host.setAttribute('data-pagination-table-id', tableId);
   host.classList.add('table-scroll-paginated-host');
   shell.classList.add('table-section-shell', 'table-section-shell-paginated');
   shell.setAttribute('data-pagination-shell', tableId);
+
+  if (card) {
+    card.classList.add('table-section-card', 'table-section-card-paginated');
+    card.setAttribute('data-pagination-card', tableId);
+  }
 
   let mount = host.nextElementSibling;
   if (!mount || !mount.classList?.contains('table-pagination')) {
