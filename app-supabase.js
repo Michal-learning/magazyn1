@@ -63,6 +63,75 @@ window.APP_SUPABASE_CONFIG = {
 
 window.__authRefreshInFlight = null;
 
+function getRawErrorMessage(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err.trim();
+  if (typeof err?.message === 'string') return err.message.trim();
+  return '';
+}
+
+window.getUserFriendlyErrorMessage = function getUserFriendlyErrorMessage(err, fallbackMessage = 'Operacja nie powiodła się. Spróbuj ponownie.') {
+  const rawMessage = getRawErrorMessage(err);
+  const fallback = String(fallbackMessage || 'Operacja nie powiodła się. Spróbuj ponownie.').trim();
+  const message = rawMessage.toLowerCase();
+
+  if (!rawMessage) return fallback;
+
+  if (message.includes('invalid login credentials')) {
+    return 'Nieprawidłowy e-mail lub hasło.';
+  }
+
+  if (message.includes('company_id')) {
+    return 'Nie udało się ustalić danych firmy. Odśwież aplikację i zaloguj się ponownie.';
+  }
+
+  if (message.includes('supplier_id') || message.includes('part_id') || message.includes('mapowania supplier_id') || message.includes('mapowania part_id')) {
+    return 'Wybrana część lub dostawca nie są już dostępne. Odśwież dane i spróbuj ponownie.';
+  }
+
+  if (message.includes('machinecode') || (message.includes('qty > 0') && message.includes('pozycja produkcji')) || (message.includes('machine_code') && message.includes('qty'))) {
+    return 'Każda pozycja produkcji musi mieć wybraną maszynę i ilość większą od zera.';
+  }
+
+  if (message.includes('ręczna alokacja') && message.includes('qty > 0')) {
+    return 'Każda ręczna alokacja musi wskazywać partię, część i ilość większą od zera.';
+  }
+
+  if (message.includes('edge function') || message.includes('http 500') || message.includes('fetch failed') || message.includes('failed to fetch') || message.includes('networkerror') || message.includes('network error')) {
+    return 'Operacja nie powiodła się po stronie serwera. Spróbuj ponownie za chwilę.';
+  }
+
+  if (message.includes('nie znaleziono dostawcy') || message.includes('brak dostawcy dla dostawy')) {
+    return 'Wybrany dostawca nie jest już dostępny. Odśwież dane i wybierz go ponownie.';
+  }
+
+  if (message.includes('nie znaleziono części') || message.includes('brak pozycji dostawy do zapisania')) {
+    return 'Jedna z wybranych części nie jest już dostępna. Odśwież dane i sprawdź pozycje.';
+  }
+
+  if (message.includes('nie udało się potwierdzić aktualnej wersji rekordu') || message.includes('został zmieniony przez innego użytkownika')) {
+    return 'Dane zostały zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.';
+  }
+
+  if (message.includes('brak klienta supabase')) {
+    return 'Połączenie z serwerem nie jest gotowe. Odśwież aplikację i spróbuj ponownie.';
+  }
+
+  if (message.includes('brak aktywnej sesji')) {
+    return 'Sesja wygasła. Zaloguj się ponownie.';
+  }
+
+  if (message.includes('brak konfiguracji supabase') || message.includes('brak nazwy edge function')) {
+    return 'Aplikacja nie jest jeszcze poprawnie skonfigurowana. Skontaktuj się z administratorem.';
+  }
+
+  if (message.includes('membershipu')) {
+    return 'Nie udało się ustalić użytkownika do aktualizacji. Odśwież listę i spróbuj ponownie.';
+  }
+
+  return rawMessage || fallback;
+};
+
 window.refreshAuthContext = async function refreshAuthContext(sessionOverride) {
   if (window.__authRefreshInFlight) return window.__authRefreshInFlight;
 
@@ -468,7 +537,7 @@ function getSupplierIdByNameFromCatalogRows(rows, supplierName) {
 
   const row = (Array.isArray(rows) ? rows : []).find(item => String(item?.name || '').trim() === normalizedName);
   if (!row?.id) {
-    throw new Error(`Nie znaleziono supplier_id dla dostawcy "${normalizedName}".`);
+    throw new Error('Wybrany dostawca nie jest już dostępny. Odśwież dane i spróbuj ponownie.');
   }
 
   return row.id;
@@ -482,7 +551,7 @@ function getPartIdBySkuFromCatalogRows(rows, sku) {
 
   const row = (Array.isArray(rows) ? rows : []).find(item => String(item?.sku || '').trim().toLowerCase() === normalizedSku.toLowerCase());
   if (!row?.id) {
-    throw new Error(`Nie znaleziono part_id dla części o sku "${normalizedSku}".`);
+    throw new Error('Wybrana część nie jest już dostępna. Odśwież dane i spróbuj ponownie.');
   }
 
   return row.id;
@@ -647,7 +716,7 @@ window.saveCatalogPartToSupabase = async function saveCatalogPartToSupabase(payl
   const archived = payload?.archived === true;
   const expectedUpdatedAt = normalizeNullableExpectedUpdatedAt(payload?.expectedUpdatedAt);
 
-  if (!sku || !name) throw new Error('Część musi mieć sku i name.');
+  if (!sku || !name) throw new Error('Część musi mieć poprawny identyfikator i nazwę.');
 
   const supplierRows = await window.fetchCatalogSuppliers(companyId);
   const pSupplierPrices = selectedSuppliers.map(supplierName => ({
@@ -773,7 +842,7 @@ window.saveMachineDefinitionToSupabase = async function saveMachineDefinitionToS
   const expectedUpdatedAt = normalizeNullableExpectedUpdatedAt(payload?.expectedUpdatedAt);
   const bom = Array.isArray(payload?.bom) ? payload.bom : [];
 
-  if (!code || !name) throw new Error('Maszyna musi mieć code i name.');
+  if (!code || !name) throw new Error('Maszyna musi mieć kod i nazwę.');
 
   const partsRows = await window.fetchCatalogParts(companyId);
   const pBom = bom.map(item => ({
@@ -1298,7 +1367,7 @@ window.saveBuildToSupabase = async function saveBuildToSupabase(payload = {}) {
   }));
 
   const invalidItem = rpcItems.find(item => !item.machine_code || item.qty <= 0);
-  if (invalidItem) throw new Error('Każda pozycja produkcji musi mieć machineCode i qty > 0.');
+  if (invalidItem) throw new Error('Każda pozycja produkcji musi mieć wybraną maszynę i ilość większą od zera.');
 
   const rpcManualAllocations = manualAllocations === null
     ? null
@@ -1312,7 +1381,7 @@ window.saveBuildToSupabase = async function saveBuildToSupabase(payload = {}) {
     ? rpcManualAllocations.find(item => !item.lot_id || !item.sku || item.qty <= 0)
     : null;
   if (invalidManualAllocation) {
-    throw new Error('Każda ręczna alokacja musi mieć lotId, sku i qty > 0.');
+    throw new Error('Każda ręczna alokacja musi wskazywać partię, część i ilość większą od zera.');
   }
 
   const { data, error } = await window.sb.rpc('finalize_production', {

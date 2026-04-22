@@ -627,6 +627,78 @@ function renderWarehouse() {
   renderSidePanel();
 }
 
+function isDeliveryFinalizationBusy() {
+  return !!_finalizeDeliveryBusy;
+}
+
+function isBuildFinalizationBusy() {
+  return !!_finalizeBuildBusy;
+}
+
+function syncDeliveryBusyState() {
+  const busy = isDeliveryFinalizationBusy();
+  const ids = [
+    "finalizeDeliveryBtn",
+    "addDeliveryItemBtn",
+    "supplierSelect",
+    "supplierPartsSelect",
+    "deliveryQty",
+    "deliveryPrice",
+    "deliveryDate",
+    "deliveryInvoiceNumber"
+  ];
+
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = busy;
+    el.setAttribute("aria-disabled", busy ? "true" : "false");
+  });
+
+  document.querySelectorAll('#deliveryItemsTable button[aria-label="Usuń"]').forEach(btn => {
+    btn.disabled = busy;
+    btn.setAttribute("aria-disabled", busy ? "true" : "false");
+  });
+
+  if (typeof refreshComboFromSelect === "function") {
+    try { refreshComboFromSelect(document.getElementById("supplierSelect"), { placeholder: "Wybierz dostawcę..." }); } catch {}
+    try { refreshComboFromSelect(document.getElementById("supplierPartsSelect"), { placeholder: "Wybierz część..." }); } catch {}
+  }
+}
+
+function syncBuildBusyState() {
+  const busy = isBuildFinalizationBusy();
+  const ids = [
+    "finalizeBuildBtn",
+    "addBuildItemBtn",
+    "machineSelect",
+    "buildQty",
+    "buildDate",
+    "consumeMode"
+  ];
+
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = busy;
+    el.setAttribute("aria-disabled", busy ? "true" : "false");
+  });
+
+  document.querySelectorAll('#buildItemsTable button[aria-label="Usuń"]').forEach(btn => {
+    btn.disabled = busy;
+    btn.setAttribute("aria-disabled", busy ? "true" : "false");
+  });
+
+  document.querySelectorAll(".manual-lot-input").forEach(input => {
+    input.disabled = busy;
+    input.setAttribute("aria-disabled", busy ? "true" : "false");
+  });
+
+  if (typeof refreshComboFromSelect === "function") {
+    try { refreshComboFromSelect(document.getElementById("machineSelect"), { placeholder: "Wybierz maszynę..." }); } catch {}
+  }
+}
+
 function renderDelivery() {
   const els = getEls();
   if (!els.deliveryItems) return;
@@ -664,7 +736,9 @@ function renderDelivery() {
   
   if (itemsCountEl) itemsCountEl.textContent = String(items.length);
   if (itemsTotalEl) itemsTotalEl.textContent = fmtPLN.format(total);
-  if (finalizeBtn) finalizeBtn.disabled = !canFinalize;
+  if (finalizeBtn) finalizeBtn.disabled = isDeliveryFinalizationBusy() || !canFinalize;
+
+  syncDeliveryBusyState();
 }
 
 
@@ -694,7 +768,7 @@ function renderBuild() {
   const finalizeBuildBtn = document.getElementById("finalizeBuildBtn");
   
   if (buildCountEl) buildCountEl.textContent = String(state.currentBuild.items.length);
-  if (finalizeBuildBtn) finalizeBuildBtn.disabled = state.currentBuild.items.length === 0;
+  if (finalizeBuildBtn) finalizeBuildBtn.disabled = isBuildFinalizationBusy() || state.currentBuild.items.length === 0;
 
   if (els.missingBox) els.missingBox.classList.add("hidden");
   if (els.manualBox) els.manualBox.classList.add("hidden");
@@ -703,6 +777,8 @@ function renderBuild() {
   if (mode === "manual" && state.currentBuild.items.length > 0) {
     renderManualConsume();
   }
+
+  syncBuildBusyState();
 }
 
 function renderMissingParts(missing) {
@@ -776,7 +852,8 @@ function renderManualConsume() {
                 data-lot-id="${lot?.id}"
                 data-sku="${skuKeyStr}"
                 max="${qtyAvail}" min="0" value="0"
-                aria-label="Ilość z partii ${lotId}">
+                aria-label="Ilość z partii ${lotId}"
+                ${isBuildFinalizationBusy() ? 'disabled aria-disabled="true"' : ''}>
             </div>
           `;
         }).join("") : `<div class="text-muted" style="font-size:var(--text-sm)">Brak partii dla tej części.</div>`}
@@ -1054,6 +1131,57 @@ function renderHistory() {
   renderSideRecentActions5();
 }
 
+function getBuildHistoryCompletenessMeta(buildItems = []) {
+  const items = Array.isArray(buildItems) ? buildItems.filter(Boolean) : [];
+  let machinesWithMissingLots = 0;
+  let partsWithMissingLots = 0;
+
+  items.forEach(item => {
+    const partsUsed = Array.isArray(item?.partsUsed) ? item.partsUsed.filter(Boolean) : [];
+    const hasMissingLots = partsUsed.some(part => {
+      const expectedQty = safeInt(part?.qty);
+      const lots = Array.isArray(part?.lots) ? part.lots.filter(Boolean) : [];
+      if (expectedQty <= 0) return false;
+      if (!lots.length) return true;
+      const allocatedQty = lots.reduce((sum, lot) => sum + safeInt(lot?.qty), 0);
+      return allocatedQty < expectedQty;
+    });
+
+    if (hasMissingLots) machinesWithMissingLots += 1;
+
+    partsUsed.forEach(part => {
+      const expectedQty = safeInt(part?.qty);
+      const lots = Array.isArray(part?.lots) ? part.lots.filter(Boolean) : [];
+      if (expectedQty <= 0) return;
+      if (!lots.length) {
+        partsWithMissingLots += 1;
+        return;
+      }
+      const allocatedQty = lots.reduce((sum, lot) => sum + safeInt(lot?.qty), 0);
+      if (allocatedQty < expectedQty) partsWithMissingLots += 1;
+    });
+  });
+
+  return {
+    isIncomplete: machinesWithMissingLots > 0 || partsWithMissingLots > 0,
+    machinesWithMissingLots,
+    partsWithMissingLots
+  };
+}
+
+function getBuildHistoryConsumptionValue(buildItem = {}) {
+  const partsUsed = Array.isArray(buildItem?.partsUsed) ? buildItem.partsUsed : [];
+  return partsUsed.reduce((machineSum, part) => {
+    const lots = Array.isArray(part?.lots) ? part.lots : [];
+    return machineSum + lots.reduce((lotSum, lot) => lotSum + (safeInt(lot?.qty) * safeFloat(lot?.unitPrice || 0)), 0);
+  }, 0);
+}
+
+function renderBuildHistoryConsumptionValue(value, isComplete) {
+  if (!isComplete) return 'brak pełnych danych';
+  return fmtPLN.format(value || 0);
+}
+
 function buildHistoryDetails(ev) {
   if (!ev) return "";
 
@@ -1250,20 +1378,13 @@ function buildHistoryDetails(ev) {
     `;
   }
 
+  const buildCompleteness = getBuildHistoryCompletenessMeta(items);
   const totalQty = items.reduce((s, i) => s + safeInt(i.qty), 0);
-  const totalConsumptionValue = items.reduce((sum, it) => {
-    const machineVal = (it?.partsUsed || []).reduce((ms, p) => {
-      const lots = Array.isArray(p?.lots) ? p.lots : [];
-      return ms + lots.reduce((ls, lot) => ls + (safeInt(lot?.qty) * safeFloat(lot?.unitPrice || 0)), 0);
-    }, 0);
-    return sum + machineVal;
-  }, 0);
+  const totalConsumptionValue = items.reduce((sum, it) => sum + getBuildHistoryConsumptionValue(it), 0);
 
   const machineCards = items.map((i) => {
-    const machineConsumptionValue = (i?.partsUsed || []).reduce((ms, p) => {
-      const lots = Array.isArray(p?.lots) ? p.lots : [];
-      return ms + lots.reduce((ls, lot) => ls + (safeInt(lot?.qty) * safeFloat(lot?.unitPrice || 0)), 0);
-    }, 0);
+    const machineConsumptionValue = getBuildHistoryConsumptionValue(i);
+    const machineCompleteness = getBuildHistoryCompletenessMeta([i]);
 
     const partsRows = (Array.isArray(i.partsUsed) ? i.partsUsed : []).flatMap(p => {
       const lots = Array.isArray(p?.lots) ? p.lots : [];
@@ -1289,6 +1410,13 @@ function buildHistoryDetails(ev) {
         `;
       });
     }).join("");
+
+    const incompleteNote = machineCompleteness.isIncomplete ? `
+      <div class="history-empty-state" style="margin-bottom:var(--space-3)">
+        <span class="badge badge-warning">Podgląd niepełny</span>
+        <span class="text-muted">Brakuje pełnej rozpiski partii dla części tej pozycji. Koszt i zużycie mogą być niepełne.</span>
+      </div>
+    ` : ``;
 
     const empty = !partsRows ? `
       <div class="history-empty-state">
@@ -1324,9 +1452,10 @@ function buildHistoryDetails(ev) {
           </div>
           <div class="history-machine-meta">
             <div><span>Ilość</span><strong>${safeInt(i.qty)}</strong></div>
-            <div><span>Zużycie</span><strong>${fmtPLN.format(machineConsumptionValue || 0)}</strong></div>
+            <div><span>Zużycie</span><strong>${renderBuildHistoryConsumptionValue(machineConsumptionValue, !machineCompleteness.isIncomplete)}</strong></div>
           </div>
         </div>
+        ${incompleteNote}
         ${empty}
       </article>
     `;
@@ -1353,9 +1482,16 @@ function buildHistoryDetails(ev) {
       </div>
       <div class="history-stat-card">
         <span class="history-stat-label">Wartość zużycia</span>
-        <strong class="history-stat-value">${fmtPLN.format(totalConsumptionValue || 0)}</strong>
+        <strong class="history-stat-value">${renderBuildHistoryConsumptionValue(totalConsumptionValue, !buildCompleteness.isIncomplete)}</strong>
       </div>
     </div>
+
+    ${buildCompleteness.isIncomplete ? `
+      <div class="history-empty-state" style="margin-bottom:var(--space-4)">
+        <span class="badge badge-warning">Podgląd niepełny</span>
+        <span class="text-muted">Brakuje pełnej rozpiski partii dla ${buildCompleteness.partsWithMissingLots} ${buildCompleteness.partsWithMissingLots === 1 ? 'części' : 'części'} w ${buildCompleteness.machinesWithMissingLots} ${buildCompleteness.machinesWithMissingLots === 1 ? 'pozycji produkcyjnej' : 'pozycjach produkcyjnych'}. Część danych o zużyciu i koszcie może być niepełna.</span>
+      </div>
+    ` : ``}
 
     <div class="history-modal-section">
       <div class="history-modal-section-head">

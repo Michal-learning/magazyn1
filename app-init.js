@@ -334,7 +334,7 @@ function initStockEditMode() {
       await commitStockAdjustments();
     } catch (err) {
       console.error(err);
-      toast("Błąd systemu", "Nie udało się zapisać korekt stanów.", "error");
+      toast("Nie zapisano korekt", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać korekt stanów. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać korekt stanów. Odśwież dane i spróbuj ponownie.", "error");
     }
   });
 
@@ -799,8 +799,19 @@ let currentActiveTab = "parts";
 window.companyUsersState = window.companyUsersState || {
   items: [],
   loading: false,
-  error: ""
+  error: "",
+  refreshing: false
 };
+
+function syncUsersRefreshButtonState() {
+  const btn = document.getElementById('refreshUsersBtn');
+  if (!btn) return;
+
+  const busy = !!window.companyUsersState?.refreshing;
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Odświeżanie...' : 'Odśwież';
+  btn.setAttribute('aria-disabled', busy ? 'true' : 'false');
+}
 window.companyRolePermissionsState = window.companyRolePermissionsState || {
   items: {},
   loading: false,
@@ -1143,7 +1154,7 @@ async function loadCompanyRolePermissions(options = {}) {
     return items;
   } catch (err) {
     console.error('Błąd konfiguracji ról:', err);
-    st.error = err?.message || 'Nie udało się pobrać konfiguracji ról.';
+    st.error = window.getUserFriendlyErrorMessage?.(err, 'Nie udało się pobrać konfiguracji ról.') || 'Nie udało się pobrać konfiguracji ról.';
     st.items = {};
     window.appAuth.rolePermissions = {};
     return st.items;
@@ -1265,7 +1276,7 @@ async function saveRolePermissions(role) {
     toast('Uprawnienia zapisane', `Konfiguracja roli ${normalizedRole} została zaktualizowana.`, 'success');
   } catch (err) {
     console.error('Błąd zapisu konfiguracji ról:', err);
-    toast('Nie zapisano konfiguracji', err?.message || 'Nie udało się zapisać konfiguracji roli.', 'error');
+    toast('Nie zapisano konfiguracji', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zapisać konfiguracji roli.') || 'Nie udało się zapisać konfiguracji roli.', 'error');
   } finally {
     st.saving = false;
     renderUsersAdmin();
@@ -1492,7 +1503,7 @@ async function loadCompanyUsers() {
     return window.companyUsersState.items;
   } catch (err) {
     console.error('Błąd listy użytkowników:', err);
-    window.companyUsersState.error = err?.message || 'Nie udało się pobrać listy użytkowników.';
+    window.companyUsersState.error = window.getUserFriendlyErrorMessage?.(err, 'Nie udało się pobrać listy użytkowników.') || 'Nie udało się pobrać listy użytkowników.';
     throw err;
   } finally {
     window.companyUsersState.loading = false;
@@ -1640,6 +1651,7 @@ function renderUsersAdmin() {
   if (refreshBtn) {
     refreshBtn.classList.toggle('hidden', !hasUsersManagePermission);
     refreshBtn.setAttribute('aria-hidden', hasUsersManagePermission ? 'false' : 'true');
+    syncUsersRefreshButtonState();
   }
 
   const st = window.companyUsersState || { items: [], loading: false, error: '' };
@@ -1696,6 +1708,11 @@ function bindUserManagementUI() {
 
   document.getElementById('refreshUsersBtn')?.addEventListener('click', async () => {
     if (!canAccessTab('users')) return;
+    if (window.companyUsersState?.refreshing) return;
+
+    window.companyUsersState.refreshing = true;
+    syncUsersRefreshButtonState();
+
     try {
       renderUsersAdmin();
       await Promise.all([
@@ -1706,7 +1723,10 @@ function bindUserManagementUI() {
       toast('Odświeżono', 'Lista użytkowników i konfiguracja ról zostały odświeżone.', 'success');
     } catch (err) {
       renderUsersAdmin();
-      toast('Błąd użytkowników', err?.message || 'Nie udało się odświeżyć zakładki użytkowników.', 'error');
+      toast('Błąd użytkowników', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się odświeżyć zakładki użytkowników.') || 'Nie udało się odświeżyć zakładki użytkowników.', 'error');
+    } finally {
+      window.companyUsersState.refreshing = false;
+      syncUsersRefreshButtonState();
     }
   });
 
@@ -1793,7 +1813,7 @@ function bindUserManagementUI() {
       console.error('Błąd tworzenia użytkownika:', err);
       toast(
         'Nie utworzono użytkownika',
-        err?.message || 'Nie udało się utworzyć konta użytkownika.',
+        window.getUserFriendlyErrorMessage?.(err, 'Nie udało się utworzyć konta użytkownika. Sprawdź dane i spróbuj ponownie.') || 'Nie udało się utworzyć konta użytkownika. Sprawdź dane i spróbuj ponownie.',
         'error'
       );
     } finally {
@@ -1892,7 +1912,7 @@ function bindUserManagementUI() {
         toast('Rola zapisana', 'Zmiana roli została zapisana.', 'success');
       } catch (err) {
         console.error('Błąd zmiany roli:', err);
-        toast('Nie zapisano roli', err?.message || 'Nie udało się zmienić roli.', 'error');
+        toast('Nie zapisano roli', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zmienić roli.') || 'Nie udało się zmienić roli.', 'error');
       }
       return;
     }
@@ -1920,7 +1940,7 @@ function bindUserManagementUI() {
         toast(nextActive ? 'Użytkownik aktywowany' : 'Użytkownik dezaktywowany', 'Status użytkownika został zaktualizowany.', 'success');
       } catch (err) {
         console.error('Błąd zmiany statusu użytkownika:', err);
-        toast('Nie zapisano statusu', err?.message || 'Nie udało się zmienić statusu użytkownika.', 'error');
+        toast('Nie zapisano statusu', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zmienić statusu użytkownika.') || 'Nie udało się zmienić statusu użytkownika.', 'error');
       }
       return;
     }
@@ -2165,7 +2185,7 @@ function bindAuthUI() {
     } catch (err) {
       console.error(err);
       setAuthLocked(true);
-      setAuthError(err?.message || "Nie udało się zalogować.");
+      setAuthError(window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zalogować.') || 'Nie udało się zalogować.');
     } finally {
       if (loginBtn) {
         loginBtn.disabled = false;
@@ -2225,7 +2245,7 @@ function bindAuthUI() {
       toast("Hasło zmienione", "Nowe hasło zostało zapisane.", "success");
     } catch (err) {
       console.error("Błąd zmiany hasła:", err);
-      const msg = err?.message || "Nie udało się zmienić hasła.";
+      const msg = window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zmienić hasła.') || 'Nie udało się zmienić hasła.';
       setAccountPasswordError(msg);
       toast("Nie zapisano hasła", msg, "error");
     } finally {
@@ -2247,7 +2267,7 @@ function bindAuthUI() {
       emailInput?.focus?.();
     } catch (err) {
       console.error(err);
-      setAuthError(err?.message || "Nie udało się wylogować.");
+      setAuthError(window.getUserFriendlyErrorMessage?.(err, 'Nie udało się wylogować.') || 'Nie udało się wylogować.');
     }
   });
 
@@ -2354,13 +2374,13 @@ async function init() {
     await loadCatalogsFromSupabaseIntoState({ silent: true });
   } catch (err) {
     console.error('Błąd ładowania katalogów z Supabase:', err);
-    toast('Katalogi nie zostały pobrane', err?.message || 'Nie udało się wczytać katalogów z Supabase.', 'warning');
+    toast('Katalogi nie zostały pobrane', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się wczytać katalogów. Odśwież dane i spróbuj ponownie.') || 'Nie udało się wczytać katalogów. Odśwież dane i spróbuj ponownie.', 'warning');
   }
   try {
     await loadOperationalStateFromSupabaseIntoState({ silent: true });
   } catch (err) {
     console.error('Błąd ładowania danych operacyjnych z Supabase:', err);
-    toast('Dane operacyjne nie zostały pobrane', err?.message || 'Nie udało się wczytać operacyjnych danych magazynowych z Supabase.', 'warning');
+    toast('Dane operacyjne nie zostały pobrane', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się wczytać danych magazynowych. Odśwież dane i spróbuj ponownie.') || 'Nie udało się wczytać danych magazynowych. Odśwież dane i spróbuj ponownie.', 'warning');
   }
   bindTabs();
   bindTabModal();
@@ -2451,7 +2471,7 @@ async function init() {
     } catch (err) {
       console.error('Błąd zapisu progów firmy do Supabase:', err);
       syncThresholdInputsFromAuth();
-      toast('Nie zapisano progów', err?.message || 'Nie udało się zapisać progów firmy.', 'error');
+      toast('Nie zapisano progów', window.getUserFriendlyErrorMessage?.(err, 'Nie udało się zapisać progów firmy. Spróbuj ponownie.') || 'Nie udało się zapisać progów firmy. Spróbuj ponownie.', 'error');
     }
   };
 
@@ -2498,11 +2518,13 @@ async function init() {
 
   if (deliveryDate) {
     deliveryDate.addEventListener("input", (e) => {
+      if (_finalizeDeliveryBusy) return;
       state.currentDelivery.dateISO = normalize(e.target.value);
       save();
       renderDelivery();
     });
     deliveryDate.addEventListener("change", (e) => {
+      if (_finalizeDeliveryBusy) return;
       state.currentDelivery.dateISO = normalize(e.target.value);
       save();
       renderDelivery();
@@ -2512,11 +2534,13 @@ async function init() {
   const deliveryInvoiceNumber = document.getElementById("deliveryInvoiceNumber");
   if (deliveryInvoiceNumber) {
     deliveryInvoiceNumber.addEventListener("input", (e) => {
+      if (_finalizeDeliveryBusy) return;
       state.currentDelivery.invoiceNumber = normalize(e.target.value);
       save();
       renderDelivery();
     });
     deliveryInvoiceNumber.addEventListener("change", (e) => {
+      if (_finalizeDeliveryBusy) return;
       state.currentDelivery.invoiceNumber = normalize(e.target.value);
       save();
       renderDelivery();
@@ -2528,10 +2552,12 @@ async function init() {
     buildDate.value = buildDraftDate;
     state.currentBuild.dateISO = buildDraftDate;
     buildDate.addEventListener("input", (e) => {
+      if (_finalizeBuildBusy) return;
       state.currentBuild.dateISO = normalize(e.target.value);
       save();
     });
     buildDate.addEventListener("change", (e) => {
+      if (_finalizeBuildBusy) return;
       state.currentBuild.dateISO = normalize(e.target.value);
       save();
     });
@@ -2572,6 +2598,7 @@ function initBeforeUnloadWarning() {
 
 // Delivery events
 document.getElementById("supplierSelect")?.addEventListener("change", (e) => {
+  if (_finalizeDeliveryBusy) return;
   const nextSupplier = normalize(e.target.value);
   const currentSupplier = normalize(state.currentDelivery?.supplier);
   const hasItems = Array.isArray(state.currentDelivery?.items) && state.currentDelivery.items.length > 0;
@@ -2593,6 +2620,7 @@ document.getElementById("supplierSelect")?.addEventListener("change", (e) => {
 });
 
 document.getElementById("supplierPartsSelect")?.addEventListener("change", (e) => {
+  if (_finalizeDeliveryBusy) return;
   const opt = e.target.selectedOptions?.[0];
   if (!opt || !opt.value) {
     const priceEl = document.getElementById("deliveryPrice");
@@ -2605,6 +2633,7 @@ document.getElementById("supplierPartsSelect")?.addEventListener("change", (e) =
 
 document.getElementById("addDeliveryItemBtn")?.addEventListener("click", () => {
   const btn = document.getElementById("addDeliveryItemBtn");
+  if (_finalizeDeliveryBusy) return;
   if (btn?.dataset.busy === "1") return;
 
   const sup = document.getElementById("supplierSelect")?.value;
@@ -2660,6 +2689,7 @@ document.getElementById("addDeliveryItemBtn")?.addEventListener("click", () => {
 });
 
 document.getElementById("finalizeDeliveryBtn")?.addEventListener("click", async () => {
+  if (_finalizeDeliveryBusy) return;
   try { await finalizeDelivery(); }
   catch (e) { 
     console.error(e); 
@@ -2668,6 +2698,7 @@ document.getElementById("finalizeDeliveryBtn")?.addEventListener("click", async 
 });
 
 window.removeDeliveryItem = (id) => {
+  if (_finalizeDeliveryBusy) return;
   const item = state.currentDelivery.items.find(x => x.id === id);
   if (!item) return;
   if (!confirm(`Czy na pewno usunąć pozycję "${item.sku}" (${item.qty} szt.) z dostawy?`)) return;
@@ -2679,6 +2710,7 @@ window.removeDeliveryItem = (id) => {
 // Build events
 document.getElementById("addBuildItemBtn")?.addEventListener("click", () => {
   const btn = document.getElementById("addBuildItemBtn");
+  if (_finalizeBuildBusy) return;
   if (btn?.dataset.busy === "1") return;
 
   const code = document.getElementById("machineSelect")?.value;
@@ -2721,6 +2753,7 @@ document.getElementById("addBuildItemBtn")?.addEventListener("click", () => {
 });
 
 window.removeBuildItem = (id) => {
+  if (_finalizeBuildBusy) return;
   const item = state.currentBuild.items.find(x => x.id === id);
   if (!item) return;
   const machine = state.machineCatalog.find(m => m.code === item.machineCode);
@@ -2732,6 +2765,7 @@ window.removeBuildItem = (id) => {
 };
 
 document.getElementById("finalizeBuildBtn")?.addEventListener("click", async () => {
+  if (_finalizeBuildBusy) return;
   try {
     const mode = document.getElementById("consumeMode")?.value;
     if (mode === 'manual') {
@@ -2767,11 +2801,12 @@ document.getElementById("finalizeBuildBtn")?.addEventListener("click", async () 
     }
   } catch (e) {
     console.error(e);
-    toast("Błąd systemu", "Nie udało się finalizować produkcji. Sprawdź konsolę (F12) po szczegóły.", "error");
+    toast("Nie zapisano produkcji", window.getUserFriendlyErrorMessage?.(e, "Nie udało się zapisać produkcji. Sprawdź pozycje i spróbuj ponownie.") || "Nie udało się zapisać produkcji. Sprawdź pozycje i spróbuj ponownie.", "error");
   }
 });
 
 document.getElementById("consumeMode")?.addEventListener("change", (e) => {
+  if (_finalizeBuildBusy) return;
   if (e.target.value === 'manual') {
     const els = getEls();
     if (els.missingBox) els.missingBox.classList.add("hidden");
@@ -2851,7 +2886,7 @@ document.getElementById("addPartBtn")?.addEventListener("click", async () => {
     toast("Zapisano", "Zapisano część w bazie.", "success");
   } catch (err) {
     console.error("Błąd zapisu części do Supabase:", err);
-    toast("Nie zapisano części", err?.message || "Nie udało się zapisać części w Supabase.", "error");
+    toast("Nie zapisano części", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać części. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać części. Odśwież dane i spróbuj ponownie.", "error");
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
@@ -2894,7 +2929,7 @@ Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
     console.error("Błąd archiwizacji części w Supabase:", err);
     part.archived = !willArchive;
     save();
-    toast(willArchive ? "Nie zarchiwizowano części" : "Nie przywrócono części", err?.message || "Nie udało się zapisać archiwizacji części w Supabase.", "error");
+    toast(willArchive ? "Nie zarchiwizowano części" : "Nie przywrócono części", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać zmiany statusu części. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać zmiany statusu części. Odśwież dane i spróbuj ponownie.", "error");
   }
 };
 
@@ -2935,7 +2970,7 @@ document.getElementById("addSupplierBtn")?.addEventListener("click", async () =>
     toast("Dodano dostawcę", `"${normalizedName}" został dodany do bazy.`, "success");
   } catch (err) {
     console.error("Błąd dodawania dostawcy do Supabase:", err);
-    toast("Nie utworzono dostawcy", err?.message || "Nie udało się dodać dostawcy w Supabase.", "error");
+    toast("Nie utworzono dostawcy", window.getUserFriendlyErrorMessage?.(err, "Nie udało się dodać dostawcy. Spróbuj ponownie.") || "Nie udało się dodać dostawcy. Spróbuj ponownie.", "error");
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
@@ -2978,7 +3013,7 @@ Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
     console.error("Błąd archiwizacji dostawcy w Supabase:", err);
     supplier.archived = !willArchive;
     save();
-    toast(willArchive ? "Nie zarchiwizowano dostawcy" : "Nie przywrócono dostawcy", err?.message || "Nie udało się zapisać archiwizacji dostawcy w Supabase.", "error");
+    toast(willArchive ? "Nie zarchiwizowano dostawcy" : "Nie przywrócono dostawcy", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać zmiany statusu dostawcy. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać zmiany statusu dostawcy. Odśwież dane i spróbuj ponownie.", "error");
   }
 };
 
@@ -3162,7 +3197,7 @@ Rekord wróci do nowych operacji. Historia pozostanie bez zmian.`;
     console.error("Błąd archiwizacji maszyny w Supabase:", err);
     machine.archived = !willArchive;
     save();
-    toast(willArchive ? "Nie zarchiwizowano maszyny" : "Nie przywrócono maszyny", err?.message || "Nie udało się zapisać archiwizacji maszyny w Supabase.", "error");
+    toast(willArchive ? "Nie zarchiwizowano maszyny" : "Nie przywrócono maszyny", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać zmiany statusu maszyny. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać zmiany statusu maszyny. Odśwież dane i spróbuj ponownie.", "error");
   }
 };
 
@@ -3259,7 +3294,7 @@ document.getElementById("supplierEditorSaveBtn")?.addEventListener("click", asyn
     toast("Zapisano zmiany", "Cennik dostawcy został zaktualizowany.", "success");
   } catch (err) {
     console.error("Błąd zapisu cennika dostawcy do Supabase:", err);
-    toast("Nie zapisano cennika", err?.message || "Nie udało się zapisać cennika dostawcy w Supabase.", "error");
+    toast("Nie zapisano cennika", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać cennika dostawcy. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać cennika dostawcy. Odśwież dane i spróbuj ponownie.", "error");
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
@@ -3270,7 +3305,7 @@ document.getElementById("supplierEditorSaveBtn")?.addEventListener("click", asyn
 
 document.getElementById("supplierEditorCancelBtn")?.addEventListener("click", () => {
   if (unsavedChanges.supplierEditor) {
-    if (!confirm("Masz niezapisane zmiany w cenniku. Czy na pewno chcesz anulować?")) {
+    if (!confirm("Masz niezapisane zmiany w cenniku. Po anulowaniu utracisz je bez zapisu. Czy chcesz kontynuować?")) {
       return;
     }
   }
@@ -3532,7 +3567,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", async
     toast("Zapisano zmiany", successMsg, "success");
   } catch (err) {
     console.error("Błąd zapisu maszyny do Supabase:", err);
-    toast("Nie zapisano maszyny", err?.message || "Nie udało się zapisać definicji maszyny w Supabase.", "error");
+    toast("Nie zapisano maszyny", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać maszyny. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać maszyny. Odśwież dane i spróbuj ponownie.", "error");
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
@@ -3543,7 +3578,7 @@ document.getElementById("machineEditorSaveBtn")?.addEventListener("click", async
 
 document.getElementById("machineEditorCancelBtn")?.addEventListener("click", () => {
   if (unsavedChanges.machineEditor) {
-    if (!confirm("Masz niezapisane zmiany w BOM. Czy na pewno chcesz anulować?")) {
+    if (!confirm("Masz niezapisane zmiany w BOM. Po anulowaniu utracisz je bez zapisu. Czy chcesz kontynuować?")) {
       return;
     }
   }
@@ -3820,7 +3855,7 @@ async function saveEditPart() {
     toast("Zapisano zmiany", `Część "${sku}" została zaktualizowana.`, "success");
   } catch (err) {
     console.error("Błąd zapisu części do Supabase:", err);
-    toast("Nie zapisano części", err?.message || "Nie udało się zapisać zmian części w Supabase.", "error");
+    toast("Nie zapisano części", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać zmian części. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać zmian części. Odśwież dane i spróbuj ponownie.", "error");
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
@@ -3831,7 +3866,7 @@ async function saveEditPart() {
 
 function cancelEditPart() {
   if (unsavedChanges.partEditor) {
-    if (!confirm("Masz niezapisane zmiany. Czy na pewno chcesz anulować?")) {
+    if (!confirm("Masz niezapisane zmiany. Po anulowaniu utracisz je bez zapisu. Czy chcesz kontynuować?")) {
       return;
     }
   }

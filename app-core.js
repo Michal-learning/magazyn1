@@ -214,7 +214,7 @@ function load() {
     }
   } catch (e) {
     console.error("Error loading data:", e);
-    toast("Błąd odczytu", "Nie udało się wczytać danych.", "error");
+    toast("Błąd odczytu", "Nie udało się wczytać zapisanych danych roboczych. Aplikacja uruchomi się z pustym stanem lokalnym.", "error");
   }
 }
 
@@ -705,12 +705,98 @@ function isCurrentDeliveryFinalizable() {
   return hasItems && hasSupplier && hasInvoiceNumber && !!dateValidation?.valid;
 }
 
+function getHistorySanityBoundary() {
+  const latest = Array.isArray(state.history) && state.history.length ? state.history[0] : null;
+  return {
+    id: latest?.id ?? null,
+    ts: Number(latest?.ts) || 0
+  };
+}
+
+function isHistoryEventAfterBoundary(ev, boundary = null) {
+  if (!ev) return false;
+  const boundaryTs = Number(boundary?.ts) || 0;
+  const eventTs = Number(ev?.ts) || 0;
+  if (!boundary?.id && !boundaryTs) return true;
+  if (eventTs > boundaryTs) return true;
+  if (eventTs < boundaryTs) return false;
+  return String(ev?.id ?? '') !== String(boundary?.id ?? '');
+}
+
+function validateHistoryEventBasics(ev, expected = {}) {
+  const type = normalize(ev?.type).toLowerCase();
+  if (!type || type !== normalize(expected?.type).toLowerCase()) return false;
+
+  const expectedDateISO = normalize(expected?.dateISO);
+  if (expectedDateISO && normalize(ev?.dateISO) !== expectedDateISO) return false;
+
+  const items = Array.isArray(ev?.items)
+    ? ev.items.filter(Boolean)
+    : (Array.isArray(ev?.details?.changes) ? ev.details.changes.filter(Boolean) : []);
+
+  if (!items.length) return false;
+
+  if (type === 'delivery') {
+    if (normalize(ev?.supplier) !== normalize(expected?.supplier)) return false;
+    const expectedItemCount = Math.max(1, safeQtyInt(expected?.itemCount || 0));
+    if (items.length < expectedItemCount) return false;
+    return items.every(item => normalize(item?.sku) && safeInt(item?.qty) > 0);
+  }
+
+  if (type === 'build') {
+    const expectedItemCount = Math.max(1, safeQtyInt(expected?.itemCount || 0));
+    const expectedTotalQty = Math.max(1, safeQtyInt(expected?.totalQty || 0));
+    const actualTotalQty = items.reduce((sum, item) => sum + safeInt(item?.qty), 0);
+    if (items.length < expectedItemCount) return false;
+    if (actualTotalQty < expectedTotalQty) return false;
+    return items.every(item => normalize(item?.code) && safeInt(item?.qty) > 0);
+  }
+
+  if (type === 'adjustment') {
+    const expectedSkuSet = new Set((Array.isArray(expected?.skus) ? expected.skus : []).map(sku => skuKey(sku)).filter(Boolean));
+    const actualSkuSet = new Set(items.map(item => skuKey(item?.sku)).filter(Boolean));
+    if (!actualSkuSet.size) return false;
+    if (expectedSkuSet.size && expectedSkuSet.size !== actualSkuSet.size) return false;
+    if (expectedSkuSet.size) {
+      for (const sku of expectedSkuSet) {
+        if (!actualSkuSet.has(sku)) return false;
+      }
+    }
+    return items.every(item => normalize(item?.sku));
+  }
+
+  return false;
+}
+
+function findHistorySanityMatch(expected = {}, boundary = null) {
+  const history = Array.isArray(state.history) ? state.history : [];
+  return history.find(ev => isHistoryEventAfterBoundary(ev, boundary) && validateHistoryEventBasics(ev, expected)) || null;
+}
+
+function warnIfHistoryLooksSuspicious(expected = {}, boundary = null) {
+  const match = findHistorySanityMatch(expected, boundary);
+  if (match) return true;
+
+  let message = 'Operacja została wykonana, ale historia nie potwierdza jej nowym, kompletnym wpisem. Sprawdź zakładkę historii.';
+  if (expected?.type === 'delivery') {
+    message = 'Dostawa została wykonana, ale historia nie potwierdza jej nowym, kompletnym wpisem. Sprawdź zakładkę historii.';
+  } else if (expected?.type === 'build') {
+    message = 'Produkcja została wykonana, ale historia nie potwierdza jej nowym, kompletnym wpisem. Sprawdź zakładkę historii.';
+  } else if (expected?.type === 'adjustment') {
+    message = 'Korekta została wykonana, ale historia nie potwierdza jej nowym, kompletnym wpisem. Sprawdź zakładkę historii.';
+  }
+
+  toast('Historia wymaga sprawdzenia', message, 'warning', { duration: 5200 });
+  return false;
+}
+
 async function finalizeDelivery() {
   if (_finalizeDeliveryBusy) {
     toast("Operacja w toku", "Przetwarzanie dostawy już trwa - proszę czekać.", "warning");
     return;
   }
   _finalizeDeliveryBusy = true;
+  renderDelivery();
   
   try {
     const dateInput = document.getElementById("deliveryDate");
@@ -754,6 +840,7 @@ async function finalizeDelivery() {
     }
 
     const itemCount = d.items.length;
+    const historyBoundary = getHistorySanityBoundary();
     const payload = {
       supplier: normalize(d.supplier),
       dateISO: d.dateISO,
@@ -768,6 +855,12 @@ async function finalizeDelivery() {
 
     await window.saveDeliveryToSupabase?.(payload);
     await window.loadOperationalStateFromSupabaseIntoState?.({ silent: true });
+    warnIfHistoryLooksSuspicious({
+      type: 'delivery',
+      dateISO: payload.dateISO,
+      supplier: payload.supplier,
+      itemCount: payload.items.length
+    }, historyBoundary);
 
     state.currentDelivery.items = [];
     state.currentDelivery.supplier = null;
@@ -783,9 +876,10 @@ async function finalizeDelivery() {
     toast("Dostawa przyjęta", `Przyjęto ${itemCount} pozycji na stan magazynowy.`, "success");
   } catch (err) {
     console.error("Błąd zapisu dostawy do Supabase:", err);
-    toast("Nie zapisano dostawy", err?.message || "Nie udało się zapisać dostawy w Supabase.", "error");
+    toast("Nie zapisano dostawy", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać dostawy. Sprawdź dane i spróbuj ponownie.") || "Nie udało się zapisać dostawy. Sprawdź dane i spróbuj ponownie.", "error");
   } finally {
     _finalizeDeliveryBusy = false;
+    renderDelivery();
   }
 }
 
@@ -901,6 +995,7 @@ async function finalizeBuild(manualAllocation = null) {
     return;
   }
   _finalizeBuildBusy = true;
+  renderBuild();
   
   try {
     const buildDateInput = document.getElementById("buildDate");
@@ -979,12 +1074,19 @@ async function finalizeBuild(manualAllocation = null) {
       return;
     }
 
+    const historyBoundary = getHistorySanityBoundary();
     await window.saveBuildToSupabase?.({
       buildISO,
       items,
       manualAllocations
     });
     await window.loadOperationalStateFromSupabaseIntoState?.({ silent: true });
+    warnIfHistoryLooksSuspicious({
+      type: 'build',
+      dateISO: buildISO,
+      itemCount: items.length,
+      totalQty: items.reduce((sum, item) => sum + safeInt(item.qty), 0)
+    }, historyBoundary);
     
     state.currentBuild.items = [];
     state.currentBuild.dateISO = "";
@@ -998,9 +1100,10 @@ async function finalizeBuild(manualAllocation = null) {
     toast("Produkcja zakończona", "Stany magazynowe zostały zaktualizowane.", "success");
   } catch (err) {
     console.error("Błąd finalizacji produkcji w Supabase:", err);
-    toast("Nie zapisano produkcji", err?.message || "Nie udało się zapisać produkcji w Supabase.", "error");
+    toast("Nie zapisano produkcji", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać produkcji. Sprawdź pozycje i spróbuj ponownie.") || "Nie udało się zapisać produkcji. Sprawdź pozycje i spróbuj ponownie.", "error");
   } finally {
     _finalizeBuildBusy = false;
+    renderBuild();
   }
 }
 
@@ -1291,11 +1394,17 @@ async function commitStockAdjustments() {
       return;
     }
 
+    const historyBoundary = getHistorySanityBoundary();
     await window.saveStockAdjustmentToSupabase?.({
       dateISO,
       items: changes
     });
     await window.loadOperationalStateFromSupabaseIntoState?.({ silent: true });
+    warnIfHistoryLooksSuspicious({
+      type: 'adjustment',
+      dateISO,
+      skus: changes.map(item => item.sku)
+    }, historyBoundary);
 
     state.ui.stockEditMode = false;
     state.ui.pendingStockAdjustments = {};
@@ -1306,7 +1415,7 @@ async function commitStockAdjustments() {
     toast("Korekty zapisane", `Zapisano korekty dla ${changes.length} ${changes.length === 1 ? "części" : "części"}.`, "success");
   } catch (err) {
     console.error("Błąd zapisu korekt do Supabase:", err);
-    toast("Nie zapisano korekt", err?.message || "Nie udało się zapisać korekt stanów w Supabase.", "error");
+    toast("Nie zapisano korekt", window.getUserFriendlyErrorMessage?.(err, "Nie udało się zapisać korekt stanów. Odśwież dane i spróbuj ponownie.") || "Nie udało się zapisać korekt stanów. Odśwież dane i spróbuj ponownie.", "error");
   } finally {
     _stockAdjustmentsBusy = false;
   }
