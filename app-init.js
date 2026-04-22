@@ -740,6 +740,39 @@ function applyTableSystemClasses() {
   });
 }
 
+function ensureMainTableScrollContainers() {
+  const mainTableSelectors = [
+    '#skuSummaryTable',
+    '#historyTable',
+    '#partsCatalogTable',
+    '#suppliersListTable',
+    '#machinesCatalogTable',
+    '#machinesStockTable',
+    '#companyUsersTable'
+  ];
+
+  mainTableSelectors.forEach(selector => {
+    const table = document.querySelector(selector);
+    if (!table) return;
+
+    const existingContainer = table.closest('.table-container');
+    if (existingContainer) {
+      existingContainer.classList.add('table-scroll-main');
+      existingContainer.setAttribute('data-table-scroll', 'main');
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-container table-scroll-main';
+    wrapper.setAttribute('data-table-scroll', 'main');
+
+    const parent = table.parentNode;
+    if (!parent) return;
+    parent.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  });
+}
+
 // === MAIN INIT ===
 
 const APP_TABS = Object.freeze([
@@ -2464,6 +2497,7 @@ async function init() {
   initThresholdsToggle();
   initNewPartToggle();
   applyTableSystemClasses();
+  ensureMainTableScrollContainers();
   initStockEditMode();
   initWarehouseArchiveToggles();
   

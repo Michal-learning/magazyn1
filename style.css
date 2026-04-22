@@ -760,12 +760,33 @@ tbody tr:nth-child(even):hover {
 }
 
 /* Sticky Header */
+.table-scroll-main {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: min(68vh, 720px);
+  scrollbar-gutter: stable both-edges;
+}
+
+.table-scroll-main table {
+  min-width: 100%;
+}
+
 .table-sticky th {
   position: sticky;
   top: 0;
   z-index: 10;
   backdrop-filter: blur(12px);
   background: var(--stickyhead-bg);
+}
+
+.table-sticky thead th {
+  z-index: 12;
+}
+
+@media (max-width: 900px) {
+  .table-scroll-main {
+    max-height: min(62vh, 640px);
+  }
 }
 
 /* Right aligned cells */
