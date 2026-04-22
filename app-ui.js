@@ -99,6 +99,16 @@ function paginateTableRows(tableKey, rows) {
   };
 }
 
+function cleanupHistorySectionTrailingTip(mount) {
+  if (!mount || mount.getAttribute('data-pagination-for') !== 'historyTable') return;
+  let node = mount.nextElementSibling;
+  while (node) {
+    const next = node.nextElementSibling;
+    node.remove();
+    node = next;
+  }
+}
+
 function getTablePaginationMount(tableElement) {
   if (!tableElement) return null;
   const host = tableElement.closest('.table-container') || tableElement.parentElement;
@@ -120,15 +130,17 @@ function getTablePaginationMount(tableElement) {
     card.setAttribute('data-pagination-card', tableId);
   }
 
-  let mount = host.nextElementSibling;
-  if (!mount || !mount.classList?.contains('table-pagination')) {
+  let mount = shell.querySelector(`.table-pagination[data-pagination-for="${tableId}"]`);
+  if (!mount) {
     mount = document.createElement('div');
-    mount.className = 'table-pagination';
-    host.insertAdjacentElement('afterend', mount);
+    mount.className = 'table-pagination table-pagination-stable';
+    mount.setAttribute('data-pagination-for', tableId);
+    shell.appendChild(mount);
   }
 
   mount.classList.add('table-pagination-stable');
   mount.setAttribute('data-pagination-for', tableId);
+  cleanupHistorySectionTrailingTip(mount);
   return mount;
 }
 

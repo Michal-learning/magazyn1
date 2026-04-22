@@ -781,15 +781,26 @@ tbody tr:nth-child(even):hover {
   min-height: 0;
 }
 
+.table-section-shell.table-section-shell-paginated[data-pagination-shell] {
+  overflow: hidden;
+}
+
 .table-section-card.table-section-card-paginated > .table-section-shell.table-section-shell-paginated {
   flex: 1 1 auto;
 }
 
 .table-scroll-paginated-host {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
+.table-section-shell.table-section-shell-paginated > .table-pagination {
+  margin-top: auto;
+}
+
+.table-scroll-main.table-scroll-paginated {
+  flex: 0 0 auto;
+}
 
 .table-scroll-main table {
   min-width: 100%;
@@ -826,7 +837,7 @@ tbody tr:nth-child(even):hover {
 .table-pagination {
   display: flex;
   justify-content: center;
-  margin-top: auto;
+  flex: 0 0 auto;
   padding-top: var(--space-5);
   min-height: 60px;
 }
