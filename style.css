@@ -2324,7 +2324,9 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--text-sm);
 }
 
-.catalog-actions {
+.table-row-actions,
+.catalog-actions,
+.user-row-actions-clean {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -2332,63 +2334,42 @@ input[type="range"]::-moz-range-thumb {
   flex-wrap: wrap;
 }
 
-.catalog-actions .btn {
+.table-row-actions .btn,
+.catalog-actions .btn,
+.user-row-actions-clean .btn {
   min-height: 32px;
-  min-width: 96px;
+  height: 32px;
+  min-width: 88px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
 }
 
-.catalog-actions .btn-catalog-edit {
-  background: rgba(16, 185, 129, 0.1);
-  color: #86efac;
-  border-color: rgba(16, 185, 129, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.06);
+.table-row-actions .btn,
+.catalog-actions .btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
-.catalog-actions .btn-catalog-edit:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #bbf7d0;
+.table-row-actions .btn:hover:not(:disabled),
+.catalog-actions .btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
-.catalog-actions .btn-catalog-edit:active:not(:disabled) {
-  background: rgba(16, 185, 129, 0.18);
+.table-row-actions .btn:active:not(:disabled),
+.catalog-actions .btn:active:not(:disabled) {
+  background: var(--surface-4);
 }
 
-.catalog-actions .btn-catalog-archive {
-  background: rgba(245, 158, 11, 0.1);
-  color: #fcd34d;
-  border-color: rgba(245, 158, 11, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.06);
-}
-
-.catalog-actions .btn-catalog-archive:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.38);
-  color: #fde68a;
-}
-
-.catalog-actions .btn-catalog-archive:active:not(:disabled) {
-  background: rgba(245, 158, 11, 0.18);
-}
-
-.catalog-actions .btn-catalog-restore {
-  background: rgba(122, 162, 247, 0.1);
-  color: var(--accent-light);
-  border-color: rgba(122, 162, 247, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(122, 162, 247, 0.06);
-}
-
-.catalog-actions .btn-catalog-restore:hover:not(:disabled) {
-  background: rgba(122, 162, 247, 0.14);
-  border-color: rgba(122, 162, 247, 0.4);
-}
-
-.catalog-actions .btn-catalog-restore:active:not(:disabled) {
-  background: rgba(122, 162, 247, 0.18);
+.table-row-actions .btn:focus-visible,
+.catalog-actions .btn:focus-visible,
+.user-row-actions-clean .btn:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .catalog-readonly-backdrop {
@@ -4041,12 +4022,14 @@ body.user-info-open {
     justify-content: flex-start;
   }
 
+  .table-row-actions,
   .user-row-actions-clean,
   .user-create-actions,
   .user-info-actions {
     width: 100%;
   }
 
+  .table-row-actions .btn,
   .user-row-actions-clean .btn,
   .user-create-actions .btn,
   .user-info-actions .btn {

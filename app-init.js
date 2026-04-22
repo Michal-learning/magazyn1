@@ -1745,8 +1745,8 @@ function renderUsersAdmin() {
         <td class="text-right">
           ${hasUsersManagePermission ? `
             <div class="user-row-actions-clean">
-              <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Informacje</button>
               <button type="button" class="btn btn-secondary btn-sm" data-action="openUserHistory" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Szczegóły</button>
             </div>
           ` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
         </td>
