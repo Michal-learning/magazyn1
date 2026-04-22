@@ -54,8 +54,9 @@
   --field-bg-focus: rgba(18, 28, 40, 0.98);
 
   --table-bg: transparent;
-  --thead-bg: rgba(255, 255, 255, 0.02);
-  --stickyhead-bg: rgba(16, 21, 29, 0.98);
+  --table-head-bg: rgba(24, 32, 43, 0.96);
+  --thead-bg: var(--table-head-bg);
+  --stickyhead-bg: var(--table-head-bg);
   --modal-panel-bg: rgba(20, 25, 35, 0.96);
   --row-hover: rgba(122, 162, 247, 0.05);
   --row-zebra: rgba(255, 255, 255, 0.01);
@@ -710,6 +711,7 @@ th {
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
   white-space: nowrap;
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 table.table-dense th {

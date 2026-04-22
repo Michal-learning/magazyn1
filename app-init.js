@@ -727,7 +727,7 @@ function applyTableSystemClasses() {
 
   mainTableSelectors.forEach(selector => {
     const table = document.querySelector(selector);
-    if (table) table.classList.add('table-main');
+    if (table) table.classList.add('table-main', 'table-sticky');
   });
 
   operationalTableSelectors.forEach(selector => {
