@@ -772,6 +772,7 @@ tbody tr:nth-child(even):hover {
   display: flex;
   flex-direction: column;
   height: var(--paginated-section-height);
+  min-height: 0;
 }
 
 .table-section-shell.table-section-shell-paginated {
@@ -787,10 +788,12 @@ tbody tr:nth-child(even):hover {
 
 .table-section-card.table-section-card-paginated > .table-section-shell.table-section-shell-paginated {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .table-scroll-paginated-host {
-  flex: 0 0 auto;
+  display: flex;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -799,7 +802,10 @@ tbody tr:nth-child(even):hover {
 }
 
 .table-scroll-main.table-scroll-paginated {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
 }
 
 .table-scroll-main table {
