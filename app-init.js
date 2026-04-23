@@ -1613,7 +1613,12 @@ function resetCreateUserForm() {
   if (fullNameInput) fullNameInput.value = '';
   if (emailInput) emailInput.value = '';
   if (passwordInput) passwordInput.value = '';
-  if (roleSelect) roleSelect.value = 'worker';
+  if (roleSelect) {
+    roleSelect.value = 'worker';
+    if (typeof refreshComboFromSelect === 'function') {
+      try { refreshComboFromSelect(roleSelect, { placeholder: 'Wybierz rolę...', searchable: false }); } catch {}
+    }
+  }
 }
 
 function openCreateUserModal() {
@@ -1738,6 +1743,9 @@ function openCompanyUserInfoModal(memberId) {
 
   roleSelect.value = ['worker', 'admin'].includes(meta.rowRole) ? meta.rowRole : 'worker';
   roleSelect.disabled = !meta.canModify;
+  if (typeof refreshComboFromSelect === 'function') {
+    try { refreshComboFromSelect(roleSelect, { placeholder: 'Wybierz rolę...', searchable: false }); } catch {}
+  }
   statusInput.value = meta.statusLabel;
   toggleActiveBtn.textContent = meta.actionLabel;
   toggleActiveBtn.dataset.memberId = String(item.id);
@@ -2665,9 +2673,12 @@ async function init() {
     initComboFromSelect(document.getElementById("supplierSelect"), { placeholder: "Wybierz dostawcę..." });
     initComboFromSelect(document.getElementById("supplierPartsSelect"), { placeholder: "Wybierz część..." });
     initComboFromSelect(document.getElementById("machineSelect"), { placeholder: "Wybierz maszynę..." });
+    initComboFromSelect(document.getElementById("consumeMode"), { placeholder: "Wybierz tryb...", searchable: false });
     initComboFromSelect(document.getElementById("supplierEditorPartSelect"), { placeholder: "Wybierz część..." });
     initComboFromSelect(document.getElementById("bomSkuSelect"), { placeholder: "Wybierz część..." });
     initComboFromSelect(document.getElementById("historyAuthorFilter"), { placeholder: "Wszyscy autorzy" });
+    initComboFromSelect(document.getElementById("createWorkerRoleSelect"), { placeholder: "Wybierz rolę...", searchable: false });
+    initComboFromSelect(document.getElementById("userInfoRoleSelect"), { placeholder: "Wybierz rolę...", searchable: false });
 
     syncDeliveryDraftUI({ keepSelectedPart: true, notifySupplierReset: false });
   } catch (e) {

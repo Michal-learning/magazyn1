@@ -2246,6 +2246,14 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--border);
 }
 
+.combobox-menu-simple {
+  padding-top: var(--space-1);
+}
+
+.combobox-no-search .combobox-options {
+  padding-top: var(--space-2);
+}
+
 .combobox-search input,
 .combobox-search-input {
   width: 100%;

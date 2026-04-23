@@ -2334,15 +2334,18 @@ function closeOpenCombobox(exceptApi = null) {
   }
 }
 
-function createComboShell(hostEl, placeholder = "Wybierz...", extraClass = "") {
+function createComboShell(hostEl, placeholder = "Wybierz...", extraClass = "", opts = {}) {
+  const searchable = opts?.searchable !== false;
   hostEl.innerHTML = `
     <button type="button" class="combobox-trigger ${extraClass}" aria-expanded="false">
       <span class="combobox-trigger-label">${escapeHtml(placeholder)}</span>
     </button>
-    <div class="combobox-menu hidden">
-      <div class="combobox-search">
-        <input type="text" class="combobox-search-input" placeholder="Szukaj..." autocomplete="off" />
-      </div>
+    <div class="combobox-menu hidden ${searchable ? '' : 'combobox-menu-simple'}">
+      ${searchable ? `
+        <div class="combobox-search">
+          <input type="text" class="combobox-search-input" placeholder="Szukaj..." autocomplete="off" />
+        </div>
+      ` : ''}
       <div class="combobox-options" role="listbox"></div>
     </div>
   `;
@@ -2351,6 +2354,7 @@ function createComboShell(hostEl, placeholder = "Wybierz...", extraClass = "") {
     trigger: hostEl.querySelector('.combobox-trigger'),
     label: hostEl.querySelector('.combobox-trigger-label'),
     menu: hostEl.querySelector('.combobox-menu'),
+    searchWrap: hostEl.querySelector('.combobox-search'),
     search: hostEl.querySelector('.combobox-search-input'),
     optionsBox: hostEl.querySelector('.combobox-options')
   };
@@ -2367,6 +2371,11 @@ function attachComboBehavior(hostEl, refs, api) {
     _openComboApi = api;
     api.refresh?.();
     requestAnimationFrame(() => {
+      if (api.searchable === false) {
+        const firstOption = refs.optionsBox.querySelector('.combobox-option:not(.is-empty):not(.is-disabled)');
+        firstOption?.focus?.();
+        return;
+      }
       search?.focus();
       search?.select?.();
     });
@@ -2387,6 +2396,25 @@ function attachComboBehavior(hostEl, refs, api) {
     else api.open();
   };
 
+  const moveActiveOption = (delta) => {
+    const items = Array.from(refs.optionsBox.querySelectorAll('.combobox-option:not(.is-empty):not(.is-disabled)'));
+    if (!items.length) return null;
+    if (delta > 0) api.activeIndex = Math.min(items.length - 1, api.activeIndex + delta);
+    else if (delta < 0) api.activeIndex = Math.max(0, api.activeIndex + delta);
+    else if (api.activeIndex < 0) api.activeIndex = 0;
+    api.refresh?.();
+    const refreshedItems = Array.from(refs.optionsBox.querySelectorAll('.combobox-option:not(.is-empty):not(.is-disabled)'));
+    const target = refreshedItems[Math.max(0, api.activeIndex)] || refreshedItems[0] || null;
+    target?.scrollIntoView?.({ block: 'nearest' });
+    return target;
+  };
+
+  const selectActiveOption = () => {
+    const items = Array.from(refs.optionsBox.querySelectorAll('.combobox-option:not(.is-empty):not(.is-disabled)'));
+    const target = items[Math.max(0, api.activeIndex)] || items[0];
+    if (target) target.click();
+  };
+
   trigger.addEventListener('click', (e) => {
     e.preventDefault();
     api.toggle();
@@ -2401,35 +2429,55 @@ function attachComboBehavior(hostEl, refs, api) {
     }
   });
 
+  if (api.searchable === false) {
+    menu.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveActiveOption(1)?.focus?.();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveActiveOption(-1)?.focus?.();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectActiveOption();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        api.close();
+        trigger.focus();
+        return;
+      }
+      if (e.key === 'Tab') {
+        api.close();
+      }
+    });
+    return;
+  }
+
   search?.addEventListener('input', () => {
     api.activeIndex = 0;
     api.refresh?.();
   });
 
   search?.addEventListener('keydown', (e) => {
-    const items = Array.from(refs.optionsBox.querySelectorAll('.combobox-option:not(.is-empty):not(.is-disabled)'));
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (!items.length) return;
-      api.activeIndex = Math.min(items.length - 1, api.activeIndex + 1);
-      api.refresh?.();
-      items[api.activeIndex]?.scrollIntoView?.({ block: 'nearest' });
+      moveActiveOption(1);
       return;
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (!items.length) return;
-      api.activeIndex = Math.max(0, api.activeIndex - 1);
-      api.refresh?.();
-      items[api.activeIndex]?.scrollIntoView?.({ block: 'nearest' });
+      moveActiveOption(-1);
       return;
     }
     if (e.key === 'Enter') {
-      const target = items[Math.max(0, api.activeIndex)] || items[0];
-      if (target) {
-        e.preventDefault();
-        target.click();
-      }
+      e.preventDefault();
+      selectActiveOption();
       return;
     }
     if (e.key === 'Escape') {
@@ -2574,7 +2622,8 @@ function renderSelectOptions(selectEl, options, labelFn = null) {
       return `<option value="${escapeHtml(opt)}">${escapeHtml(label)}</option>`;
     }).join('');
   if (options.includes(currentValue)) selectEl.value = currentValue;
-  refreshComboFromSelect(selectEl);
+  const existingData = _singleComboRegistry.get(selectEl);
+  refreshComboFromSelect(selectEl, existingData ? { searchable: existingData.searchable, includeEmptyOption: existingData.includeEmptyOption } : {});
 }
 
 function initComboFromSelect(selectEl, opts = {}) {
@@ -2588,13 +2637,15 @@ function initComboFromSelect(selectEl, opts = {}) {
     hostEl.className = 'combobox combo-select-host';
     selectEl.insertAdjacentElement('afterend', hostEl);
 
-    const refs = createComboShell(hostEl, opts.placeholder || 'Wybierz...');
+    const initialSearchable = opts.searchable !== false;
+    const refs = createComboShell(hostEl, opts.placeholder || 'Wybierz...', '', { searchable: initialSearchable });
     data = {
       selectEl,
       hostEl,
       refs,
       placeholder: opts.placeholder || 'Wybierz...',
       includeEmptyOption: !!opts.includeEmptyOption,
+      searchable: initialSearchable,
       activeIndex: -1,
       currentValue: normalize(selectEl.value || ''),
       refresh: null,
@@ -2613,6 +2664,9 @@ function initComboFromSelect(selectEl, opts = {}) {
   if (Object.prototype.hasOwnProperty.call(opts, 'includeEmptyOption')) {
     data.includeEmptyOption = !!opts.includeEmptyOption;
   }
+  if (Object.prototype.hasOwnProperty.call(opts, 'searchable')) {
+    data.searchable = opts.searchable !== false;
+  }
   refreshComboFromSelect(selectEl, opts);
   return data;
 }
@@ -2626,8 +2680,12 @@ function refreshComboFromSelect(selectEl, opts = {}) {
   if (Object.prototype.hasOwnProperty.call(opts, 'includeEmptyOption')) {
     data.includeEmptyOption = !!opts.includeEmptyOption;
   }
+  if (Object.prototype.hasOwnProperty.call(opts, 'searchable')) {
+    data.searchable = opts.searchable !== false;
+  }
   const { refs, hostEl } = data;
   const includeEmptyOption = !!data.includeEmptyOption;
+  const searchable = data.searchable !== false;
   const options = Array.from(selectEl.options || []).map(opt => ({
     value: opt.value,
     label: opt.textContent || '',
@@ -2636,9 +2694,10 @@ function refreshComboFromSelect(selectEl, opts = {}) {
   })).filter(opt => includeEmptyOption || opt.value !== '');
   const hasVisibleOptions = options.some(opt => !opt.disabled);
 
-  refs.search.placeholder = hasVisibleOptions ? 'Szukaj...' : 'Brak opcji';
+  if (refs.search) refs.search.placeholder = hasVisibleOptions ? 'Szukaj...' : 'Brak opcji';
   refs.trigger.disabled = !!selectEl.disabled;
   hostEl.classList.toggle('is-disabled', !!selectEl.disabled);
+  hostEl.classList.toggle('combobox-no-search', !searchable);
 
   if (!options.some(opt => opt.value === selectEl.value)) {
     selectEl.value = '';
@@ -2646,7 +2705,7 @@ function refreshComboFromSelect(selectEl, opts = {}) {
   data.currentValue = normalize(selectEl.value || '');
 
   data.refresh = () => {
-    const query = String(refs.search?.value || '').trim().toLowerCase();
+    const query = searchable ? String(refs.search?.value || '').trim().toLowerCase() : '';
     const filtered = options.filter(opt => !query || opt.label.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query));
     const selectedOpt = options.find(opt => opt.value === selectEl.value);
 
@@ -2660,7 +2719,7 @@ function refreshComboFromSelect(selectEl, opts = {}) {
       if (data.activeIndex < 0) data.activeIndex = 0;
 
       refs.optionsBox.innerHTML = filtered.map((opt, idx) => `
-        <button type="button" class="combobox-option ${opt.value === selectEl.value ? 'selected' : ''} ${idx === data.activeIndex ? 'active' : ''} ${opt.disabled ? 'is-disabled' : ''}" data-value="${escapeHtml(opt.value)}" ${opt.disabled ? 'disabled' : ''}>
+        <button type="button" class="combobox-option ${opt.value === selectEl.value ? 'selected' : ''} ${idx === data.activeIndex ? 'active' : ''} ${opt.disabled ? 'is-disabled' : ''}" data-value="${escapeHtml(opt.value)}" ${opt.disabled ? 'disabled' : ''} tabindex="${idx === data.activeIndex ? '0' : '-1'}">
           <span>${escapeHtml(opt.label)}</span>
         </button>
       `).join('');
