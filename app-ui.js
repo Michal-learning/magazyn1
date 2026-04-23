@@ -2101,7 +2101,7 @@ function renderAllSuppliers() {
 
   const canCreate = typeof canCreateSuppliers === 'function' ? canCreateSuppliers() : true;
   const canEdit = typeof canEditSuppliers === 'function' ? canEditSuppliers() : true;
-  const supplierAddRow = document.querySelector('.supplier-add-row');
+  const supplierAddRow = document.querySelector('.supplier-add-popover-anchor');
   if (supplierAddRow) {
     supplierAddRow.classList.toggle('hidden', !canCreate);
     supplierAddRow.setAttribute('aria-hidden', canCreate ? 'false' : 'true');

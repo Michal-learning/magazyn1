@@ -358,33 +358,47 @@ function initStockEditMode() {
   });
 }
 
-function initThresholdsToggle() {
-  const panel = byId("thresholdsPanel");
-  const btn = byId("toggleThresholdsBtn");
-  const anchor = byId("thresholdsPopoverAnchor");
-  if (!panel || !btn || !anchor) return;
-  if (btn.dataset.thresholdsBound === "1") return;
-  btn.dataset.thresholdsBound = "1";
+function initInlineActionPopover(config = {}) {
+  const anchor = byId(config.anchorId);
+  const panel = byId(config.panelId);
+  const btn = byId(config.buttonId);
+  if (!anchor || !panel || !btn) return null;
+
+  const boundKey = config.boundKey || `${config.buttonId}Bound`;
+  if (btn.dataset[boundKey] === "1") return null;
+  btn.dataset[boundKey] = "1";
+
+  const persistKey = config.persistKey || "";
+  const closeOnEscape = config.closeOnEscape !== false;
+  const onOpen = typeof config.onOpen === 'function' ? config.onOpen : null;
+  const onClose = typeof config.onClose === 'function' ? config.onClose : null;
 
   const setPanelOpen = (isOpen) => {
-    panel.classList.toggle("collapsed", !isOpen);
-    panel.setAttribute("aria-hidden", isOpen ? "false" : "true");
-    btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
-    btn.classList.toggle("is-active", isOpen);
+    const nextOpen = !!isOpen;
+    panel.classList.toggle("collapsed", !nextOpen);
+    panel.setAttribute("aria-hidden", nextOpen ? "false" : "true");
+    btn.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+    btn.classList.toggle("is-active", nextOpen);
     if (typeof setExpanded === "function") {
-      setExpanded(btn, isOpen);
+      setExpanded(btn, nextOpen);
     }
-    localStorage.setItem(THRESHOLDS_OPEN_KEY, isOpen ? "1" : "0");
+    if (persistKey) {
+      localStorage.setItem(persistKey, nextOpen ? "1" : "0");
+    }
+    if (nextOpen) {
+      onOpen?.();
+    } else {
+      onClose?.();
+    }
   };
 
-  const saved = localStorage.getItem(THRESHOLDS_OPEN_KEY);
-  setPanelOpen(saved === "1");
+  const initiallyOpen = persistKey ? localStorage.getItem(persistKey) === "1" : false;
+  setPanelOpen(initiallyOpen);
 
   btn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const shouldOpen = panel.classList.contains("collapsed");
-    setPanelOpen(shouldOpen);
+    setPanelOpen(panel.classList.contains("collapsed"));
   });
 
   panel.addEventListener("click", (e) => {
@@ -397,12 +411,59 @@ function initThresholdsToggle() {
     setPanelOpen(false);
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (panel.classList.contains("collapsed")) return;
-    setPanelOpen(false);
-    btn.focus();
+  if (closeOnEscape) {
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (panel.classList.contains("collapsed")) return;
+      setPanelOpen(false);
+      btn.focus();
+    });
+  }
+
+  return {
+    open: () => setPanelOpen(true),
+    close: () => setPanelOpen(false),
+    toggle: () => setPanelOpen(panel.classList.contains("collapsed")),
+    isOpen: () => !panel.classList.contains("collapsed")
+  };
+}
+
+function initThresholdsToggle() {
+  return initInlineActionPopover({
+    anchorId: "thresholdsPopoverAnchor",
+    panelId: "thresholdsPanel",
+    buttonId: "toggleThresholdsBtn",
+    boundKey: "thresholdsBound",
+    persistKey: THRESHOLDS_OPEN_KEY
   });
+}
+
+function initSupplierAddPopover() {
+  const api = initInlineActionPopover({
+    anchorId: "supplierAddPopoverAnchor",
+    panelId: "supplierAddPopoverPanel",
+    buttonId: "toggleSupplierPopoverBtn",
+    boundKey: "supplierPopoverBound",
+    onOpen: () => {
+      window.setTimeout(() => {
+        document.getElementById("supplierNameInput")?.focus?.();
+      }, 0);
+    },
+    onClose: () => {
+      const input = document.getElementById("supplierNameInput");
+      if (input) input.value = "";
+    }
+  });
+
+  const input = document.getElementById("supplierNameInput");
+  input?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    document.getElementById("addSupplierBtn")?.click?.();
+  });
+
+  window.__supplierAddPopoverApi = api;
+  return api;
 }
 
 
@@ -1144,7 +1205,7 @@ function canEditCatalogMachines() {
 function refreshCatalogFeatureAccessUI() {
   const newPartBtn = document.getElementById('toggleNewPartBtn');
   const newMachineBtn = document.getElementById('openMachineModalBtn');
-  const supplierAddRow = document.querySelector('.supplier-add-row');
+  const supplierAddRow = document.querySelector('.supplier-add-popover-anchor');
 
   if (newPartBtn) {
     newPartBtn.classList.toggle('hidden', !canCreateCatalogParts());
@@ -2521,6 +2582,7 @@ async function init() {
 
   const initPromise = (async () => {
   initThresholdsToggle();
+  initSupplierAddPopover();
   initNewPartToggle();
   applyTableSystemClasses();
   ensureMainTableScrollContainers();
@@ -3141,6 +3203,7 @@ document.getElementById("addSupplierBtn")?.addEventListener("click", async () =>
     await window.createCatalogSupplierInSupabase?.(normalizedName);
     await loadCatalogsFromSupabaseIntoState({ silent: false });
     if (nameInput) nameInput.value = "";
+    window.__supplierAddPopoverApi?.close?.();
     toast("Dodano dostawcę", `"${normalizedName}" został dodany do bazy.`, "success");
   } catch (err) {
     console.error("Błąd dodawania dostawcy do Supabase:", err);
