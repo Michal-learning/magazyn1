@@ -372,51 +372,6 @@ function initInlineActionPopover(config = {}) {
   const closeOnEscape = config.closeOnEscape !== false;
   const onOpen = typeof config.onOpen === 'function' ? config.onOpen : null;
   const onClose = typeof config.onClose === 'function' ? config.onClose : null;
-  const useFixedPosition = config.positionStrategy === "fixed";
-
-  let frameId = 0;
-
-  const updateFixedPosition = () => {
-    if (!useFixedPosition) return;
-    if (panel.classList.contains("collapsed")) return;
-
-    const rect = btn.getBoundingClientRect();
-    const viewportPadding = 12;
-    const panelWidth = Math.min(
-      Math.max(240, panel.offsetWidth || 0, btn.offsetWidth || 0),
-      Math.max(240, window.innerWidth - viewportPadding * 2)
-    );
-    const halfWidth = panelWidth / 2;
-    const centeredLeft = rect.left + rect.width / 2;
-    const clampedLeft = Math.min(
-      Math.max(centeredLeft, viewportPadding + halfWidth),
-      window.innerWidth - viewportPadding - halfWidth
-    );
-    const top = rect.bottom + 8;
-
-    panel.style.setProperty("--inline-popover-left", `${Math.round(clampedLeft)}px`);
-    panel.style.setProperty("--inline-popover-top", `${Math.round(top)}px`);
-  };
-
-  const queueFixedPositionUpdate = () => {
-    if (!useFixedPosition) return;
-    if (frameId) window.cancelAnimationFrame(frameId);
-    frameId = window.requestAnimationFrame(() => {
-      frameId = 0;
-      updateFixedPosition();
-    });
-  };
-
-  const handleViewportUpdate = () => {
-    if (panel.classList.contains("collapsed")) return;
-    queueFixedPositionUpdate();
-  };
-
-  if (useFixedPosition) {
-    panel.classList.add("is-fixed-popover");
-    window.addEventListener("resize", handleViewportUpdate);
-    window.addEventListener("scroll", handleViewportUpdate, true);
-  }
 
   const setPanelOpen = (isOpen) => {
     const nextOpen = !!isOpen;
@@ -432,7 +387,6 @@ function initInlineActionPopover(config = {}) {
       localStorage.setItem(persistKey, nextOpen ? "1" : "0");
     }
     if (nextOpen) {
-      queueFixedPositionUpdate();
       onOpen?.();
     } else {
       onClose?.();
@@ -471,8 +425,7 @@ function initInlineActionPopover(config = {}) {
     open: () => setPanelOpen(true),
     close: () => setPanelOpen(false),
     toggle: () => setPanelOpen(panel.classList.contains("collapsed")),
-    isOpen: () => !panel.classList.contains("collapsed"),
-    updatePosition: () => queueFixedPositionUpdate()
+    isOpen: () => !panel.classList.contains("collapsed")
   };
 }
 
@@ -516,9 +469,7 @@ function initSupplierAddPopover() {
     panelId: "supplierAddPopoverPanel",
     buttonId: "toggleSupplierPopoverBtn",
     boundKey: "supplierPopoverBound",
-    positionStrategy: "fixed",
     onOpen: () => {
-      window.__supplierAddPopoverApi?.updatePosition?.();
       focusSupplierPopoverInput();
     },
     onClose: () => {

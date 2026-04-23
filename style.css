@@ -203,12 +203,16 @@ p {
   min-height: 100vh;
 }
 
-.appMain {
+ .appMain {
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .globalSide {
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .stickySide {
@@ -351,18 +355,6 @@ p {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
   transition: opacity var(--trans-base), transform var(--trans-base), visibility var(--trans-base);
-}
-
-.inline-action-popover.is-fixed-popover {
-  position: fixed;
-  top: var(--inline-popover-top, 0px);
-  left: var(--inline-popover-left, 0px);
-  z-index: 10050;
-  transform: translateX(-50%) translateY(0);
-}
-
-.inline-action-popover.is-fixed-popover.collapsed {
-  transform: translateX(-50%) translateY(-6px);
 }
 
 .inline-action-popover.collapsed {
