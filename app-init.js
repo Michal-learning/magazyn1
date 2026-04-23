@@ -1417,8 +1417,7 @@ function renderRolePermissionsPanel() {
     root.innerHTML = `
       <div class="role-permissions-owner-note">
         <h5>Owner ma pełny dostęp zawsze</h5>
-        <p>Ta rola nie korzysta z ograniczeń zapisanych w konfiguracji. Nawet jeśli kiedyś ktoś wpisze tu jakieś cuda, logika aplikacji i tak traktuje ownera jako pełny dostęp do wszystkiego.</p>
-        <div class="role-permissions-summary">
+        <div class="role-permissions-summary role-permissions-summary-compact">
           <span class="text-secondary">Dostęp do zakładek</span>
           <strong>${totalCount} / ${totalCount}</strong>
         </div>
@@ -1433,10 +1432,9 @@ function renderRolePermissionsPanel() {
   const totalFeatureCount = APP_FEATURE_PERMISSIONS.length;
 
   root.innerHTML = `
-    <div class="role-permissions-summary">
+    <div class="role-permissions-summary role-permissions-summary-compact">
       <div>
         <strong>${roleLabel}</strong>
-        <div class="text-secondary" style="font-size:var(--text-sm)">Duża karta steruje całą zakładką. Małe chipy w środku sterują dodatkowymi funkcjami tej zakładki.</div>
       </div>
       <div class="role-permissions-summary-metrics">
         ${hasDraft ? '<span class="badge badge-warning">Niezapisane zmiany</span>' : '<span class="badge badge-success">Zapisane</span>'}
@@ -1444,7 +1442,7 @@ function renderRolePermissionsPanel() {
         <strong>Funkcje: ${enabledFeatureCount} / ${totalFeatureCount}</strong>
       </div>
     </div>
-    <div class="role-permissions-grid">
+    <div class="role-permissions-grid role-permissions-grid-stable">
       ${APP_TABS.map(tab => {
         const enabled = !!effectivePermissions[tab.id];
         const features = getFeaturesForTab(tab.id);
@@ -1710,8 +1708,9 @@ function openCompanyUserInfoModal(memberId) {
   const statusInput = document.getElementById('userInfoStatusInput');
   const saveRoleBtn = document.getElementById('userInfoRoleSaveBtn');
   const toggleActiveBtn = document.getElementById('userInfoToggleActiveBtn');
+  const openHistoryBtn = document.getElementById('userInfoHistoryBtn');
 
-  if (!item || !backdrop || !summaryEl || !roleSelect || !statusInput || !saveRoleBtn || !toggleActiveBtn) return;
+  if (!item || !backdrop || !summaryEl || !roleSelect || !statusInput || !saveRoleBtn || !toggleActiveBtn || !openHistoryBtn) return;
 
   const meta = getCompanyUserAdminMeta(item);
   window.companyUserModalState.memberId = String(item.id);
@@ -1748,6 +1747,7 @@ function openCompanyUserInfoModal(memberId) {
   toggleActiveBtn.disabled = !meta.canModify;
   saveRoleBtn.dataset.memberId = String(item.id);
   saveRoleBtn.disabled = !meta.canModify || !['worker', 'admin'].includes(meta.rowRole);
+  openHistoryBtn.dataset.memberId = String(item.id);
 
   if (readonlyNoteEl) {
     if (meta.readonlyMessage) {
@@ -1833,7 +1833,6 @@ function renderUsersAdmin() {
         <td class="text-right user-actions-cell">
           ${hasUsersManagePermission ? `
             <div class="user-row-actions-clean">
-              <button type="button" class="btn btn-secondary btn-sm" data-action="openUserHistory" data-member-id="${escapeHtml(String(item.id))}">Historia</button>
               <button type="button" class="btn btn-secondary btn-sm" data-action="openUserInfo" data-member-id="${escapeHtml(String(item.id))}">Szczegóły</button>
             </div>
           ` : '<span class="catalog-status-empty" aria-hidden="true"></span>'}
@@ -2040,6 +2039,7 @@ function bindUserManagementUI() {
     if (openUserHistoryBtn) {
       if (!canAccessTab('users')) return;
       openHistoryForCompanyUser(openUserHistoryBtn.getAttribute('data-member-id'));
+      closeCompanyUserInfoModal();
       return;
     }
 

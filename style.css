@@ -3712,6 +3712,17 @@ body.part-details-open {
   height: 100%;
 }
 
+.users-admin-block-role-panel {
+  overflow: hidden;
+}
+
+.role-permissions-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .users-admin-block-header {
   flex: 0 0 auto;
 }
@@ -3888,9 +3899,8 @@ body.part-details-open {
 }
 
 .user-row-actions-clean {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-content: end;
+  display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -3903,7 +3913,7 @@ body.part-details-open {
 
 .user-row-actions-clean .btn {
   min-width: 0;
-  padding-inline: 8px;
+  padding-inline: 10px;
 }
 
 .user-create-backdrop {
@@ -4181,20 +4191,35 @@ body.user-info-open {
   flex-wrap: wrap;
 }
 
+.role-permissions-summary-compact {
+  flex: 0 0 auto;
+}
+
+.role-permissions-summary-compact > div:first-child {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+
 .role-permissions-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
+.role-permissions-grid-stable {
+  align-items: stretch;
+}
+
 .role-permission-tile {
   position: relative;
   display: grid;
   gap: 10px;
+  grid-template-rows: auto minmax(88px, 1fr) auto;
   align-content: start;
   text-align: left;
   width: 100%;
-  min-height: 0;
+  min-height: 184px;
   padding: 12px;
   background: var(--surface-1);
   border: 1px solid var(--border);
@@ -4276,6 +4301,8 @@ body.user-info-open {
   flex-wrap: wrap;
   gap: 6px;
   align-items: stretch;
+  align-content: flex-start;
+  min-height: 88px;
 }
 
 .role-feature-chip {
@@ -4284,6 +4311,7 @@ body.user-info-open {
   justify-content: space-between;
   gap: var(--space-2);
   min-width: 0;
+  min-height: 56px;
   flex: 1 1 160px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
@@ -4337,6 +4365,9 @@ body.user-info-open {
   position: relative;
   z-index: 2;
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  min-height: 88px;
   padding: var(--space-3);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
@@ -4364,10 +4395,6 @@ body.user-info-open {
 }
 
 .role-permissions-owner-note h5 {
-  margin-bottom: var(--space-2);
-}
-
-.role-permissions-owner-note p {
   margin-bottom: var(--space-3);
 }
 
@@ -4400,15 +4427,15 @@ body.user-info-open {
 
   #companyUsersTable th:nth-child(3),
   #companyUsersTable td:nth-child(3) {
-    width: 136px;
+    width: 120px;
   }
 
   .user-row-actions-clean {
-    grid-template-columns: 1fr;
+    justify-content: flex-end;
   }
 
   .user-row-actions-clean .btn {
-    width: 100%;
+    width: auto;
   }
 }
 
