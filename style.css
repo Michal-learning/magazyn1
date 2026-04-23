@@ -1386,13 +1386,13 @@ body.history-preview-open {
   .operation-side,
   .operation-side-body {
     min-height: auto;
-  }
-
-  .operation-side-body {
+    height: auto;
     overflow: visible;
   }
 
   .operation-side-scroll {
+    flex: 0 0 auto;
+    max-height: none;
     overflow-y: visible;
   }
 }
@@ -3067,6 +3067,10 @@ body.part-details-open {
 
 .operation-card.main-section-card-height {
   width: min(100%, var(--operation-max-width));
+  height: var(--main-section-card-height);
+  min-height: var(--main-section-card-height);
+  max-height: var(--main-section-card-height);
+  overflow: hidden;
 }
 
 .operation-card-header {
@@ -3081,6 +3085,7 @@ body.part-details-open {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .operation-grid {
@@ -3094,6 +3099,7 @@ body.part-details-open {
 .operation-card.main-section-card-height .operation-grid-build {
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   align-items: stretch;
 }
 
@@ -3109,6 +3115,7 @@ body.part-details-open {
 .operation-card.main-section-card-height .operation-main,
 .operation-card.main-section-card-height .operation-side {
   min-height: 0;
+  height: 100%;
 }
 
 .operation-main {
@@ -3125,6 +3132,7 @@ body.part-details-open {
 .operation-card.main-section-card-height .operation-side {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .operation-side-body {
@@ -3145,7 +3153,9 @@ body.part-details-open {
 }
 
 .operation-side-scroll {
+  flex: 1 1 auto;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -3179,10 +3189,12 @@ body.part-details-open {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
+  max-height: 100%;
 }
 
 .operation-summary-panel {
-  margin-top: 0;
+  flex: 0 0 auto;
+  margin-top: auto;
   padding: var(--space-4);
   background: linear-gradient(180deg, var(--surface-2), rgba(255, 255, 255, 0.02));
 }
@@ -3227,6 +3239,13 @@ body.part-details-open {
     width: 100%;
   }
 
+  .operation-card.main-section-card-height {
+    height: auto;
+    min-height: var(--main-section-card-height);
+    max-height: none;
+    overflow: visible;
+  }
+
   .operation-grid,
   .operation-grid-build {
     grid-template-columns: 1fr;
@@ -3239,13 +3258,13 @@ body.part-details-open {
   .operation-side,
   .operation-side-body {
     min-height: auto;
-  }
-
-  .operation-side-body {
+    height: auto;
     overflow: visible;
   }
 
   .operation-side-scroll {
+    flex: 0 0 auto;
+    max-height: none;
     overflow-y: visible;
   }
 
