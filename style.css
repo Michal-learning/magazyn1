@@ -1382,6 +1382,21 @@ body.history-preview-open {
   }
 }
 
+@media (max-width: 1100px) {
+  .operation-side,
+  .operation-side-body {
+    min-height: auto;
+  }
+
+  .operation-side-body {
+    overflow: visible;
+  }
+
+  .operation-side-scroll {
+    overflow-y: visible;
+  }
+}
+
 @media (max-width: 760px) {
   .machine-editor-bom-row,
   .supplier-editor-form-row {
@@ -3101,12 +3116,38 @@ body.part-details-open {
 }
 
 .operation-side {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
+  min-height: 0;
 }
 
 .operation-card.main-section-card-height .operation-side {
-  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.operation-side-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.operation-side-body-delivery {
+  min-height: 0;
+}
+
+.operation-side-body-build {
+  min-height: 0;
+}
+
+.operation-side-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .operation-form-row {
@@ -3135,9 +3176,9 @@ body.part-details-open {
 }
 
 .operation-card.main-section-card-height .operation-table-wrap {
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
   min-height: 0;
-  overflow-y: auto;
 }
 
 .operation-summary-panel {
@@ -3174,6 +3215,7 @@ body.part-details-open {
 
 .operation-manual-box {
   margin-bottom: 0;
+  min-height: 0;
 }
 
 .operation-manual-header {
@@ -3192,6 +3234,19 @@ body.part-details-open {
 
   .operation-main {
     max-width: none;
+  }
+
+  .operation-side,
+  .operation-side-body {
+    min-height: auto;
+  }
+
+  .operation-side-body {
+    overflow: visible;
+  }
+
+  .operation-side-scroll {
+    overflow-y: visible;
   }
 
   .operation-cta {
@@ -3224,7 +3279,8 @@ body.part-details-open {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin-top: var(--space-4);
+  margin-top: 0;
+  flex: 0 0 auto;
 }
 
 .delivery-summary {

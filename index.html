@@ -115,11 +115,13 @@
                 </div>
               </div>
               <div class="operation-side">
-                <div class="table-container operation-table-wrap">
-                  <table id="deliveryItemsTable">
-                    <thead><tr><th>Nazwa (ID)</th><th class="text-right">Ilość</th><th class="text-right">Cena</th><th class="text-right">Razem</th><th></th></tr></thead>
-                    <tbody></tbody>
-                  </table>
+                <div class="operation-side-body operation-side-body-delivery">
+                  <div class="table-container operation-table-wrap operation-side-scroll">
+                    <table id="deliveryItemsTable">
+                      <thead><tr><th>Nazwa (ID)</th><th class="text-right">Ilość</th><th class="text-right">Cena</th><th class="text-right">Razem</th><th></th></tr></thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
                 </div>
                 <div class="delivery-actions operation-summary-panel">
                   <div class="delivery-summary operation-summary-grid">
@@ -153,12 +155,14 @@
                 </div>
               </div>
               <div class="operation-side">
-                <div class="table-container operation-table-wrap">
-                  <table id="buildItemsTable"><thead><tr><th>Maszyna</th><th class="text-right">Ilość</th><th></th></tr></thead><tbody></tbody></table>
-                </div>
-                <div class="editor-panel hidden operation-manual-box" id="manualConsumeBox">
-                  <div class="editor-header operation-manual-header" style="margin-bottom:var(--space-3);padding-bottom:var(--space-2)"><h4 style="margin:0;font-size:var(--text-base)">Wybór partii (Manual)</h4></div>
-                  <div class="consume-grid" id="manualConsumeUI"></div>
+                <div class="operation-side-body operation-side-body-build">
+                  <div class="table-container operation-table-wrap operation-side-scroll">
+                    <table id="buildItemsTable"><thead><tr><th>Maszyna</th><th class="text-right">Ilość</th><th></th></tr></thead><tbody></tbody></table>
+                  </div>
+                  <div class="editor-panel hidden operation-manual-box operation-side-scroll" id="manualConsumeBox">
+                    <div class="editor-header operation-manual-header" style="margin-bottom:var(--space-3);padding-bottom:var(--space-2)"><h4 style="margin:0;font-size:var(--text-base)">Wybór partii (Manual)</h4></div>
+                    <div class="consume-grid" id="manualConsumeUI"></div>
+                  </div>
                 </div>
                 <div class="delivery-actions operation-summary-panel">
                   <div class="delivery-summary operation-summary-grid"><span class="text-secondary">Maszyn:</span><strong id="buildItemsCount">0</strong></div>
