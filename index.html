@@ -226,7 +226,7 @@
 
 
       <section class="tabPanel hidden" data-tab-panel="users">
-        <div class="card">
+        <div class="card users-admin-card main-section-card-height">
           <div class="cardHeader users-admin-card-header">
             <div>
               <h2>Użytkownicy firmy</h2>
@@ -237,15 +237,15 @@
           </div>
 
           <div class="users-admin-grid">
-            <div class="users-admin-block users-admin-block-wide">
-              <div class="editor-header" style="margin-bottom:var(--space-3)">
+            <div class="users-admin-block users-admin-block-list">
+              <div class="editor-header users-admin-block-header" style="margin-bottom:var(--space-3)">
                 <div>
                   <h4 class="editor-title">Lista użytkowników</h4>
                   <span class="editor-hint">Email, rola, status aktywności i bezpieczne akcje administracyjne.</span>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="refreshUsersBtn">Odśwież</button>
               </div>
-              <div class="table-container">
+              <div class="table-container users-admin-table-scroll">
                 <table id="companyUsersTable">
                   <thead>
                     <tr>
@@ -260,7 +260,33 @@
               </div>
             </div>
 
-            <div class="user-create-backdrop hidden" id="createUserBackdrop" aria-hidden="true">
+            <div class="users-admin-block users-admin-block-role-panel" id="rolePermissionsBlock">
+              <div class="editor-header users-admin-block-header users-admin-role-header" style="margin-bottom:var(--space-3)">
+                <div>
+                  <h4 class="editor-title">Konfiguracja ról</h4>
+                  <span class="editor-hint">Uprawnienia do zakładek są definiowane per rola i per firma. Owner zawsze ma pełny dostęp.</span>
+                </div>
+                <div class="users-admin-actions users-admin-actions-tight">
+                  <button type="button" class="btn btn-secondary btn-sm" id="rolePermissionsResetBtn">Przywróć</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="rolePermissionsSaveBtn">Zapisz konfigurację</button>
+                </div>
+              </div>
+
+              <div class="segmented role-permissions-role-switch" id="rolePermissionsRoleSwitch" role="tablist" aria-label="Edytowana rola">
+                <button type="button" class="active" data-role-permissions-role="owner" role="tab" aria-selected="true">owner</button>
+                <button type="button" data-role-permissions-role="admin" role="tab" aria-selected="false">admin</button>
+                <button type="button" data-role-permissions-role="worker" role="tab" aria-selected="false">worker</button>
+              </div>
+
+              <div class="users-admin-readonly-note hidden" id="rolePermissionsReadOnlyNote">
+                Tylko owner może zmieniać konfigurację ról i tworzyć użytkowników. Ty możesz tu co najwyżej popatrzeć, co też jest jakąś formą aktywności.
+              </div>
+
+              <div class="role-permissions-editor" id="rolePermissionsEditor"></div>
+            </div>
+          </div>
+
+          <div class="user-create-backdrop hidden" id="createUserBackdrop" aria-hidden="true">
               <div class="user-create-shell">
                 <div class="user-create-panel" role="dialog" aria-modal="true" aria-labelledby="createUserModalTitle">
                   <button type="button" class="user-create-close" id="createUserCloseBtn" aria-label="Zamknij">×</button>
@@ -337,31 +363,6 @@
               </div>
             </div>
 
-            <div class="users-admin-block users-admin-block-full" id="rolePermissionsBlock">
-              <div class="editor-header" style="margin-bottom:var(--space-3)">
-                <div>
-                  <h4 class="editor-title">Konfiguracja ról</h4>
-                  <span class="editor-hint">Uprawnienia do zakładek są definiowane per rola i per firma. Owner zawsze ma pełny dostęp.</span>
-                </div>
-                <div class="users-admin-actions users-admin-actions-tight">
-                  <button type="button" class="btn btn-secondary btn-sm" id="rolePermissionsResetBtn">Przywróć</button>
-                  <button type="button" class="btn btn-primary btn-sm" id="rolePermissionsSaveBtn">Zapisz konfigurację</button>
-                </div>
-              </div>
-
-              <div class="segmented role-permissions-role-switch" id="rolePermissionsRoleSwitch" role="tablist" aria-label="Edytowana rola">
-                <button type="button" class="active" data-role-permissions-role="owner" role="tab" aria-selected="true">owner</button>
-                <button type="button" data-role-permissions-role="admin" role="tab" aria-selected="false">admin</button>
-                <button type="button" data-role-permissions-role="worker" role="tab" aria-selected="false">worker</button>
-              </div>
-
-              <div class="users-admin-readonly-note hidden" id="rolePermissionsReadOnlyNote">
-                Tylko owner może zmieniać konfigurację ról i tworzyć użytkowników. Ty możesz tu co najwyżej popatrzeć, co też jest jakąś formą aktywności.
-              </div>
-
-              <div class="role-permissions-editor" id="rolePermissionsEditor"></div>
-            </div>
-          </div>
         </div>
       </section>
 
