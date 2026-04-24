@@ -343,6 +343,8 @@ function renderSideRecentActions5() {
 
   els.sideRecentActions.innerHTML = rows.map(ev => {
     const typeLabel = getHistoryActionMeta(ev).label;
+    const authorLabel = getHistoryAuthorMeta(ev).label;
+    const dateLabel = fmtDateISO(ev.dateISO) || "—";
 
     return `
       <li>
@@ -351,10 +353,11 @@ function renderSideRecentActions5() {
           type="button"
           data-action="toggleHistory"
           data-hid="${escapeHtml(String(ev.id))}"
-          aria-label="Otwórz podgląd akcji ${escapeHtml(typeLabel)} z dnia ${escapeHtml(String(fmtDateISO(ev.dateISO) || '—'))}">
+          aria-label="Otwórz podgląd akcji ${escapeHtml(typeLabel)} wykonanej przez ${escapeHtml(authorLabel)} z dnia ${escapeHtml(String(dateLabel))}">
           <div class="signal-info signal-info-history signal-info-history-compact">
             ${renderHistoryActionBadge(ev)}
-            <span class="signal-history-date">${fmtDateISO(ev.dateISO)}</span>
+            <span class="signal-history-author" title="${escapeHtml(authorLabel)}">${escapeHtml(authorLabel)}</span>
+            <span class="signal-history-date">${escapeHtml(dateLabel)}</span>
           </div>
         </button>
       </li>

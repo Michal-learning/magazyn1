@@ -1012,14 +1012,16 @@ tbody tr:nth-child(even):hover {
 }
 
 .history-action-badge {
+  --history-action-marker: rgba(148, 163, 184, 0.82);
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  width: 112px;
-  min-width: 112px;
+  width: 98px;
+  min-width: 98px;
   height: 24px;
-  padding: 0 9px;
+  padding: 0 8px 0 13px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -1029,6 +1031,31 @@ tbody tr:nth-child(even):hover {
   line-height: 1;
   white-space: nowrap;
   font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+.history-action-badge::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--history-action-marker);
+  opacity: 0.92;
+}
+
+.history-action-badge[data-history-action-type="delivery"] {
+  --history-action-marker: rgba(96, 165, 250, 0.9);
+}
+
+.history-action-badge[data-history-action-type="build"] {
+  --history-action-marker: rgba(167, 139, 250, 0.9);
+}
+
+.history-action-badge[data-history-action-type="adjustment"] {
+  --history-action-marker: rgba(203, 213, 225, 0.82);
 }
 
 .history-action-badge svg {
@@ -1036,11 +1063,11 @@ tbody tr:nth-child(even):hover {
   height: 13px;
   flex: 0 0 13px;
   fill: none;
-  stroke: currentColor;
+  stroke: var(--history-action-marker);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.86;
+  opacity: 0.9;
 }
 
 .history-action-badge span {
@@ -2068,7 +2095,8 @@ body.history-preview-open {
 }
 
 .signal-row-history-compact {
-  padding: 9px 11px;
+  min-height: 46px;
+  padding: 10px 12px;
 }
 
 .signal-info-history {
@@ -2077,18 +2105,30 @@ body.history-preview-open {
 }
 
 .signal-info-history-compact {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
 }
 
+.signal-history-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
 .signal-history-date {
-  flex: 0 0 auto;
+  min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .signal-info {
