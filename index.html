@@ -400,7 +400,7 @@
     </div>
 
     <aside class="globalSide" aria-label="Panel boczny">
-      <div class="card stickySide side-panel-card">
+      <div class="card stickySide">
         <div class="side-panel-topbar">
           <div class="side-auth-summary" aria-live="polite">
             <span class="side-auth-kicker" id="authPanelStatusText">—</span>
@@ -413,7 +413,7 @@
             </svg>
           </button>
         </div>
-        <div class="side-section side-section-nav">
+        <div class="side-section" style="padding-top:0">
           <h3 class="side-title">Nawigacja</h3>
           <nav class="tabs-nav" aria-label="Nawigacja główna">
             <div class="tabs-nav-priority" aria-label="Główne akcje">
@@ -431,12 +431,12 @@
         </div>
         <div class="side-section">
           <h3 class="side-title">Magazyn</h3>
-          <div class="metric-card side-metric-card"><span class="metric-label">Łączna wartość</span><span class="metric-value" id="sideWarehouseTotal">0,00 zł</span></div>
-          <div id="sideMissingSignals" class="side-list side-list-alerts"></div>
+          <div class="metric-card" style="margin-bottom:var(--space-3)"><span class="metric-label">Łączna wartość</span><span class="metric-value" id="sideWarehouseTotal">0,00 zł</span></div>
+          <div id="sideMissingSignals"></div>
         </div>
         <div class="side-section">
           <h3 class="side-title">Ostatnie akcje</h3>
-          <ul id="sideRecentActions" class="side-list side-list-actions"></ul>
+          <ul id="sideRecentActions" style="list-style:none;padding:0;margin:0;display:grid;gap:var(--space-2)"></ul>
         </div>
       </div>
     </aside>

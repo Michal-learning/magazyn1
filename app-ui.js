@@ -275,7 +275,7 @@ function renderSideMissingTop5() {
     .slice(0, 5);
 
   if (!rows.length) {
-    els.sideMissingSignals.innerHTML = `<div class="side-empty-state">Brak alertów</div>`;
+    els.sideMissingSignals.innerHTML = `<div class="text-muted" style="font-size:var(--text-sm);padding:var(--space-3);text-align:center">Brak alertów</div>`;
     return;
   }
 
@@ -285,7 +285,7 @@ function renderSideMissingTop5() {
     const status = statusMeta.label;
 
     return `
-      <button class="signal-row signal-row-alert" type="button" data-sku="${escapeHtml(String(r.sku))}" 
+      <button class="signal-row" type="button" data-sku="${escapeHtml(String(r.sku))}" 
               aria-label="Przejdź do części ${escapeHtml(String(r.sku))}">
         <div class="signal-info">
           <span class="badge badge-${cls}">${escapeHtml(String(r.sku))}</span>
@@ -310,34 +310,25 @@ function renderSideRecentActions5() {
     .slice(0, 4);
 
   if (!rows.length) {
-    els.sideRecentActions.innerHTML = `<li><div class="side-empty-state">Brak akcji</div></li>`;
+    els.sideRecentActions.innerHTML = `<li class="text-muted" style="font-size:var(--text-sm);padding:var(--space-2);text-align:center">Brak akcji</li>`;
     return;
   }
 
   els.sideRecentActions.innerHTML = rows.map(ev => {
     const typeLabel = ev.type === "delivery" ? "Dostawa" : ev.type === "build" ? "Produkcja" : "Korekta";
     const pillClass = ev.type === "delivery" ? "success" : ev.type === "build" ? "accent" : "warning";
-    const itemsCount = Array.isArray(ev.items) ? ev.items.length : 0;
-    const adjustmentChangesCount = Array.isArray(ev?.details?.changes) ? ev.details.changes.length : 0;
-    const contextCount = ev.type === "adjustment"
-      ? safeQtyInt(ev.partsChanged ?? (itemsCount || adjustmentChangesCount))
-      : itemsCount;
-    const contextLabel = ev.type === "adjustment"
-      ? `${contextCount} zmian`
-      : `${contextCount} poz.`;
-    const dateLabel = fmtDateISO(ev.dateISO) || "—";
 
     return `
       <li>
         <button
-          class="signal-row signal-row-history signal-row-history-compact signal-row-action"
+          class="signal-row signal-row-history signal-row-history-compact"
           type="button"
           data-action="toggleHistory"
           data-hid="${escapeHtml(String(ev.id))}"
-          aria-label="Otwórz podgląd akcji ${escapeHtml(typeLabel)} z dnia ${escapeHtml(String(dateLabel))}">
+          aria-label="Otwórz podgląd akcji ${escapeHtml(typeLabel)} z dnia ${escapeHtml(String(fmtDateISO(ev.dateISO) || '—'))}">
           <div class="signal-info signal-info-history signal-info-history-compact">
-            <span class="badge badge-${pillClass}">${escapeHtml(typeLabel)}</span>
-            <span class="side-action-sub">${escapeHtml(contextLabel)} • ${escapeHtml(dateLabel)}</span>
+            <span class="badge badge-${pillClass}">${typeLabel}</span>
+            <span class="signal-history-date">${fmtDateISO(ev.dateISO)}</span>
           </div>
         </button>
       </li>
