@@ -2646,6 +2646,14 @@ input[type="range"]::-moz-range-thumb {
   min-width: 220px;
 }
 
+.history-toolbar .combobox-trigger {
+  height: 46px;
+  min-height: 46px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  line-height: 1.6;
+}
+
 .supplier-catalog-header {
   align-items: center;
 }
