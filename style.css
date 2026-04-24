@@ -2646,9 +2646,27 @@ input[type="range"]::-moz-range-thumb {
   min-width: 220px;
 }
 
+.history-toolbar {
+  --history-toolbar-control-height: 46px;
+  align-items: center;
+}
+
+.history-toolbar > input[type="text"],
+.history-toolbar > input[type="search"],
+.history-toolbar > select#historyAuthorFilter,
+.history-toolbar > .combo-select-host {
+  height: var(--history-toolbar-control-height);
+  min-height: var(--history-toolbar-control-height);
+}
+
+.history-toolbar > .combo-select-host {
+  display: flex;
+  align-items: stretch;
+}
+
 .history-toolbar .combobox-trigger {
-  height: 46px;
-  min-height: 46px;
+  height: 100%;
+  min-height: 0;
   padding-top: 10px;
   padding-bottom: 10px;
   line-height: 1.6;
