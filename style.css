@@ -1849,6 +1849,29 @@ body.history-preview-open {
 }
 
 /* ---------- 10) Side Panel ---------- */
+.globalSide .stickySide.card {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+}
+
+.globalSide .stickySide.card:hover {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.globalSide .stickySide .side-panel-topbar {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: linear-gradient(180deg, var(--surface-2), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
 .side-section {
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--border);
