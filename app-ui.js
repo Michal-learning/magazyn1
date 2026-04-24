@@ -781,7 +781,7 @@ function renderWarehouse() {
           <td>${escapeHtml(item.name || "")}</td>
           <td class="text-right stock-edit-cell">${stockCell}</td>
           <td class="text-right">${fmtPLN.format(item.value)}</td>
-          <td>${isArchived ? '<span class="badge badge-muted badge-status-warning">ZARCHIWIZOWANE</span>' : '<span class="catalog-status-empty" aria-hidden="true"></span>'}</td>
+          <td>${renderCatalogStatusBadges({ isArchived })}</td>
           <td class="text-right">
             <button class="btn btn-secondary btn-sm" type="button"
               data-action="openPartDetails"
