@@ -1115,8 +1115,46 @@ tbody tr:nth-child(even):hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.catalog-status-badges .badge {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  min-height: 24px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: var(--font-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  border-width: 1px;
+}
+
+.catalog-status-badges .badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.catalog-status-badges .badge.badge-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: var(--warning-light);
+}
+
+.catalog-status-badges .badge.badge-muted {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: rgba(226, 232, 240, 0.9);
 }
 
 .badge-status-warning {
@@ -1126,8 +1164,8 @@ tbody tr:nth-child(even):hover {
 }
 
 .catalog-status-empty {
-  display: inline-block;
-  min-height: 24px;
+  display: inline-flex;
+  min-height: 28px;
 }
 
 /* ---------- 9) Navigation Tabs ---------- */
