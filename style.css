@@ -1964,10 +1964,15 @@ body.history-preview-open {
   font-weight: var(--font-bold);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
-  color: var(--accent-light);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#sideMissingSignals {
+  display: grid;
+  gap: var(--space-2);
 }
 
 /* Signal Row */
@@ -2032,52 +2037,27 @@ body.history-preview-open {
   min-width: 0;
 }
 
+.signal-code,
 .signal-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text);
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.signal-row:not(.signal-row-history) .signal-info > .badge:first-child {
-  min-width: 0;
+.signal-code {
   max-width: 118px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
   color: var(--text);
-  font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.signal-row:not(.signal-row-history) .signal-info > .signal-name,
-.signal-row:not(.signal-row-history) .signal-info > .badge:first-child + .badge {
-  min-width: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
+.signal-name {
   color: var(--text-tertiary);
-  font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+
 
 .signal-meta {
   display: flex;
