@@ -644,6 +644,25 @@ function closeBatchPreviewModal() {
   document.body.classList.remove("batch-preview-open");
 }
 
+function syncStockEditBannerPlacement(searchInput, stockEditBanner) {
+  if (!searchInput || !stockEditBanner || typeof document === 'undefined') return;
+
+  let row = searchInput.closest('.warehouse-search-edit-row');
+  if (!row) {
+    const inputParent = searchInput.parentElement;
+    const candidate = inputParent?.tagName === 'LABEL'
+      ? inputParent.parentElement
+      : inputParent;
+    if (!candidate || candidate === document.body) return;
+    row = candidate;
+    row.classList.add('warehouse-search-edit-row');
+  }
+
+  if (stockEditBanner.parentElement !== row) {
+    row.appendChild(stockEditBanner);
+  }
+}
+
 function renderWarehouse() {
   const els = getEls();
   if (!els.summaryTable) return;
@@ -741,6 +760,7 @@ function renderWarehouse() {
     });
   }
   if (stockEditBanner) {
+    syncStockEditBannerPlacement(searchInput, stockEditBanner);
     if (isEditMode) {
       stockEditBanner.classList.remove("hidden");
       const changedCount = Object.values(pendingMap).filter(item => {
