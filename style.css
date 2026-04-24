@@ -1041,54 +1041,82 @@ tbody tr:nth-child(even):hover {
 .tabs-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
+  width: calc(100% - 14px);
+  margin-inline: auto;
 }
 
 .tabs-nav-priority {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
 }
 
 .tab-btn {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px 7px 14px;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
+  line-height: 1.35;
   color: var(--text-secondary);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: 0;
   cursor: pointer;
-  transition: all var(--trans-fast);
+  transition: background var(--trans-fast), color var(--trans-fast);
   text-align: left;
-  width: 100%;
+}
+
+.tab-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  background: transparent;
 }
 
 .tab-btn:hover {
-  background: var(--surface-2);
+  background: rgba(255, 255, 255, 0.035);
   color: var(--text);
 }
 
 .tab-btn.active {
-  background: var(--accent-glow);
-  color: var(--accent-light);
-  border-color: var(--accent);
+  background: rgba(122, 162, 247, 0.075);
+  color: var(--text);
+}
+
+.tab-btn.active::before {
+  background: var(--accent);
+}
+
+.tab-btn svg {
+  flex: 0 0 auto;
+  opacity: 0.78;
+}
+
+.tab-btn:hover svg,
+.tab-btn.active svg {
+  opacity: 1;
 }
 
 .tab-btn:focus-visible {
-  box-shadow: var(--focus-ring);
+  box-shadow: inset 0 0 0 2px rgba(122, 162, 247, 0.34);
 }
 
 .tab-btn-priority {
-  justify-content: center;
-  min-height: 48px;
-  padding-inline: var(--space-3);
-  gap: var(--space-2);
-  text-align: center;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 7px 10px 7px 14px;
+  gap: 10px;
+  text-align: left;
 }
 
 .tab-btn-priority svg {
@@ -1096,8 +1124,8 @@ tbody tr:nth-child(even):hover {
 }
 
 @media (max-width: 640px) {
-  .tabs-nav-priority {
-    grid-template-columns: 1fr;
+  .tabs-nav {
+    width: 100%;
   }
 }
 
