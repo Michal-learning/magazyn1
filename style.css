@@ -130,6 +130,7 @@
 
   /* Header Controls */
   --section-header-control-height: 36px;
+  --section-header-min-height: calc(var(--section-header-control-height) + var(--space-3) + 1px);
 }
 
 /* ---------- 1) Reset & Base ---------- */
@@ -301,6 +302,7 @@ p {
   justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
+  min-height: var(--section-header-min-height);
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
