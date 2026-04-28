@@ -372,6 +372,16 @@ function renderSidePanel() {
 
 // === NEW: Part Details Modal Functions ===
 
+function isActiveWarehouseLot(lot) {
+  return safeQtyInt(lot?.qty) > 0;
+}
+
+function getLotSourceLabel(lot) {
+  const supplier = normalize(lot?.supplier);
+  if (supplier && supplier !== '-') return supplier;
+  return 'Nieznane źródło';
+}
+
 function openPartDetailsModal(sku) {
   const skuKeyVal = skuKey(sku);
   const part = state.partsCatalog.get(skuKeyVal);
@@ -379,8 +389,8 @@ function openPartDetailsModal(sku) {
 
   currentPartDetailsSku = sku;
 
-  // Get all lots for this part
-  const lots = (state.lots || []).filter(l => skuKey(l.sku) === skuKeyVal);
+  // Get active lots for this part only; zeroed lots stay in data/history, but not in this operational view.
+  const lots = (state.lots || []).filter(l => skuKey(l.sku) === skuKeyVal && isActiveWarehouseLot(l));
   
   // Group by price (ignoring supplier at this stage)
   const priceGroups = new Map();
@@ -528,21 +538,21 @@ function openBatchPreviewByPrice(sku, price) {
   const part = state.partsCatalog.get(skuKeyVal);
   if (!part) return;
 
-  // Get lots for this part with this specific price
+  // Get active lots for this part with this specific price only.
   const lots = (state.lots || [])
-    .filter(l => skuKey(l.sku) === skuKeyVal && Math.abs(safeFloat(l.unitPrice || 0) - price) < 0.001)
+    .filter(l => skuKey(l.sku) === skuKeyVal && Math.abs(safeFloat(l.unitPrice || 0) - price) < 0.001 && isActiveWarehouseLot(l))
     .sort((a, b) => (a.id || 0) - (b.id || 0));
 
   if (!lots.length) return;
 
-  // Group by supplier
+  // Group by readable source label. Keep adjustment lots recognizable, but do not expose raw "-" fallback.
   const supplierGroups = new Map();
   lots.forEach(lot => {
-    const sup = lot.supplier || "-";
-    if (!supplierGroups.has(sup)) {
-      supplierGroups.set(sup, { supplier: sup, lots: [], totalQty: 0, totalValue: 0 });
+    const sourceLabel = getLotSourceLabel(lot);
+    if (!supplierGroups.has(sourceLabel)) {
+      supplierGroups.set(sourceLabel, { supplier: sourceLabel, lots: [], totalQty: 0, totalValue: 0 });
     }
-    const group = supplierGroups.get(sup);
+    const group = supplierGroups.get(sourceLabel);
     group.lots.push(lot);
     group.totalQty += safeQtyInt(lot.qty);
     group.totalValue += safeQtyInt(lot.qty) * price;
