@@ -376,7 +376,54 @@ function isActiveWarehouseLot(lot) {
   return safeQtyInt(lot?.qty) > 0;
 }
 
+function normalizeLotIdForCompare(value) {
+  if (value == null) return '';
+  return String(value).trim();
+}
+
+function getAdjustmentCreatedLotIds() {
+  const result = new Set();
+  const history = Array.isArray(state?.history) ? state.history : [];
+
+  history.forEach(ev => {
+    if (ev?.type !== 'adjustment') return;
+
+    const itemGroups = [];
+    if (Array.isArray(ev?.items)) itemGroups.push(ev.items);
+    if (Array.isArray(ev?.details?.changes)) itemGroups.push(ev.details.changes);
+
+    itemGroups.forEach(items => {
+      items.forEach(item => {
+        const createdLot = item?.createdLot || item?.created_lot || null;
+        if (!createdLot || typeof createdLot !== 'object') return;
+
+        [createdLot.lotId, createdLot.id, createdLot.lot_id].forEach(rawId => {
+          const lotId = normalizeLotIdForCompare(rawId);
+          if (lotId) result.add(lotId);
+        });
+      });
+    });
+  });
+
+  return result;
+}
+
+function isAdjustmentCreatedLot(lot) {
+  const adjustmentLotIds = getAdjustmentCreatedLotIds();
+  const candidateIds = [lot?.id, lot?.lotId, lot?.lot_id]
+    .map(normalizeLotIdForCompare)
+    .filter(Boolean);
+
+  return candidateIds.some(id => adjustmentLotIds.has(id));
+}
+
+function isCorrectionLot(lot) {
+  return normalize(lot?.supplier) === "Korekta stanu" || isAdjustmentCreatedLot(lot);
+}
+
 function getLotSourceLabel(lot) {
+  if (isAdjustmentCreatedLot(lot)) return 'Korekta stanu';
+
   const supplier = normalize(lot?.supplier);
   if (supplier && supplier !== '-') return supplier;
   return 'Nieznane źródło';
@@ -451,7 +498,7 @@ function openPartDetailsModal(sku) {
     } else {
       variantsEl.innerHTML = sortedGroups.map(group => {
         const batchCount = group.lots.length;
-        const correctionLots = group.lots.filter(lot => normalize(lot?.supplier) === "Korekta stanu").length;
+        const correctionLots = group.lots.filter(isCorrectionLot).length;
         return `
           <tr>
             <td>
@@ -563,12 +610,12 @@ function openBatchPreviewByPrice(sku, price) {
 
   // Build supplier sections
   const supplierSections = Array.from(supplierGroups.values()).map(supGroup => {
-    const isAdjustmentSource = normalize(supGroup.supplier) === "Korekta stanu";
+    const isAdjustmentSource = normalize(supGroup.supplier) === "Korekta stanu" || supGroup.lots.some(isCorrectionLot);
     const rows = supGroup.lots.map(lot => `
       <tr>
         <td style="white-space:nowrap">
           Partia #${lot.id ?? "—"}
-          ${normalize(lot?.supplier) === "Korekta stanu" ? `<span class="lot-origin-badge">korekta</span>` : ``}
+          ${isCorrectionLot(lot) ? `<span class="lot-origin-badge">korekta</span>` : ``}
         </td>
         <td>${escapeHtml(fmtDateISO(lot.dateIn) || "—")}</td>
         <td class="text-right">${safeQtyInt(lot.qty)}</td>
