@@ -3032,14 +3032,32 @@ document.getElementById('historyPreviewBackdrop')?.addEventListener('click', (e)
   if (e.target === e.currentTarget) closeHistoryPreviewModal();
 });
 
-// Close modals on Escape key
+function isModalBackdropOpen(backdropId) {
+  const backdrop = document.getElementById(backdropId);
+  return !!backdrop && !backdrop.classList.contains('hidden');
+}
+
+function closeTopmostPreviewModal() {
+  const modalStack = [
+    { backdropId: 'batchPreviewBackdrop', close: closeBatchPreviewModal },
+    { backdropId: 'historyPreviewBackdrop', close: closeHistoryPreviewModal },
+    { backdropId: 'machineCatalogDetailsBackdrop', close: closeMachineCatalogDetailsModal },
+    { backdropId: 'catalogPartDetailsBackdrop', close: closeCatalogPartDetailsModal },
+    { backdropId: 'supplierCatalogDetailsBackdrop', close: closeSupplierCatalogDetailsModal },
+    { backdropId: 'partDetailsBackdrop', close: closePartDetailsModal }
+  ];
+
+  const activeModal = modalStack.find(item => isModalBackdropOpen(item.backdropId));
+  if (!activeModal) return false;
+  activeModal.close();
+  return true;
+}
+
+// Close only the topmost modal on Escape.
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closePartDetailsModal();
-    closeSupplierCatalogDetailsModal();
-    closeCatalogPartDetailsModal();
-    closeMachineCatalogDetailsModal();
-    closeBatchPreviewModal();
-    closeHistoryPreviewModal();
+  if (e.key !== 'Escape') return;
+  if (closeTopmostPreviewModal()) {
+    e.preventDefault();
+    e.stopPropagation();
   }
 });
