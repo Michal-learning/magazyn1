@@ -1284,6 +1284,7 @@ window.fetchOperationalStateFromSupabase = async function fetchOperationalStateF
       supplier: String(supplier?.name || row?.supplier_name || row?.supplier || '-').trim() || '-',
       unitPrice: Math.max(0, normalizeBusinessNumber(row?.unit_price ?? row?.price ?? row?.unitPrice, 0)),
       qty: normalizeBusinessInt(row?.qty_remaining, 0),
+      qtyInitial: normalizeBusinessInt(row?.qty_initial, 0),
       dateIn: getInventoryLotReceivedDateISO(row)
     };
   }).filter(Boolean);

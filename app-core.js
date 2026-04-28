@@ -155,6 +155,7 @@ function applyOperationalState(nextOperationalState = {}) {
         supplier: normalize(lot?.supplier) || '-',
         unitPrice: safeFloat(lot?.unitPrice ?? 0),
         qty: safeQtyInt(lot?.qty),
+        qtyInitial: safeQtyInt(lot?.qtyInitial ?? lot?.qty),
         dateIn: normalize(lot?.dateIn)
       })).filter(lot => lot.sku && lot.name)
     : [];

@@ -417,15 +417,66 @@ function isAdjustmentCreatedLot(lot) {
   return candidateIds.some(id => adjustmentLotIds.has(id));
 }
 
+function normalizeLotSourceLabel(value) {
+  return normalize(value);
+}
+
+function hasNormalLotSupplier(lot) {
+  const supplier = normalizeLotSourceLabel(lot?.supplier);
+  return !!supplier && supplier !== '-' && supplier !== 'Nieznane źródło';
+}
+
+function normalizeLotDateForCompare(value) {
+  const raw = normalize(value);
+  return raw ? raw.slice(0, 10) : '';
+}
+
+function getAdjustmentEventItems(ev) {
+  const itemGroups = [];
+  if (Array.isArray(ev?.items)) itemGroups.push(ev.items);
+  if (Array.isArray(ev?.details?.changes)) itemGroups.push(ev.details.changes);
+  return itemGroups.flat().filter(Boolean);
+}
+
+function isSameMoneyValue(a, b) {
+  return Math.abs(safeFloat(a) - safeFloat(b)) < 0.001;
+}
+
+function isAdjustmentCreatedLotByHeuristic(lot) {
+  if (!lot || hasNormalLotSupplier(lot)) return false;
+
+  const lotSku = skuKey(lot?.sku);
+  const lotDate = normalizeLotDateForCompare(lot?.dateIn);
+  const lotPrice = safeFloat(lot?.unitPrice);
+  const lotInitialQty = safeQtyInt(lot?.qtyInitial ?? lot?.qty);
+  if (!lotSku || !lotDate || lotInitialQty <= 0) return false;
+
+  const history = Array.isArray(state?.history) ? state.history : [];
+  return history.some(ev => {
+    if (ev?.type !== 'adjustment') return false;
+
+    const eventDate = normalizeLotDateForCompare(ev?.dateISO);
+    if (!eventDate || eventDate !== lotDate) return false;
+
+    return getAdjustmentEventItems(ev).some(item => {
+      const diff = Number(item?.diff);
+      if (!(Number.isFinite(diff) && diff > 0)) return false;
+      if (skuKey(item?.sku) !== lotSku) return false;
+      if (!isSameMoneyValue(item?.referenceUnitPrice, lotPrice)) return false;
+      return safeQtyInt(item?.diff) === lotInitialQty;
+    });
+  });
+}
+
 function isCorrectionLot(lot) {
-  return normalize(lot?.supplier) === "Korekta stanu" || isAdjustmentCreatedLot(lot);
+  return normalize(lot?.supplier) === "Korekta stanu" || isAdjustmentCreatedLot(lot) || isAdjustmentCreatedLotByHeuristic(lot);
 }
 
 function getLotSourceLabel(lot) {
-  if (isAdjustmentCreatedLot(lot)) return 'Korekta stanu';
+  if (isCorrectionLot(lot)) return 'Korekta stanu';
 
   const supplier = normalize(lot?.supplier);
-  if (supplier && supplier !== '-') return supplier;
+  if (supplier && supplier !== '-' && supplier !== 'Nieznane źródło') return supplier;
   return 'Nieznane źródło';
 }
 
